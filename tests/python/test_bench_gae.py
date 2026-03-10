@@ -1,7 +1,4 @@
-"""TDD tests for GAE computation benchmarks (Phase 3).
-
-These tests are RED — they will fail until Phase 3 (Training Orchestrator) is implemented.
-"""
+"""Tests for GAE computation benchmarks (Phase 3)."""
 
 import numpy as np
 import pytest
@@ -45,7 +42,6 @@ def reference_gae_numpy(rewards, values, dones, last_value, gamma=0.99, lam=0.95
 class TestGAEPreconditions:
     """Validate rlox GAE produces correct results before benchmarking."""
 
-    @pytest.mark.xfail(reason="Phase 3 not implemented yet")
     def test_compute_gae_importable(self):
         from rlox import compute_gae
         advantages, returns = compute_gae(
@@ -59,7 +55,6 @@ class TestGAEPreconditions:
         assert advantages.shape == (1,)
         assert returns.shape == (1,)
 
-    @pytest.mark.xfail(reason="Phase 3 not implemented yet")
     def test_gae_matches_reference(self):
         """Rust GAE must match reference numpy implementation to within 1e-6."""
         from rlox import compute_gae
@@ -81,7 +76,6 @@ class TestGAEPreconditions:
         np.testing.assert_allclose(rust_adv, ref_adv, rtol=1e-6, atol=1e-10)
         np.testing.assert_allclose(rust_ret, ref_ret, rtol=1e-6, atol=1e-10)
 
-    @pytest.mark.xfail(reason="Phase 3 not implemented yet")
     def test_gae_handles_episode_boundaries(self):
         """GAE resets at episode boundaries (dones=True)."""
         from rlox import compute_gae
@@ -103,7 +97,6 @@ class TestGAEPreconditions:
 class TestBenchGAEComputation:
     """GAE computation benchmarks."""
 
-    @pytest.mark.xfail(reason="Phase 3 not implemented yet")
     @pytest.mark.parametrize("n_steps", [128, 512, 2048, 8192, 32768])
     def test_rlox_gae_speed(self, n_steps):
         """Rust GAE should be at least 5x faster than numpy loop."""
@@ -150,7 +143,6 @@ class TestBenchGAEComputation:
             f"speedup={comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]"
         )
 
-    @pytest.mark.xfail(reason="Phase 3 not implemented yet")
     def test_rlox_gae_batched_across_envs(self):
         """GAE across 128 envs * 2048 steps."""
         from rlox import compute_gae

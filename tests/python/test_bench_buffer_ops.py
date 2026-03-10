@@ -1,8 +1,4 @@
-"""TDD tests for buffer operation benchmarks (Phase 2).
-
-These tests are RED — they will fail until Phase 2 (Experience Storage) is implemented.
-They define the expected benchmark behavior and serve as executable specs.
-"""
+"""Tests for buffer operation benchmarks (Phase 2)."""
 
 import numpy as np
 import pytest
@@ -21,19 +17,16 @@ from conftest import BenchmarkResult, ComparisonResult, timed_run
 class TestBufferPreconditions:
     """Validate that rlox buffer types exist and have the expected API."""
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_experience_table_importable(self):
         from rlox import ExperienceTable
         table = ExperienceTable(obs_dim=4, act_dim=1)
         assert len(table) == 0
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_replay_buffer_importable(self):
         from rlox import ReplayBuffer
         buf = ReplayBuffer(capacity=1000, obs_dim=4, act_dim=1)
         assert len(buf) == 0
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_varlen_store_importable(self):
         from rlox import VarLenStore
         store = VarLenStore()
@@ -47,7 +40,6 @@ class TestBufferPreconditions:
 class TestBenchBufferPush:
     """Buffer push throughput benchmarks."""
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_rlox_push_throughput_cartpole(self):
         """Push throughput for CartPole-sized observations (4 dims)."""
         from rlox import ExperienceTable
@@ -72,7 +64,6 @@ class TestBenchBufferPush:
             f"Push throughput too low: {result.throughput:.0f} trans/s"
         )
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_rlox_push_throughput_atari(self):
         """Push throughput for Atari-sized observations (84*84*4 = 28224 dims)."""
         from rlox import ExperienceTable
@@ -104,7 +95,6 @@ class TestBenchBufferPush:
 class TestBenchBufferSample:
     """Buffer sample latency benchmarks."""
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     @pytest.mark.parametrize("batch_size", [32, 64, 256, 1024])
     def test_rlox_sample_latency(self, batch_size):
         """Sample latency should be under 100us for reasonable batch sizes."""
@@ -138,7 +128,6 @@ class TestBenchBufferSample:
 class TestBenchZeroCopy:
     """Validate zero-copy tensor bridge."""
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_observations_returns_numpy_without_copy(self):
         """table.observations() should return a view, not a copy."""
         from rlox import ExperienceTable
@@ -154,7 +143,6 @@ class TestBenchZeroCopy:
         assert isinstance(obs_array, np.ndarray)
         assert obs_array.shape == (10, 4)
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_zero_copy_faster_than_explicit_copy(self):
         """Zero-copy access should be faster than copying the same data."""
         from rlox import ExperienceTable
@@ -196,7 +184,6 @@ class TestBenchZeroCopy:
 class TestBenchVarLenStorage:
     """Variable-length sequence storage benchmarks."""
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_varlen_memory_efficiency(self):
         """VarLenStore should have < 5% memory overhead vs optimal."""
         from rlox import VarLenStore
@@ -226,7 +213,6 @@ class TestBenchVarLenStorage:
         # We just verify our storage is efficient
         assert store.num_sequences() == n_sequences
 
-    @pytest.mark.xfail(reason="Phase 2 not implemented yet")
     def test_varlen_vs_padded_tensor_memory(self):
         """VarLenStore should use much less memory than padded tensors."""
         torch = pytest.importorskip("torch")

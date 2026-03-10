@@ -1,7 +1,4 @@
-"""TDD tests for LLM post-training benchmarks (Phase 4).
-
-These tests are RED — they will fail until Phase 4 (LLM Post-Training) is implemented.
-"""
+"""Tests for LLM post-training benchmarks (Phase 4)."""
 
 import numpy as np
 import pytest
@@ -38,7 +35,6 @@ def numpy_token_kl(log_probs_policy: np.ndarray, log_probs_ref: np.ndarray) -> f
 
 class TestLLMPreconditions:
 
-    @pytest.mark.xfail(reason="Phase 4 not implemented yet")
     def test_compute_group_advantages_importable(self):
         from rlox import compute_group_advantages
         rewards = np.array([1.0, 0.5, 0.8])
@@ -46,7 +42,6 @@ class TestLLMPreconditions:
         assert adv.shape == (3,)
         assert abs(adv.mean()) < 1e-6
 
-    @pytest.mark.xfail(reason="Phase 4 not implemented yet")
     def test_compute_token_kl_importable(self):
         from rlox import compute_token_kl
         log_p = np.array([-1.0, -2.0, -0.5])
@@ -54,7 +49,6 @@ class TestLLMPreconditions:
         kl = compute_token_kl(log_p, log_q)
         assert abs(kl) < 1e-10  # identical distributions
 
-    @pytest.mark.xfail(reason="Phase 4 not implemented yet")
     def test_dpo_pair_importable(self):
         from rlox import DPOPair
         pair = DPOPair(
@@ -72,7 +66,6 @@ class TestLLMPreconditions:
 
 class TestBenchGRPOAdvantages:
 
-    @pytest.mark.xfail(reason="Phase 4 not implemented yet")
     @pytest.mark.parametrize("n_prompts,k_completions", [
         (16, 4), (64, 8), (256, 16),
     ])
@@ -123,7 +116,6 @@ class TestBenchGRPOAdvantages:
 
 class TestBenchTokenKL:
 
-    @pytest.mark.xfail(reason="Phase 4 not implemented yet")
     @pytest.mark.parametrize("seq_len", [128, 512, 2048, 8192])
     def test_rlox_token_kl_vs_numpy(self, seq_len):
         """Rust token-level KL should be faster than numpy/PyTorch."""
@@ -158,7 +150,6 @@ class TestBenchTokenKL:
         lo, _ = comp.speedup_ci_95
         assert lo > 1.5, f"Token KL not fast enough: {comp.speedup:.1f}x"
 
-    @pytest.mark.xfail(reason="Phase 4 not implemented yet")
     def test_token_kl_correctness(self):
         """Rust KL matches numpy reference."""
         from rlox import compute_token_kl

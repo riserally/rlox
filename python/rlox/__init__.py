@@ -6,6 +6,9 @@ from rlox._rlox_core import (
     ReplayBuffer,
     VarLenStore,
     compute_gae,
+    compute_group_advantages,
+    compute_token_kl,
+    DPOPair,
 )
 
 __all__ = [
@@ -16,4 +19,7 @@ __all__ = [
     "ReplayBuffer",
     "VarLenStore",
     "compute_gae",
+    "compute_group_advantages",
+    "compute_token_kl",
+    "DPOPair",
 ]

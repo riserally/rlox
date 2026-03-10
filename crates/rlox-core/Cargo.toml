@@ -9,3 +9,6 @@ rand = "0.9"
 rand_chacha = "0.9"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+proptest = "1"

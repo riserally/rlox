@@ -136,4 +136,33 @@ mod tests {
         // Monte Carlo return from step 0: 1 + 0.99 + 0.99^2 = 2.9701
         assert!((advantages[0] - 2.9701).abs() < 1e-3);
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn gae_returns_equal_advantages_plus_values(n in 1..500usize) {
+                let rewards: Vec<f64> = (0..n).map(|i| (i as f64) * 0.1).collect();
+                let values: Vec<f64> = (0..n).map(|i| (i as f64) * 0.05).collect();
+                let dones: Vec<f64> = (0..n).map(|i| if i % 10 == 9 { 1.0 } else { 0.0 }).collect();
+                let (advantages, returns) = compute_gae(&rewards, &values, &dones, 0.0, 0.99, 0.95);
+                for i in 0..n {
+                    let diff = (returns[i] - (advantages[i] + values[i])).abs();
+                    prop_assert!(diff < 1e-10, "mismatch at index {}: returns={}, adv+val={}", i, returns[i], advantages[i] + values[i]);
+                }
+            }
+
+            #[test]
+            fn gae_length_matches_input(n in 0..500usize) {
+                let rewards = vec![1.0; n];
+                let values = vec![0.5; n];
+                let dones = vec![0.0; n];
+                let (advantages, returns) = compute_gae(&rewards, &values, &dones, 0.0, 0.99, 0.95);
+                prop_assert_eq!(advantages.len(), n);
+                prop_assert_eq!(returns.len(), n);
+            }
+        }
+    }
 }

@@ -29,15 +29,52 @@ Two-crate workspace:
 |-------|-------------|--------|
 | 0 | Skeleton (workspace, PyO3, maturin) | Done |
 | 1 | Environment Engine (CartPole, VecEnv, GymEnv bridge) | Done |
-| 2 | Experience Storage (Arrow columnar, ring buffer, VarLenStore) | Planned |
-| 3 | Training Orchestrator (GAE, batch assembly, PPO) | Planned |
-| 4 | LLM Post-Training (GRPO, DPO, token KL) | Planned |
-| 5 | Polish & API (callbacks, logging, proptest) | Planned |
+| 2 | Experience Storage (columnar buffer, ring buffer, VarLenStore) | Done |
+| 3 | Training Core (GAE, KL controller) | Done |
+| 4 | LLM Post-Training (GRPO, DPO, token KL) | Done |
+| 5 | Polish & API (type stubs, proptest) | Done |
+| 6 | Three-Framework Benchmark (rlox vs TorchRL vs SB3) | Done |
 
-## Benchmark Results
+## Three-Framework Benchmark Results
 
-All benchmarks run on the same machine with bootstrap 95% confidence intervals (10,000 resamples).
-Speedup > 1.0x means rlox is faster. "Significant" = CI lower bound > 1.0.
+All benchmarks run on Apple M4 with bootstrap 95% confidence intervals (10,000 resamples).
+Speedup > 1.0x means rlox is faster. All results marked *** are statistically significant (CI lower bound > 1.0).
+
+> **Full details**: [docs/benchmark/](docs/benchmark/) — includes [setup & methodology](docs/benchmark/setup.md), per-benchmark analysis, raw timing data, and reproducibility instructions.
+
+### [GAE Computation](docs/benchmark/gae.md)
+
+| Trajectory | rlox | NumPy Loop | TorchRL | vs NumPy | vs TorchRL |
+|-----------|------|-----------|---------|----------|------------|
+| 128 steps | 0.7 us | 34 us | 453 us | **51x** *** | **679x** *** |
+| 2048 steps | 4.0 us | 558 us | 6798 us | **139x** *** | **1700x** *** |
+| 32768 steps | 60 us | 8906 us | 108441 us | **147x** *** | **1791x** *** |
+
+### [Buffer Operations](docs/benchmark/buffer-ops.md)
+
+| Benchmark | rlox | TorchRL | SB3 | vs TorchRL | vs SB3 |
+|-----------|------|---------|-----|------------|--------|
+| Push 10K (obs=4) | 1.5 ms | 229 ms | 15 ms | **148x** *** | **9.7x** *** |
+| Sample batch=32 | 1.5 us | 20 us | 18 us | **13x** *** | **11x** *** |
+| Sample batch=1024 | 9.2 us | 96 us | 75 us | **10x** *** | **8.1x** *** |
+
+### [End-to-End Rollout](docs/benchmark/e2e-rollout.md) (step + store + GAE)
+
+| Config | rlox | SB3 | TorchRL | vs SB3 | vs TorchRL |
+|--------|------|-----|---------|--------|------------|
+| 16 envs × 128 steps | 6.1 ms | 10.2 ms | 129 ms | **1.7x** *** | **21x** *** |
+| 64 envs × 512 steps | 44 ms | 135 ms | 1768 ms | **3.1x** *** | **41x** *** |
+| 256 envs × 2048 steps | 539 ms | 2080 ms | 28432 ms | **3.9x** *** | **53x** *** |
+
+### [LLM Operations](docs/benchmark/llm-ops.md) (vs NumPy / PyTorch)
+
+| Benchmark | rlox | NumPy | PyTorch | vs NumPy | vs PyTorch |
+|-----------|------|-------|---------|----------|------------|
+| GRPO 256×16 | 36 us | 1252 us | 1241 us | **35x** *** | **34x** *** |
+| Token KL 128 | 0.4 us | 1.7 us | 2.5 us | **4.0x** *** | **5.9x** *** |
+| Token KL 8192 | 17 us | 28 us | 51 us | **1.6x** *** | **3.0x** *** |
+
+### Env Stepping (from Phase 1)
 
 <!-- BENCH:START -->
 | Benchmark | rlox | Baseline | Speedup | Significant |
@@ -58,10 +95,12 @@ Speedup > 1.0x means rlox is faster. "Significant" = CI lower bound > 1.0.
 <!-- BENCH:END -->
 
 **Key takeaways:**
+- **GAE**: 140x faster than Python loops, 1700x faster than TorchRL. The sequential backward scan eliminates Python interpreter overhead entirely.
+- **Buffer push**: 148x faster than TorchRL (per-item TensorDict overhead), 10x faster than SB3. For large observations (Atari-sized), memcpy dominates and the gap narrows.
+- **Buffer sample**: 8-13x faster than both TorchRL and SB3. Pre-allocated ring buffer + ChaCha8 RNG with predictable latency (p99 < 15us even for batch=1024).
+- **End-to-end rollout**: 3.9x faster than SB3, 53x faster than TorchRL at 256 envs × 2048 steps. Advantages compound across the pipeline.
+- **GRPO advantages**: 34x faster than both NumPy and PyTorch — dominated by per-call overhead for small arrays.
 - At small env counts (4), Rayon scheduling overhead exceeds CartPole compute (~37ns/step) — Gymnasium wins. This is expected and honest.
-- Speedup scales with env count: **5.7x at 512 envs** vs Gymnasium Sync.
-- Peak throughput: **2.1M env-steps/second** (512 envs).
-- Bridge overhead (Python ↔ Rust): ~2.7 us per step.
 
 ## Quick Start
 
@@ -97,21 +136,28 @@ cargo test --package rlox-core
 # Python only (after maturin develop)
 .venv/bin/python -m pytest tests/python/ -v
 
-# Benchmarks
+# Full benchmark suite (rlox vs TorchRL vs SB3)
 .venv/bin/python benchmarks/run_all.py
+
+# Individual benchmarks
+.venv/bin/python benchmarks/bench_buffer_ops.py
+.venv/bin/python benchmarks/bench_gae.py
+.venv/bin/python benchmarks/bench_llm_ops.py
+.venv/bin/python benchmarks/bench_e2e_rollout.py
 ```
 
 ## Project Layout
 
 ```
 crates/
-  rlox-core/       Pure Rust: envs, spaces, parallel stepping
+  rlox-core/       Pure Rust: envs, spaces, buffers, GAE, GRPO
   rlox-python/     PyO3 bindings
   rlox-bench/      Criterion benchmarks
 python/
   rlox/            Python package (imports Rust via _rlox_core)
-benchmarks/        Python benchmark suite with statistical framework
+benchmarks/        Three-framework benchmark suite
 tests/python/      Python integration & benchmark TDD tests
 scripts/           Test runner, README updater
-docs/              PRD, feature spec, phase plans, benchmarking plan
+docs/benchmark/    Detailed benchmark results & methodology
+docs/plans/        Phase-by-phase implementation plans
 ```

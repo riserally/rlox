@@ -10,4 +10,7 @@ pub enum RloxError {
 
     #[error("Shape mismatch: expected {expected}, got {got}")]
     ShapeMismatch { expected: String, got: String },
+
+    #[error("Buffer error: {0}")]
+    BufferError(String),
 }

@@ -8,3 +8,4 @@ __pycache__
 /dist
 *.pdb
 /benchmark_results
+*.dSYM

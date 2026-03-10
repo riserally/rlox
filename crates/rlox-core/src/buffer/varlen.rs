@@ -118,4 +118,42 @@ mod tests {
         let store = VarLenStore::default();
         assert_eq!(store.num_sequences(), 0);
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+        use proptest::collection::vec;
+
+        proptest! {
+            #[test]
+            fn varlen_total_equals_sum_of_lengths(sequences in vec(vec(0u32..1000, 1..100), 1..50)) {
+                let mut store = VarLenStore::new();
+                let expected: usize = sequences.iter().map(|s| s.len()).sum();
+                for seq in &sequences {
+                    store.push(seq);
+                }
+                prop_assert_eq!(store.total_elements(), expected);
+            }
+
+            #[test]
+            fn varlen_roundtrip(sequences in vec(vec(0u32..1000, 1..100), 1..50)) {
+                let mut store = VarLenStore::new();
+                for seq in &sequences {
+                    store.push(seq);
+                }
+                for (i, seq) in sequences.iter().enumerate() {
+                    prop_assert_eq!(store.get(i), seq.as_slice());
+                }
+            }
+
+            #[test]
+            fn varlen_num_sequences_matches(sequences in vec(vec(0u32..1000, 1..50), 1..100)) {
+                let mut store = VarLenStore::new();
+                for seq in &sequences {
+                    store.push(seq);
+                }
+                prop_assert_eq!(store.num_sequences(), sequences.len());
+            }
+        }
+    }
 }

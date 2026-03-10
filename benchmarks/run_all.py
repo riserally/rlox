@@ -7,26 +7,16 @@ Benchmarks that depend on unimplemented features are skipped gracefully.
 
 Usage:
     python benchmarks/run_all.py [--output-dir benchmark_results] [--quick]
+    python benchmarks/run_all.py --category buffer_ops
+    python benchmarks/run_all.py --category e2e
 """
 
 import argparse
-import json
 import sys
 import os
-import time
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
-from conftest import system_info, write_report
-
-
-def run_env_stepping(output_dir: str, quick: bool = False):
-    """Run environment stepping benchmarks (3.1)."""
-    print("\n" + "=" * 70)
-    print("BENCHMARK 3.1: Environment Stepping")
-    print("=" * 70)
-    from bench_env_stepping import run_all
-    run_all(output_dir)
+from conftest import system_info
 
 
 def check_phase_available(phase: str) -> bool:
@@ -43,18 +33,27 @@ def check_phase_available(phase: str) -> bool:
         return False
 
 
+def check_framework_available(name: str) -> bool:
+    """Check if an optional framework is installed."""
+    try:
+        __import__(name)
+        return True
+    except ImportError:
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="rlox benchmark suite")
     parser.add_argument("--output-dir", default="benchmark_results")
     parser.add_argument("--quick", action="store_true",
-                       help="Run reduced iterations for faster feedback")
+                        help="Run reduced iterations for faster feedback")
     parser.add_argument("--category", choices=[
-        "all", "env_stepping", "buffer_ops", "gae", "llm",
+        "all", "env_stepping", "buffer_ops", "gae", "llm", "e2e",
     ], default="all")
     args = parser.parse_args()
 
     print("=" * 70)
-    print("rlox Benchmark Suite")
+    print("rlox Benchmark Suite — Three-Framework Comparison")
     print("=" * 70)
 
     info = system_info()
@@ -68,11 +67,21 @@ def main():
         print(f"GPU:      {info.get('gpu', 'unknown')}")
     print(f"rlox:     {'available' if info.get('rlox_available') else 'NOT FOUND'}")
 
+    # Framework availability
+    print("\nFramework availability:")
+    for fw, pkg in [
+        ("TorchRL", "torchrl"),
+        ("Stable-Baselines3", "stable_baselines3"),
+        ("Gymnasium", "gymnasium"),
+    ]:
+        available = check_framework_available(pkg)
+        print(f"  {fw}: {'available' if available else 'NOT INSTALLED (benchmarks will skip)'}")
+
     # Phase availability
-    print("\nPhase availability:")
+    print("\nrlox phase availability:")
     for phase, desc in [
         ("phase2", "Experience Storage (buffer, VarLenStore)"),
-        ("phase3", "Training Orchestrator (GAE, batch assembly)"),
+        ("phase3", "Training Core (GAE)"),
         ("phase4", "LLM Post-Training (GRPO, DPO, token KL)"),
     ]:
         available = check_phase_available(phase)
@@ -82,27 +91,50 @@ def main():
     # Run benchmarks
     if args.category in ("all", "env_stepping"):
         try:
-            run_env_stepping(args.output_dir, args.quick)
+            from bench_env_stepping import run_all as run_env
+            run_env(args.output_dir)
         except Exception as e:
             print(f"\nENV STEPPING BENCHMARK FAILED: {e}")
 
     if args.category in ("all", "buffer_ops"):
         if check_phase_available("phase2"):
-            print("\n[TODO] Buffer benchmarks — run when Phase 2 is implemented")
+            try:
+                from bench_buffer_ops import run_all as run_buffers
+                run_buffers(args.output_dir)
+            except Exception as e:
+                print(f"\nBUFFER OPS BENCHMARK FAILED: {e}")
         else:
             print("\n[SKIP] Buffer benchmarks — Phase 2 not implemented")
 
     if args.category in ("all", "gae"):
         if check_phase_available("phase3"):
-            print("\n[TODO] GAE benchmarks — run when Phase 3 is implemented")
+            try:
+                from bench_gae import run_all as run_gae
+                run_gae(args.output_dir)
+            except Exception as e:
+                print(f"\nGAE BENCHMARK FAILED: {e}")
         else:
             print("\n[SKIP] GAE benchmarks — Phase 3 not implemented")
 
     if args.category in ("all", "llm"):
         if check_phase_available("phase4"):
-            print("\n[TODO] LLM benchmarks — run when Phase 4 is implemented")
+            try:
+                from bench_llm_ops import run_all as run_llm
+                run_llm(args.output_dir)
+            except Exception as e:
+                print(f"\nLLM OPS BENCHMARK FAILED: {e}")
         else:
             print("\n[SKIP] LLM benchmarks — Phase 4 not implemented")
+
+    if args.category in ("all", "e2e"):
+        if check_phase_available("phase2") and check_phase_available("phase3"):
+            try:
+                from bench_e2e_rollout import run_all as run_e2e
+                run_e2e(args.output_dir)
+            except Exception as e:
+                print(f"\nE2E ROLLOUT BENCHMARK FAILED: {e}")
+        else:
+            print("\n[SKIP] E2E rollout benchmarks — Phase 2+3 required")
 
     print("\n" + "=" * 70)
     print("DONE")

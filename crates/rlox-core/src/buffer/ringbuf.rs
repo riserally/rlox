@@ -201,4 +201,40 @@ mod tests {
         assert_eq!(buf.len(), 0);
         assert!(buf.is_empty());
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn ring_buffer_never_exceeds_capacity(capacity in 1..500usize, num_pushes in 0..2000usize) {
+                let mut buf = ReplayBuffer::new(capacity, 4, 1);
+                for _ in 0..num_pushes {
+                    buf.push(sample_record(4)).unwrap();
+                }
+                prop_assert!(buf.len() <= capacity);
+            }
+
+            #[test]
+            fn ring_buffer_len_is_min_of_pushes_and_capacity(capacity in 1..500usize, num_pushes in 0..2000usize) {
+                let mut buf = ReplayBuffer::new(capacity, 4, 1);
+                for _ in 0..num_pushes {
+                    buf.push(sample_record(4)).unwrap();
+                }
+                prop_assert_eq!(buf.len(), num_pushes.min(capacity));
+            }
+
+            #[test]
+            fn sample_returns_requested_size_prop(capacity in 10..500usize, num_pushes in 10..2000usize, batch_size in 1..50usize) {
+                let mut buf = ReplayBuffer::new(capacity, 4, 1);
+                for _ in 0..num_pushes {
+                    buf.push(sample_record(4)).unwrap();
+                }
+                let effective_batch = batch_size.min(buf.len());
+                let batch = buf.sample(effective_batch, 42).unwrap();
+                prop_assert_eq!(batch.batch_size, effective_batch);
+            }
+        }
+    }
 }

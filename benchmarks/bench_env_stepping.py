@@ -189,6 +189,97 @@ def bench_sb3_subprocvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int
 
 
 # ---------------------------------------------------------------------------
+# 3.1.2b TorchRL environment stepping
+# ---------------------------------------------------------------------------
+
+def bench_torchrl_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
+    try:
+        from torchrl.envs import GymEnv
+        import torch
+    except ImportError:
+        print("  [skip] torchrl not installed")
+        return None
+
+    env = GymEnv("CartPole-v1", device="cpu")
+    td = env.reset()
+
+    def step():
+        nonlocal td
+        td.set("action", torch.tensor(1))
+        td = env.step(td)
+        next_td = td.get("next")
+        if next_td.get("done").item():
+            td = env.reset()
+        else:
+            td = next_td
+
+    times = timed_run(step, n_warmup=100, n_reps=n_reps)
+    env.close()
+    return BenchmarkResult(
+        name="single_step", category="env_stepping",
+        framework="torchrl", times_ns=times,
+    )
+
+
+def bench_torchrl_serial_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50) -> BenchmarkResult | None:
+    try:
+        from torchrl.envs import GymEnv, SerialEnv
+        import torch
+    except ImportError:
+        return None
+
+    env = SerialEnv(num_envs, lambda: GymEnv("CartPole-v1", device="cpu"))
+    td = env.reset()
+
+    def step_batch():
+        nonlocal td
+        for _ in range(n_batch_steps):
+            td.set("action", torch.zeros(num_envs, dtype=torch.long))
+            td = env.step(td)
+            td = td.get("next")
+
+    times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
+    env.close()
+    total_steps_per_call = num_envs * n_batch_steps
+    return BenchmarkResult(
+        name=f"vecenv_{num_envs}", category="env_stepping",
+        framework="torchrl_serial", times_ns=times,
+        params={"num_envs": num_envs, "batch_steps": n_batch_steps, "n_items": total_steps_per_call},
+    )
+
+
+def bench_torchrl_parallel_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 20) -> BenchmarkResult | None:
+    try:
+        from torchrl.envs import GymEnv, ParallelEnv
+        import torch
+    except ImportError:
+        return None
+
+    try:
+        env = ParallelEnv(num_envs, lambda: GymEnv("CartPole-v1", device="cpu"))
+        td = env.reset()
+    except Exception as e:
+        print(f"    [skip] torchrl ParallelEnv failed: {e}")
+        return None
+
+    def step_batch():
+        nonlocal td
+        for _ in range(n_batch_steps):
+            td.set("action", torch.zeros(num_envs, dtype=torch.long))
+            td = env.step(td)
+            td = td.get("next")
+
+    times = timed_run(step_batch, n_warmup=3, n_reps=n_reps)
+    env.close()
+    total_steps_per_call = num_envs * n_batch_steps
+    return BenchmarkResult(
+        name=f"vecenv_{num_envs}", category="env_stepping",
+        framework="torchrl_parallel", times_ns=times,
+        params={"num_envs": num_envs, "batch_steps": n_batch_steps, "n_items": total_steps_per_call},
+    )
+
+
+# ---------------------------------------------------------------------------
 # 3.1.3 Bridge overhead
 # ---------------------------------------------------------------------------
 
@@ -264,6 +355,15 @@ def run_all(output_dir: str = "benchmark_results"):
         lo, hi = comp.speedup_ci_95
         print(f"  -> rlox speedup: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
         all_comparisons.append(comp.summary())
+
+    torchrl_single = bench_torchrl_single_step()
+    if torchrl_single:
+        print(f"  torchrl:    {torchrl_single.median_ns:>10.0f} ns (IQR: {torchrl_single.iqr_ns:.0f})")
+        all_results.append(torchrl_single.summary())
+        comp = ComparisonResult("single_step", rlox_single, torchrl_single, "torchrl")
+        lo, hi = comp.speedup_ci_95
+        print(f"  -> vs torchrl: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
+        all_comparisons.append(comp.summary())
     print()
 
     # --- 3.1.2 Vectorized throughput ---
@@ -310,6 +410,30 @@ def run_all(output_dir: str = "benchmark_results"):
                 comp = ComparisonResult(f"vecenv_{n}", rlox_vec, sb3_dummy, "sb3_dummyvecenv")
                 lo, hi = comp.speedup_ci_95
                 print(f"    -> vs sb3 dummy: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
+                all_comparisons.append(comp.summary())
+
+        # TorchRL serial
+        if n <= 256:
+            torchrl_serial = bench_torchrl_serial_vecenv(n)
+            if torchrl_serial:
+                throughput_ts = torchrl_serial.throughput
+                print(f"    torchrl serial:  {torchrl_serial.median_ns/1e6:>8.2f} ms  ({throughput_ts:>12,.0f} steps/s)")
+                all_results.append(torchrl_serial.summary())
+                comp = ComparisonResult(f"vecenv_{n}", rlox_vec, torchrl_serial, "torchrl_serial")
+                lo, hi = comp.speedup_ci_95
+                print(f"    -> vs torchrl serial: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
+                all_comparisons.append(comp.summary())
+
+        # TorchRL parallel (multiprocess)
+        if n <= 64:
+            torchrl_par = bench_torchrl_parallel_vecenv(n, n_batch_steps=50, n_reps=10)
+            if torchrl_par:
+                throughput_tp = torchrl_par.throughput
+                print(f"    torchrl parallel: {torchrl_par.median_ns/1e6:>8.2f} ms  ({throughput_tp:>12,.0f} steps/s)")
+                all_results.append(torchrl_par.summary())
+                comp = ComparisonResult(f"vecenv_{n}", rlox_vec, torchrl_par, "torchrl_parallel")
+                lo, hi = comp.speedup_ci_95
+                print(f"    -> vs torchrl parallel: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
                 all_comparisons.append(comp.summary())
 
         if n <= 64:

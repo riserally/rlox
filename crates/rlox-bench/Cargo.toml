@@ -1,0 +1,21 @@
+[package]
+name = "rlox-bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bench]]
+name = "env_stepping"
+harness = false
+
+[[bench]]
+name = "micro_ops"
+harness = false
+
+[dependencies]
+rlox-core = { path = "../rlox-core" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.9"
+rand_chacha = "0.9"
+rayon = "1.10"

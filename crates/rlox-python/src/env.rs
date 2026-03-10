@@ -1,0 +1,187 @@
+use numpy::{PyArray1, PyArray2};
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+
+use rlox_core::env::builtins::CartPole;
+use rlox_core::env::parallel::VecEnv;
+use rlox_core::env::spaces::Action;
+use rlox_core::env::{RLEnv, Transition};
+use rlox_core::error::RloxError;
+use rlox_core::seed::derive_seed;
+
+fn rlox_err_to_py(e: RloxError) -> PyErr {
+    PyRuntimeError::new_err(e.to_string())
+}
+
+fn transition_to_pydict<'py>(py: Python<'py>, t: &Transition) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    let obs_array = PyArray1::from_slice(py, t.obs.as_slice());
+    dict.set_item("obs", obs_array)?;
+    dict.set_item("reward", t.reward)?;
+    dict.set_item("terminated", t.terminated)?;
+    dict.set_item("truncated", t.truncated)?;
+    Ok(dict)
+}
+
+/// Python-facing CartPole environment.
+#[pyclass(name = "CartPole")]
+pub struct PyCartPole {
+    inner: CartPole,
+}
+
+#[pymethods]
+impl PyCartPole {
+    #[new]
+    #[pyo3(signature = (seed = None))]
+    fn new(seed: Option<u64>) -> Self {
+        PyCartPole {
+            inner: CartPole::new(seed),
+        }
+    }
+
+    fn step<'py>(&mut self, py: Python<'py>, action: u32) -> PyResult<Bound<'py, PyDict>> {
+        let t = self
+            .inner
+            .step(&Action::Discrete(action))
+            .map_err(rlox_err_to_py)?;
+        transition_to_pydict(py, &t)
+    }
+
+    #[pyo3(signature = (seed = None))]
+    fn reset<'py>(&mut self, py: Python<'py>, seed: Option<u64>) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        let obs = self.inner.reset(seed).map_err(rlox_err_to_py)?;
+        Ok(PyArray1::from_slice(py, obs.as_slice()))
+    }
+
+    fn render(&self) -> Option<String> {
+        self.inner.render()
+    }
+}
+
+/// Python-facing vectorized environment for parallel stepping.
+#[pyclass(name = "VecEnv")]
+pub struct PyVecEnv {
+    inner: VecEnv,
+}
+
+#[pymethods]
+impl PyVecEnv {
+    /// Create a VecEnv with `n` CartPole environments.
+    #[new]
+    #[pyo3(signature = (n, seed = None))]
+    fn new(n: usize, seed: Option<u64>) -> Self {
+        let master_seed = seed.unwrap_or(0);
+        let envs: Vec<Box<dyn RLEnv>> = (0..n)
+            .map(|i| {
+                let s = derive_seed(master_seed, i);
+                Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
+            })
+            .collect();
+        PyVecEnv {
+            inner: VecEnv::new(envs),
+        }
+    }
+
+    fn num_envs(&self) -> usize {
+        self.inner.num_envs()
+    }
+
+    /// Step all envs. `actions` is a list/array of integer actions.
+    fn step_all<'py>(
+        &mut self,
+        py: Python<'py>,
+        actions: Vec<u32>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let actions: Vec<Action> = actions.into_iter().map(Action::Discrete).collect();
+        let batch = self.inner.step_all(&actions).map_err(rlox_err_to_py)?;
+
+        let n = batch.obs.len();
+        let obs_dim = if n > 0 { batch.obs[0].len() } else { 0 };
+
+        // Build a flat vec for the 2D obs array
+        let mut obs_flat = Vec::with_capacity(n * obs_dim);
+        for row in &batch.obs {
+            obs_flat.extend_from_slice(row);
+        }
+
+        let dict = PyDict::new(py);
+        let obs_array = PyArray2::from_vec2(py, &batch.obs).map_err(|e| {
+            PyRuntimeError::new_err(format!("Failed to create obs array: {}", e))
+        })?;
+        dict.set_item("obs", obs_array)?;
+
+        let rewards = PyArray1::from_slice(py, &batch.rewards);
+        dict.set_item("rewards", rewards)?;
+
+        let terminated: Vec<u8> = batch.terminated.iter().map(|&b| b as u8).collect();
+        let terminated_arr = PyArray1::from_slice(py, &terminated);
+        dict.set_item("terminated", terminated_arr)?;
+
+        let truncated: Vec<u8> = batch.truncated.iter().map(|&b| b as u8).collect();
+        let truncated_arr = PyArray1::from_slice(py, &truncated);
+        dict.set_item("truncated", truncated_arr)?;
+
+        Ok(dict)
+    }
+
+    /// Reset all envs with an optional master seed.
+    #[pyo3(signature = (seed = None))]
+    fn reset_all<'py>(
+        &mut self,
+        py: Python<'py>,
+        seed: Option<u64>,
+    ) -> PyResult<Bound<'py, PyArray2<f32>>> {
+        let observations = self.inner.reset_all(seed).map_err(rlox_err_to_py)?;
+        let vecs: Vec<Vec<f32>> = observations.into_iter().map(|o| o.into_inner()).collect();
+        PyArray2::from_vec2(py, &vecs)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create obs array: {}", e)))
+    }
+}
+
+/// Python-facing wrapper for a Gymnasium environment.
+///
+/// This allows Python gymnasium.Env objects to be used from Rust-side code
+/// (stepped sequentially due to GIL constraints).
+#[pyclass(name = "GymEnv")]
+pub struct PyGymEnv {
+    gym_env: PyObject,
+}
+
+#[pymethods]
+impl PyGymEnv {
+    /// Wrap an existing gymnasium.Env instance.
+    #[new]
+    fn new(env: PyObject) -> Self {
+        PyGymEnv { gym_env: env }
+    }
+
+    fn step<'py>(&self, py: Python<'py>, action: PyObject) -> PyResult<Bound<'py, PyDict>> {
+        let result = self.gym_env.call_method1(py, "step", (action,))?;
+        let tuple = result.downcast_bound::<pyo3::types::PyTuple>(py)?;
+
+        let obs = tuple.get_item(0)?;
+        let reward: f64 = tuple.get_item(1)?.extract()?;
+        let terminated: bool = tuple.get_item(2)?.extract()?;
+        let truncated: bool = tuple.get_item(3)?.extract()?;
+
+        let dict = PyDict::new(py);
+        dict.set_item("obs", obs)?;
+        dict.set_item("reward", reward)?;
+        dict.set_item("terminated", terminated)?;
+        dict.set_item("truncated", truncated)?;
+        Ok(dict)
+    }
+
+    #[pyo3(signature = (seed = None))]
+    fn reset<'py>(&self, py: Python<'py>, seed: Option<u64>) -> PyResult<PyObject> {
+        let kwargs = PyDict::new(py);
+        if let Some(s) = seed {
+            kwargs.set_item("seed", s)?;
+        }
+        let result = self.gym_env.call_method(py, "reset", (), Some(&kwargs))?;
+        let tuple = result.downcast_bound::<pyo3::types::PyTuple>(py)?;
+        let obs = tuple.get_item(0)?;
+        Ok(obs.into_pyobject(py)?.into_any().unbind())
+    }
+}

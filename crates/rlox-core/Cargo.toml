@@ -1,0 +1,11 @@
+[package]
+name = "rlox-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rayon = "1.10"
+rand = "0.9"
+rand_chacha = "0.9"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }

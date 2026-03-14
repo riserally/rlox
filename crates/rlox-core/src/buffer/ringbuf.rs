@@ -85,11 +85,19 @@ impl ReplayBuffer {
                 got: format!("obs.len()={}", record.obs.len()),
             });
         }
+        if record.action.len() != self.act_dim {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("act_dim={}", self.act_dim),
+                got: format!("action.len()={}", record.action.len()),
+            });
+        }
         let idx = self.write_pos;
         let obs_start = idx * self.obs_dim;
         self.observations[obs_start..obs_start + self.obs_dim]
             .copy_from_slice(&record.obs);
-        self.actions[idx] = record.action;
+        let act_start = idx * self.act_dim;
+        self.actions[act_start..act_start + self.act_dim]
+            .copy_from_slice(&record.action);
         self.rewards[idx] = record.reward;
         self.terminated[idx] = record.terminated;
         self.truncated[idx] = record.truncated;
@@ -121,7 +129,10 @@ impl ReplayBuffer {
             batch
                 .observations
                 .extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
-            batch.actions.push(self.actions[idx]);
+            let act_start = idx * self.act_dim;
+            batch
+                .actions
+                .extend_from_slice(&self.actions[act_start..act_start + self.act_dim]);
             batch.rewards.push(self.rewards[idx]);
             batch.terminated.push(self.terminated[idx]);
             batch.truncated.push(self.truncated[idx]);

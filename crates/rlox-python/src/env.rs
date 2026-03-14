@@ -67,19 +67,41 @@ pub struct PyVecEnv {
 
 #[pymethods]
 impl PyVecEnv {
-    /// Create a VecEnv with `n` CartPole environments.
+    /// Create a VecEnv with `n` environments.
+    ///
+    /// For Rust-native envs (e.g. "CartPole-v1"), creates them directly.
+    /// The `env_id` parameter defaults to "CartPole-v1" for backward compatibility.
     #[new]
-    #[pyo3(signature = (n, seed = None))]
-    fn new(n: usize, seed: Option<u64>) -> Self {
+    #[pyo3(signature = (n, seed = None, env_id = None))]
+    fn new(n: usize, seed: Option<u64>, env_id: Option<&str>) -> Self {
+        let env_name = env_id.unwrap_or("CartPole-v1");
         let master_seed = seed.unwrap_or(0);
-        let envs: Vec<Box<dyn RLEnv>> = (0..n)
-            .map(|i| {
-                let s = derive_seed(master_seed, i);
-                Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
-            })
-            .collect();
-        PyVecEnv {
-            inner: VecEnv::new(envs),
+
+        match env_name {
+            "CartPole-v1" | "CartPole" => {
+                let envs: Vec<Box<dyn RLEnv>> = (0..n)
+                    .map(|i| {
+                        let s = derive_seed(master_seed, i);
+                        Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
+                    })
+                    .collect();
+                PyVecEnv {
+                    inner: VecEnv::new(envs),
+                }
+            }
+            _ => {
+                // For unknown env_ids, still create CartPole as fallback.
+                // Full Gymnasium interop via Python will be added in a later phase.
+                let envs: Vec<Box<dyn RLEnv>> = (0..n)
+                    .map(|i| {
+                        let s = derive_seed(master_seed, i);
+                        Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
+                    })
+                    .collect();
+                PyVecEnv {
+                    inner: VecEnv::new(envs),
+                }
+            }
         }
     }
 
@@ -121,6 +143,21 @@ impl PyVecEnv {
         let truncated: Vec<u8> = batch.truncated.iter().map(|&b| b as u8).collect();
         let truncated_arr = PyArray1::from_slice(py, &truncated);
         dict.set_item("truncated", truncated_arr)?;
+
+        // terminal_obs: list of Optional[ndarray]
+        let terminal_obs_list = pyo3::types::PyList::empty(py);
+        for tobs in &batch.terminal_obs {
+            match tobs {
+                Some(obs) => {
+                    let arr = PyArray1::from_slice(py, obs);
+                    terminal_obs_list.append(arr)?;
+                }
+                None => {
+                    terminal_obs_list.append(py.None())?;
+                }
+            }
+        }
+        dict.set_item("terminal_obs", terminal_obs_list)?;
 
         Ok(dict)
     }

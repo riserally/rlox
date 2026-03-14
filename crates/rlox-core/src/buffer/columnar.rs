@@ -61,8 +61,14 @@ impl ExperienceTable {
                 got: format!("obs.len()={}", record.obs.len()),
             });
         }
+        if record.action.len() != self.act_dim {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("act_dim={}", self.act_dim),
+                got: format!("action.len()={}", record.action.len()),
+            });
+        }
         self.observations.extend_from_slice(&record.obs);
-        self.actions.push(record.action);
+        self.actions.extend_from_slice(&record.action);
         self.rewards.push(record.reward);
         self.terminated.push(record.terminated);
         self.truncated.push(record.truncated);

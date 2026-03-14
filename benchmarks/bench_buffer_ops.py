@@ -30,7 +30,7 @@ def bench_rlox_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResul
 
     def push_batch():
         for _ in range(n_transitions):
-            table.push(obs=obs, action=0, reward=1.0,
+            table.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                        terminated=False, truncated=False)
 
     times = timed_run(push_batch, n_warmup=2, n_reps=10)
@@ -47,7 +47,7 @@ def bench_rlox_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkR
     buf = ReplayBuffer(capacity=buffer_size, obs_dim=4, act_dim=1)
     obs = np.zeros(4, dtype=np.float32)
     for _ in range(buffer_size):
-        buf.push(obs=obs, action=0, reward=1.0,
+        buf.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                  terminated=False, truncated=False)
 
     seed_counter = [0]

@@ -50,7 +50,7 @@ class TestBenchBufferPush:
 
         def push_batch():
             for _ in range(n_transitions):
-                table.push(obs=obs, action=0, reward=1.0,
+                table.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                           terminated=False, truncated=False)
 
         times = timed_run(push_batch, n_warmup=2, n_reps=10)
@@ -75,7 +75,7 @@ class TestBenchBufferPush:
 
         def push_batch():
             for _ in range(n_transitions):
-                table.push(obs=obs, action=0, reward=1.0,
+                table.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                           terminated=False, truncated=False)
 
         times = timed_run(push_batch, n_warmup=2, n_reps=10)
@@ -103,7 +103,7 @@ class TestBenchBufferSample:
         buf = ReplayBuffer(capacity=100_000, obs_dim=4, act_dim=1)
         obs = np.zeros(4, dtype=np.float32)
         for _ in range(100_000):
-            buf.push(obs=obs, action=0, reward=1.0,
+            buf.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                     terminated=False, truncated=False)
 
         def sample():
@@ -135,7 +135,7 @@ class TestBenchZeroCopy:
         table = ExperienceTable(obs_dim=4, act_dim=1)
         obs = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
         for _ in range(10):
-            table.push(obs=obs, action=0, reward=1.0,
+            table.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                       terminated=False, truncated=False)
 
         obs_array = table.observations()
@@ -150,7 +150,7 @@ class TestBenchZeroCopy:
         table = ExperienceTable(obs_dim=4, act_dim=1)
         obs = np.zeros(4, dtype=np.float32)
         for _ in range(10_000):
-            table.push(obs=obs, action=0, reward=1.0,
+            table.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                       terminated=False, truncated=False)
 
         # Zero-copy: just get the view

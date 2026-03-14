@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use rlox_core::buffer::columnar::ExperienceTable;
+use rlox_core::buffer::priority::PrioritizedReplayBuffer;
 use rlox_core::buffer::ringbuf::ReplayBuffer;
 use rlox_core::buffer::varlen::VarLenStore;
 use rlox_core::buffer::ExperienceRecord;
@@ -32,14 +33,14 @@ impl PyExperienceTable {
     fn push(
         &mut self,
         obs: PyReadonlyArray1<f32>,
-        action: f32,
+        action: PyReadonlyArray1<f32>,
         reward: f32,
         terminated: bool,
         truncated: bool,
     ) -> PyResult<()> {
         let record = ExperienceRecord {
             obs: obs.as_slice()?.to_vec(),
-            action,
+            action: action.as_slice()?.to_vec(),
             reward,
             terminated,
             truncated,
@@ -95,14 +96,14 @@ impl PyReplayBuffer {
     fn push(
         &mut self,
         obs: PyReadonlyArray1<f32>,
-        action: f32,
+        action: PyReadonlyArray1<f32>,
         reward: f32,
         terminated: bool,
         truncated: bool,
     ) -> PyResult<()> {
         let record = ExperienceRecord {
             obs: obs.as_slice()?.to_vec(),
-            action,
+            action: action.as_slice()?.to_vec(),
             reward,
             terminated,
             truncated,
@@ -131,7 +132,15 @@ impl PyReplayBuffer {
             .reshape([batch.batch_size, batch.obs_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("obs", obs_2d)?;
-        dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
+        let act_1d = PyArray1::from_vec(py, batch.actions);
+        if batch.act_dim > 1 {
+            let act_2d = act_1d
+                .reshape([batch.batch_size, batch.act_dim])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            dict.set_item("actions", act_2d)?;
+        } else {
+            dict.set_item("actions", act_1d)?;
+        }
         dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
 
         let term: Vec<u8> = batch.terminated.iter().map(|&b| b as u8).collect();
@@ -139,6 +148,113 @@ impl PyReplayBuffer {
         dict.set_item("terminated", PyArray1::from_slice(py, &term))?;
         dict.set_item("truncated", PyArray1::from_slice(py, &trunc))?;
         Ok(dict)
+    }
+}
+
+// ---------- PrioritizedReplayBuffer ----------
+
+#[pyclass(name = "PrioritizedReplayBuffer")]
+pub struct PyPrioritizedReplayBuffer {
+    inner: PrioritizedReplayBuffer,
+}
+
+#[pymethods]
+impl PyPrioritizedReplayBuffer {
+    #[new]
+    #[pyo3(signature = (capacity, obs_dim, act_dim, alpha=0.6, beta=0.4))]
+    fn new(capacity: usize, obs_dim: usize, act_dim: usize, alpha: f64, beta: f64) -> Self {
+        Self {
+            inner: PrioritizedReplayBuffer::new(capacity, obs_dim, act_dim, alpha, beta),
+        }
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[pyo3(signature = (obs, action, reward, terminated, truncated, priority=1.0))]
+    fn push(
+        &mut self,
+        obs: PyReadonlyArray1<f32>,
+        action: PyReadonlyArray1<f32>,
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+        priority: f64,
+    ) -> PyResult<()> {
+        let record = ExperienceRecord {
+            obs: obs.as_slice()?.to_vec(),
+            action: action.as_slice()?.to_vec(),
+            reward,
+            terminated,
+            truncated,
+        };
+        self.inner
+            .push(record, priority)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Sample a batch. Returns a dict with numpy arrays + weights + indices.
+    #[pyo3(signature = (batch_size, seed=42))]
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = self
+            .inner
+            .sample(batch_size, seed)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let dict = PyDict::new(py);
+        let obs_1d = PyArray1::from_vec(py, batch.observations);
+        let obs_2d = obs_1d
+            .reshape([batch.batch_size, batch.obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("obs", obs_2d)?;
+        let act_1d = PyArray1::from_vec(py, batch.actions);
+        if batch.act_dim > 1 {
+            let act_2d = act_1d
+                .reshape([batch.batch_size, batch.act_dim])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            dict.set_item("actions", act_2d)?;
+        } else {
+            dict.set_item("actions", act_1d)?;
+        }
+        dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
+
+        let term: Vec<u8> = batch.terminated.iter().map(|&b| b as u8).collect();
+        let trunc: Vec<u8> = batch.truncated.iter().map(|&b| b as u8).collect();
+        dict.set_item("terminated", PyArray1::from_slice(py, &term))?;
+        dict.set_item("truncated", PyArray1::from_slice(py, &trunc))?;
+
+        // Prioritized-specific fields
+        let weights: Vec<f32> = batch.weights.iter().map(|&w| w as f32).collect();
+        dict.set_item("weights", PyArray1::from_vec(py, weights))?;
+        let indices: Vec<u64> = batch.indices.iter().map(|&i| i as u64).collect();
+        dict.set_item("indices", PyArray1::from_vec(py, indices))?;
+
+        Ok(dict)
+    }
+
+    /// Update priorities for previously sampled indices.
+    #[pyo3(signature = (indices, priorities))]
+    fn update_priorities(
+        &mut self,
+        indices: PyReadonlyArray1<u64>,
+        priorities: PyReadonlyArray1<f64>,
+    ) -> PyResult<()> {
+        let idx_slice = indices.as_slice()?;
+        let pri_slice = priorities.as_slice()?;
+        let idx_usize: Vec<usize> = idx_slice.iter().map(|&i| i as usize).collect();
+        self.inner
+            .update_priorities(&idx_usize, pri_slice)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn set_beta(&mut self, beta: f64) {
+        self.inner.set_beta(beta);
     }
 }
 

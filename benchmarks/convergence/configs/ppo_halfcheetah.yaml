@@ -1,0 +1,26 @@
+algorithm: PPO
+environment: HalfCheetah-v4
+action_space: continuous
+threshold: 3000.0
+max_steps: 1_000_000
+eval_freq: 10_000
+eval_episodes: 10
+
+hyperparameters:
+  n_envs: 8
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.0
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  normalize_obs: true
+  normalize_reward: true
+
+policy:
+  type: MlpPolicy
+  hidden_sizes: [64, 64]

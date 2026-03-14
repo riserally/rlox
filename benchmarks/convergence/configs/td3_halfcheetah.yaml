@@ -1,0 +1,24 @@
+algorithm: TD3
+environment: HalfCheetah-v4
+action_space: continuous
+threshold: 8000.0
+max_steps: 1_000_000
+eval_freq: 10_000
+eval_episodes: 10
+
+hyperparameters:
+  buffer_size: 1_000_000
+  batch_size: 256
+  learning_rate: 1.0e-3
+  gamma: 0.99
+  tau: 0.005
+  policy_delay: 2
+  target_policy_noise: 0.2
+  target_noise_clip: 0.5
+  learning_starts: 10_000
+  train_freq: 1
+  exploration_noise: 0.1
+
+policy:
+  type: MlpPolicy
+  hidden_sizes: [400, 300]

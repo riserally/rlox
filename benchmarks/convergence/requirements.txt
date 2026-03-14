@@ -1,0 +1,9 @@
+stable-baselines3>=2.3.0
+gymnasium[mujoco]>=1.0.0
+rliable>=1.0.8
+matplotlib>=3.8
+seaborn>=0.13
+pyyaml>=6.0
+pandas>=2.0
+numpy>=1.24
+torch>=2.0

@@ -1,4 +1,15 @@
-"""Callback system for training loops."""
+"""Callback system for training loops.
+
+Provides hooks for monitoring, evaluation, checkpointing, and early
+stopping during training. Callbacks are composable via :class:`CallbackList`.
+
+Example
+-------
+>>> from rlox.callbacks import EarlyStoppingCallback, CallbackList
+>>> callbacks = CallbackList([
+...     EarlyStoppingCallback(patience=10),
+... ])
+"""
 
 from __future__ import annotations
 
@@ -6,30 +17,52 @@ from typing import Any
 
 
 class Callback:
-    """Base callback class. Override methods to hook into training events."""
+    """Base callback class. Override methods to hook into training events.
+
+    All ``on_*`` methods are no-ops by default. Override only the ones
+    you need. ``on_step`` should return ``True`` to continue training
+    or ``False`` to stop early.
+    """
 
     def on_training_start(self, **kwargs: Any) -> None:
+        """Called once before the training loop begins."""
         pass
 
     def on_step(self, **kwargs: Any) -> bool:
-        """Called after each step. Return False to stop training."""
+        """Called after each environment step. Return False to stop training."""
         return True
 
     def on_rollout_end(self, **kwargs: Any) -> None:
+        """Called after a complete rollout is collected."""
         pass
 
     def on_train_batch(self, **kwargs: Any) -> None:
+        """Called after each SGD minibatch update."""
         pass
 
     def on_eval(self, **kwargs: Any) -> None:
+        """Called after an evaluation episode completes."""
         pass
 
     def on_training_end(self, **kwargs: Any) -> None:
+        """Called once after the training loop finishes."""
         pass
 
 
 class EvalCallback(Callback):
-    """Periodic evaluation with optional best model saving."""
+    """Periodic evaluation with optional best model saving.
+
+    Parameters
+    ----------
+    eval_env : gymnasium.Env, optional
+        Environment for evaluation (separate from training env).
+    eval_freq : int
+        Evaluate every ``eval_freq`` steps (default 10000).
+    n_eval_episodes : int
+        Number of evaluation episodes (default 5).
+    best_model_path : str, optional
+        If set, save the best model weights to this path.
+    """
 
     def __init__(
         self,
@@ -52,7 +85,15 @@ class EvalCallback(Callback):
 
 
 class EarlyStoppingCallback(Callback):
-    """Stop training when reward plateaus."""
+    """Stop training when reward plateaus.
+
+    Parameters
+    ----------
+    patience : int
+        Number of steps without improvement before stopping (default 10).
+    min_delta : float
+        Minimum improvement to count as progress (default 0.0).
+    """
 
     def __init__(self, patience: int = 10, min_delta: float = 0.0):
         super().__init__()
@@ -76,7 +117,15 @@ class EarlyStoppingCallback(Callback):
 
 
 class CheckpointCallback(Callback):
-    """Periodic checkpoint saving."""
+    """Periodic checkpoint saving.
+
+    Parameters
+    ----------
+    save_freq : int
+        Save a checkpoint every ``save_freq`` steps (default 10000).
+    save_path : str
+        Directory for checkpoint files (default "checkpoints").
+    """
 
     def __init__(self, save_freq: int = 10000, save_path: str = "checkpoints"):
         super().__init__()

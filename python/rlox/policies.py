@@ -1,4 +1,10 @@
-"""Default policy networks for RL algorithms."""
+"""Default policy networks for on-policy RL algorithms.
+
+Provides actor-critic network architectures used by PPO and A2C.
+All policies use orthogonal initialisation (Andrychowicz et al., 2021)
+with reduced gain on the policy head (0.01) to encourage initial
+exploration.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +22,26 @@ def _orthogonal_init(module: nn.Module, gain: float = 1.0) -> None:
 
 
 class DiscretePolicy(nn.Module):
-    """MLP actor-critic for discrete action spaces (e.g. CartPole)."""
+    """MLP actor-critic for discrete action spaces (e.g. CartPole).
+
+    Separate actor and critic networks sharing no parameters. The actor
+    outputs logits for a Categorical distribution; the critic outputs a
+    scalar value estimate.
+
+    Parameters
+    ----------
+    obs_dim : int
+        Observation space dimensionality.
+    n_actions : int
+        Number of discrete actions.
+    hidden : int
+        Hidden layer width (default 64, matching CleanRL PPO).
+
+    Required interface methods (called by PPOLoss / RolloutCollector):
+        - ``get_action_and_logprob(obs)`` → (actions, log_probs)
+        - ``get_value(obs)`` → values
+        - ``get_logprob_and_entropy(obs, actions)`` → (log_probs, entropy)
+    """
 
     def __init__(self, obs_dim: int, n_actions: int, hidden: int = 64):
         super().__init__()

@@ -1,4 +1,14 @@
-"""Logging callbacks for training loops."""
+"""Logging callbacks for training loops.
+
+Provides pluggable loggers for Weights & Biases and TensorBoard.
+Extend :class:`LoggerCallback` for custom logging backends.
+
+Example
+-------
+>>> from rlox.logging import WandbLogger
+>>> logger = WandbLogger(project="my-rl-project")
+>>> trainer = PPOTrainer(env="CartPole-v1", logger=logger)
+"""
 
 from __future__ import annotations
 
@@ -6,7 +16,10 @@ from typing import Any
 
 
 class LoggerCallback:
-    """Base logger callback.  Override methods to hook into training events."""
+    """Base logger callback. Override methods to hook into training events.
+
+    Subclass this to implement custom logging (e.g. CSV, MLflow, etc.).
+    """
 
     def on_train_step(self, step: int, metrics: dict[str, Any]) -> None:
         pass

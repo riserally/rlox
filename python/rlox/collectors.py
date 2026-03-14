@@ -1,4 +1,16 @@
-"""RolloutCollector: gather on-policy experience using Rust VecEnv + GAE."""
+"""RolloutCollector: gather on-policy experience using Rust VecEnv + GAE.
+
+This module provides the bridge between environment stepping (Rust) and
+policy evaluation (PyTorch). It collects ``n_steps`` of experience from
+``n_envs`` parallel environments and computes GAE advantages, returning
+a flat :class:`~rlox.batch.RolloutBatch` ready for SGD.
+
+.. note::
+    Currently uses ``rlox.VecEnv`` which only supports CartPole. For other
+    environments, use ``gymnasium.vector.SyncVectorEnv`` with
+    ``rlox.compute_gae`` directly (see ``benchmarks/convergence/rlox_runner.py``
+    for an example).
+"""
 
 from __future__ import annotations
 
@@ -11,11 +23,39 @@ from rlox.batch import RolloutBatch
 
 
 class RolloutCollector:
-    """Collect rollout data from a vectorized environment.
+    """Collect on-policy rollout data from vectorized environments.
 
-    Uses ``rlox.VecEnv`` for stepping and ``rlox.compute_gae`` for
-    advantage estimation.  Optionally normalises rewards/observations
-    via ``rlox.RunningStats``.
+    Orchestrates the collect-then-compute pattern:
+    1. Step ``n_envs`` environments for ``n_steps`` using ``rlox.VecEnv``
+    2. Compute GAE advantages per environment using ``rlox.compute_gae``
+    3. Flatten and return a :class:`RolloutBatch`
+
+    Parameters
+    ----------
+    env_id : str
+        Gymnasium environment ID (currently only CartPole-v1 is native).
+    n_envs : int
+        Number of parallel environments.
+    seed : int
+        RNG seed for environment initialisation.
+    device : str
+        PyTorch device for output tensors.
+    gamma : float
+        Discount factor for GAE.
+    gae_lambda : float
+        Lambda parameter for GAE bias-variance tradeoff.
+    normalize_rewards : bool
+        If True, divide rewards by running standard deviation.
+    normalize_obs : bool
+        If True, standardise observations using running statistics.
+
+    Example
+    -------
+    >>> from rlox.policies import DiscretePolicy
+    >>> collector = RolloutCollector("CartPole-v1", n_envs=8, seed=0)
+    >>> policy = DiscretePolicy(obs_dim=4, n_actions=2)
+    >>> batch = collector.collect(policy, n_steps=128)
+    >>> batch.obs.shape  # torch.Size([1024, 4])
     """
 
     def __init__(

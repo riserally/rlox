@@ -1,4 +1,13 @@
-"""Configuration dataclasses with validation, merging, and serialization."""
+"""Configuration dataclasses with validation, merging, and serialization.
+
+Each config dataclass provides:
+- ``from_dict(d)`` — construct from a dict, ignoring unknown keys
+- ``merge(overrides)`` — create a new config with selective overrides
+- ``to_dict()`` — serialise to a plain dict (e.g. for JSON logging)
+
+Validation is performed in ``__post_init__`` and raises ``ValueError``
+for invalid parameters.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +27,41 @@ def _validate_min(name: str, value: int, minimum: int) -> None:
 
 @dataclass
 class PPOConfig:
+    """Configuration for PPO training.
+
+    Defaults match CleanRL's PPO implementation for CartPole-v1.
+
+    Attributes
+    ----------
+    n_envs : int
+        Number of parallel environments (default 8).
+    n_steps : int
+        Rollout length per environment per update (default 128).
+    n_epochs : int
+        Number of SGD passes over each rollout (default 4).
+    batch_size : int
+        Minibatch size for SGD (default 256).
+    learning_rate : float
+        Adam learning rate (default 2.5e-4).
+    clip_eps : float
+        PPO clipping range for the probability ratio (default 0.2).
+    vf_coef : float
+        Value loss coefficient (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.01).
+    max_grad_norm : float
+        Maximum gradient norm for clipping (default 0.5).
+    gamma : float
+        Discount factor (default 0.99).
+    gae_lambda : float
+        GAE lambda (default 0.95).
+    normalize_advantages : bool
+        Whether to normalise advantages per minibatch (default True).
+    clip_vloss : bool
+        Whether to clip the value loss (default True).
+    anneal_lr : bool
+        Whether to linearly anneal the learning rate (default True).
+    """
     n_envs: int = 8
     n_steps: int = 128
     n_epochs: int = 4
@@ -57,6 +101,31 @@ class PPOConfig:
 
 @dataclass
 class SACConfig:
+    """Configuration for SAC training.
+
+    Defaults match rl-zoo3 SAC hyperparameters.
+
+    Attributes
+    ----------
+    learning_rate : float
+        Learning rate for all optimisers (default 3e-4).
+    buffer_size : int
+        Replay buffer capacity (default 1M).
+    batch_size : int
+        Minibatch size for critic/actor updates (default 256).
+    tau : float
+        Polyak averaging coefficient for target networks (default 0.005).
+    gamma : float
+        Discount factor (default 0.99).
+    target_entropy : float or None
+        Target entropy for auto-tuning. None = ``-dim(action_space)``.
+    auto_entropy : bool
+        Whether to automatically tune the entropy coefficient (default True).
+    learning_starts : int
+        Number of random exploration steps before training (default 1000).
+    hidden : int
+        Hidden layer width for actor and critic networks (default 256).
+    """
     learning_rate: float = 3e-4
     buffer_size: int = 1_000_000
     batch_size: int = 256
@@ -89,6 +158,46 @@ class SACConfig:
 
 @dataclass
 class DQNConfig:
+    """Configuration for DQN training with Rainbow extensions.
+
+    Supports Double DQN, Dueling architecture, N-step returns, and
+    Prioritized Experience Replay (PER).
+
+    Attributes
+    ----------
+    learning_rate : float
+        Adam learning rate (default 1e-4).
+    buffer_size : int
+        Replay buffer capacity (default 1M).
+    batch_size : int
+        Minibatch size (default 64).
+    gamma : float
+        Discount factor (default 0.99).
+    target_update_freq : int
+        Steps between hard target network updates (default 1000).
+    exploration_fraction : float
+        Fraction of training for epsilon decay (default 0.1).
+    exploration_initial_eps : float
+        Starting epsilon for exploration (default 1.0).
+    exploration_final_eps : float
+        Final epsilon after decay (default 0.05).
+    learning_starts : int
+        Random exploration steps before training (default 1000).
+    double_dqn : bool
+        Use Double DQN action selection (default True).
+    dueling : bool
+        Use Dueling network architecture (default False).
+    n_step : int
+        N-step return horizon (default 1).
+    prioritized : bool
+        Use Prioritized Experience Replay (default False).
+    alpha : float
+        PER priority exponent (default 0.6).
+    beta_start : float
+        PER initial importance-sampling exponent (default 0.4).
+    hidden : int
+        Hidden layer width (default 256).
+    """
     learning_rate: float = 1e-4
     buffer_size: int = 1_000_000
     batch_size: int = 64

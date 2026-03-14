@@ -1,4 +1,8 @@
-"""Shared network utilities for off-policy algorithms."""
+"""Shared network architectures for off-policy algorithms (SAC, TD3, DQN).
+
+Provides Q-networks, stochastic/deterministic policy networks, and the
+Polyak (soft) target update utility.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,25 @@
-"""rlox algorithm implementations."""
+"""rlox algorithm implementations.
+
+On-policy (use VecEnv + compute_gae):
+    - :class:`PPO` — Proximal Policy Optimization (clipped surrogate)
+    - :class:`A2C` — Advantage Actor-Critic (single gradient step)
+
+Off-policy (use ReplayBuffer + gymnasium):
+    - :class:`SAC` — Soft Actor-Critic (continuous actions)
+    - :class:`TD3` — Twin Delayed DDPG (continuous actions)
+    - :class:`DQN` — Deep Q-Network with Rainbow extensions (discrete actions)
+
+LLM post-training:
+    - :class:`GRPO` — Group Relative Policy Optimization
+    - :class:`DPO` — Direct Preference Optimization
+    - :class:`OnlineDPO` — Online DPO with active generation
+    - :class:`BestOfN` — Best-of-N sampling baseline
+
+Multi-agent / advanced:
+    - :class:`MAPPO` — Multi-Agent PPO
+    - :class:`IMPALA` — Importance Weighted Actor-Learner Architecture
+    - :class:`DreamerV3` — World-model-based RL
+"""
 
 from rlox.algorithms.ppo import PPO, PPOConfig
 from rlox.algorithms.a2c import A2C

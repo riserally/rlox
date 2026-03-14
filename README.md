@@ -225,4 +225,27 @@ tests/python/      Python integration & benchmark TDD tests
 scripts/           Test runner, README updater
 docs/benchmark/    Detailed benchmark results & methodology
 docs/plans/        Phase-by-phase implementation plans
+docs/              User guides, math reference, paper references
+```
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md) -- installation, first agent, tutorial
+- [Python User Guide](docs/python-guide.md) -- Trainer, Algorithm, and Primitive APIs
+- [Rust User Guide](docs/rust-guide.md) -- using `rlox-core` directly from Rust
+- [Mathematical Reference](docs/math-reference.md) -- full derivations for all algorithms
+- [References](docs/references.md) -- academic papers behind each algorithm
+
+## Citing rlox
+
+If you use rlox in your research, please cite it:
+
+```bibtex
+@software{rlox2026,
+  title        = {rlox: Rust-Accelerated Reinforcement Learning},
+  year         = {2026},
+  url          = {https://github.com/wojciechkpl/rlox},
+  version      = {1.0.0},
+  note         = {Rust data plane + Python control plane via PyO3}
+}
 ```

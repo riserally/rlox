@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use rlox in your research, please cite it using these metadata."
+title: "rlox: Rust-Accelerated Reinforcement Learning"
+type: software
+version: 1.0.0
+date-released: 2026-03-14
+license: MIT
+url: "https://github.com/wojciechkpl/rlox"
+repository-code: "https://github.com/wojciechkpl/rlox"
+abstract: >-
+  rlox is a reinforcement learning library that applies the Polars
+  architecture pattern (Rust data plane + Python control plane via PyO3)
+  to RL. Environments step in Rust with Rayon work-stealing parallelism;
+  GAE, replay buffers, and LLM post-training operations run as native
+  Rust code; Python stays in charge of training logic and neural networks
+  via PyTorch.
+keywords:
+  - reinforcement-learning
+  - rust
+  - python
+  - pyo3
+  - ppo
+  - sac
+  - dqn
+  - grpo
+  - dpo

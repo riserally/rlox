@@ -1,0 +1,10 @@
+[package]
+name = "rlox-nn"
+version = "0.1.0"
+edition = "2021"
+description = "Backend-agnostic neural network traits for rlox"
+
+[dependencies]
+thiserror = "2"
+
+[dev-dependencies]

@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
     "crates/rlox-core",
+    "crates/rlox-nn",
+    "crates/rlox-burn",
+    "crates/rlox-candle",
     "crates/rlox-python",
     "crates/rlox-bench",
 ]

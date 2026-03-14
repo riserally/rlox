@@ -228,18 +228,23 @@ def bench_torchrl_serial_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps:
     except ImportError:
         return None
 
-    env = SerialEnv(num_envs, lambda: GymEnv("CartPole-v1", device="cpu"))
-    td = env.reset()
+    try:
+        env = SerialEnv(num_envs, lambda: GymEnv("CartPole-v1", device="cpu"))
+        td = env.reset()
 
-    def step_batch():
-        nonlocal td
-        for _ in range(n_batch_steps):
-            td.set("action", torch.zeros(num_envs, dtype=torch.long))
-            td = env.step(td)
-            td = td.get("next")
+        def step_batch():
+            nonlocal td
+            for _ in range(n_batch_steps):
+                td.set("action", torch.zeros(num_envs, dtype=torch.long))
+                td = env.step(td)
+                td = td.get("next")
 
-    times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
-    env.close()
+        times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
+        env.close()
+    except Exception as e:
+        print(f"    [skip] torchrl SerialEnv failed ({num_envs} envs): {e}")
+        return None
+
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
         name=f"vecenv_{num_envs}", category="env_stepping",
@@ -258,19 +263,20 @@ def bench_torchrl_parallel_vecenv(num_envs: int, n_batch_steps: int = 100, n_rep
     try:
         env = ParallelEnv(num_envs, lambda: GymEnv("CartPole-v1", device="cpu"))
         td = env.reset()
+
+        def step_batch():
+            nonlocal td
+            for _ in range(n_batch_steps):
+                td.set("action", torch.zeros(num_envs, dtype=torch.long))
+                td = env.step(td)
+                td = td.get("next")
+
+        times = timed_run(step_batch, n_warmup=3, n_reps=n_reps)
+        env.close()
     except Exception as e:
-        print(f"    [skip] torchrl ParallelEnv failed: {e}")
+        print(f"    [skip] torchrl ParallelEnv failed ({num_envs} envs): {e}")
         return None
 
-    def step_batch():
-        nonlocal td
-        for _ in range(n_batch_steps):
-            td.set("action", torch.zeros(num_envs, dtype=torch.long))
-            td = env.step(td)
-            td = td.get("next")
-
-    times = timed_run(step_batch, n_warmup=3, n_reps=n_reps)
-    env.close()
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
         name=f"vecenv_{num_envs}", category="env_stepping",

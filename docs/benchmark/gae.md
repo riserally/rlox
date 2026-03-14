@@ -19,33 +19,33 @@ All implementations validated against the NumPy reference to within `rtol=1e-6, 
 
 ### Raw Timings
 
-| Trajectory Length | rlox (median) | rlox (p99) | NumPy Loop (median) | TorchRL (median) |
-|------------------|---------------|------------|---------------------|------------------|
-| 128 steps | 0.7 us | 0.8 us | 34.3 us | 453.1 us |
-| 512 steps | 1.2 us | 1.3 us | 148.5 us | 1,725.0 us |
-| 2,048 steps | 4.0 us | 5.0 us | 557.5 us | 6,798.4 us |
-| 8,192 steps | 15.9 us | 18.5 us | 2,228.9 us | 27,004.7 us |
-| 32,768 steps | 60.5 us | 72.0 us | 8,906.0 us | 108,441.3 us |
+| Trajectory Length | rlox (median) | NumPy Loop (median) | TorchRL (median) |
+|------------------|---------------|---------------------|------------------|
+| 128 steps | 0.7 us | 30.4 us | 423.3 us |
+| 512 steps | 1.2 us | 135.4 us | 1,600.4 us |
+| 2,048 steps | 3.9 us | 557.4 us | 6,402.6 us |
+| 8,192 steps | 16.6 us | 2,166.2 us | 25,712.9 us |
+| 32,768 steps | 54.7 us | 8,664.0 us | 103,448.2 us |
 
 ### Speedup vs NumPy Loop (Python)
 
 | Trajectory Length | Speedup | 95% CI |
 |------------------|---------|--------|
-| 128 steps | **51.4x** | [51.1, 52.2] |
-| 512 steps | **118.8x** | [118.1, 119.2] |
-| 2,048 steps | **139.4x** | [137.2, 141.2] |
-| 8,192 steps | **140.6x** | [139.4, 141.7] |
-| 32,768 steps | **147.1x** | [145.9, 151.4] |
+| 128 steps | **45.5x** | [45.4, 45.7] |
+| 512 steps | **116.0x** | [115.7, 116.2] |
+| 2,048 steps | **142.3x** | [140.7, 148.6] |
+| 8,192 steps | **130.6x** | [119.9, 136.1] |
+| 32,768 steps | **158.4x** | [157.3, 158.6] |
 
 ### Speedup vs TorchRL
 
 | Trajectory Length | Speedup | 95% CI |
 |------------------|---------|--------|
-| 128 steps | **679.3x** | [669.9, 689.8] |
-| 512 steps | **1,380.0x** | [1364.1, 1391.2] |
-| 2,048 steps | **1,699.6x** | [1690.3, 1722.6] |
-| 8,192 steps | **1,703.3x** | [1690.5, 1716.2] |
-| 32,768 steps | **1,791.2x** | [1778.7, 1843.1] |
+| 128 steps | **634.7x** | [632.1, 636.4] |
+| 512 steps | **1,371.4x** | [1366.9, 1375.5] |
+| 2,048 steps | **1,634.6x** | [1615.6, 1707.4] |
+| 8,192 steps | **1,550.6x** | [1422.9, 1617.6] |
+| 32,768 steps | **1,890.9x** | [1876.8, 1898.7] |
 
 ## Analysis
 
@@ -66,7 +66,7 @@ In Python, each iteration pays:
 
 In Rust, the same loop compiles to ~5 instructions with no allocation. At 2048 steps, that's 2048 × ~50ns = ~100us of Python overhead eliminated.
 
-### Why TorchRL is 1700x slower
+### Why TorchRL is 1635x slower
 
 TorchRL's `generalized_advantage_estimate` operates on `TensorDict` objects. Each step in the computation involves:
 - TensorDict metadata validation
@@ -77,7 +77,7 @@ This per-element overhead dominates the actual arithmetic. TorchRL's GAE is desi
 
 ### Scaling behavior
 
-The rlox vs NumPy speedup increases from 51x (128 steps) to 147x (32768 steps) because:
+The rlox vs NumPy speedup increases from 46x (128 steps) to 158x (32768 steps) because:
 - At small T, rlox's fixed PyO3 boundary-crossing overhead is a larger fraction of total time
 - At large T, both converge to their steady-state per-step cost, and the ratio stabilizes around 140x
 

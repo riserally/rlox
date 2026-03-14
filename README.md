@@ -13,14 +13,20 @@ Rust-accelerated reinforcement learning — the Polars architecture pattern appl
 │  config, logging                        │
 ├────────── PyO3 boundary ────────────────┤
 │  Rust (data plane)                      │
-│  rlox-core: envs, parallel stepping,    │
-│             buffers, GAE, GRPO          │
+│  rlox-core:   envs, parallel stepping,  │
+│               buffers, GAE, GRPO        │
+│  rlox-nn:     RL algorithm traits       │
+│  rlox-burn:   Burn backend (NdArray)    │
+│  rlox-candle: Candle backend (CPU)      │
 │  rlox-python: thin PyO3 bindings        │
 └─────────────────────────────────────────┘
 ```
 
-Two-crate workspace:
+Multi-crate workspace:
 - **rlox-core** — pure Rust, no PyO3 dependency, testable independently
+- **rlox-nn** — RL algorithm traits (`ActorCritic`, `QFunction`, `StochasticPolicy`, etc.)
+- **rlox-burn** — Burn `Autodiff<NdArray>` implementations of all RL algorithms
+- **rlox-candle** — Candle CPU implementations of all RL algorithms
 - **rlox-python** — thin PyO3 wrappers exposing `rlox-core` to Python
 
 ## Status
@@ -74,25 +80,47 @@ Speedup > 1.0x means rlox is faster. All results marked *** are statistically si
 | Token KL 128 | 0.4 us | 1.7 us | 2.5 us | **4.0x** *** | **5.9x** *** |
 | Token KL 8192 | 17 us | 28 us | 51 us | **1.6x** *** | **3.0x** *** |
 
-### Env Stepping (from Phase 1)
+### [Environment Stepping](docs/benchmark/env-stepping.md)
 
-<!-- BENCH:START -->
-| Benchmark | rlox | Baseline | Speedup | Significant |
-|-----------|------|----------|---------|-------------|
-| single_step | 958 ns | 2041 ns (Gymnasium) | **2.1x** | Yes |
-| vecenv_1 | 250.5 us | 530.2 us (Gymnasium Sync) | **2.1x** | Yes |
-| vecenv_1 | 250.5 us | 1560.8 us (Gymnasium Async) | **6.2x** | Yes |
-| vecenv_4 | 2769.2 us | 1336.9 us (Gymnasium Sync) | **0.5x** | No |
-| vecenv_4 | 2769.2 us | 2831.6 us (Gymnasium Async) | **1.0x** | No |
-| vecenv_16 | 3984.4 us | 4365.3 us (Gymnasium Sync) | **1.1x** | Yes |
-| vecenv_16 | 3984.4 us | 7511.5 us (Gymnasium Async) | **1.9x** | Yes |
-| vecenv_64 | 6595.6 us | 16963.6 us (Gymnasium Sync) | **2.6x** | Yes |
-| vecenv_64 | 6595.6 us | 23450.5 us (Gymnasium Async) | **3.6x** | Yes |
-| vecenv_128 | 8967.2 us | 34115.0 us (Gymnasium Sync) | **3.8x** | Yes |
-| vecenv_128 | 8967.2 us | 50058.5 us (Gymnasium Async) | **5.6x** | Yes |
-| vecenv_256 | 13407.6 us | 68815.0 us (Gymnasium Sync) | **5.1x** | Yes |
-| vecenv_512 | 24365.9 us | 138668.1 us (Gymnasium Sync) | **5.7x** | Yes |
-<!-- BENCH:END -->
+**Single-step latency:**
+
+| Framework | Median | Speedup |
+|-----------|--------|---------|
+| rlox | 292 ns | — |
+| Gymnasium | 2,375 ns | **8.1x** *** |
+| TorchRL | 52,834 ns | **181x** *** |
+
+**Vectorized throughput (100 batch-steps):**
+
+| Num Envs | rlox | rlox steps/s | vs Gym Sync | vs SB3 Dummy | vs TorchRL Serial |
+|----------|------|-------------|-------------|-------------|-------------------|
+| 1 | 0.07 ms | 1.5M | **8.9x** *** | **9.8x** *** | **153x** *** |
+| 4 | 3.61 ms | 111K | 0.4x | 0.6x | **16x** *** |
+| 16 | 2.10 ms | 762K | **2.3x** *** | **2.9x** *** | **43x** *** |
+| 64 | 4.44 ms | 1.4M | **4.1x** *** | **5.0x** *** | **80x** *** |
+| 128 | 5.44 ms | 2.4M | **6.9x** *** | **8.6x** *** | **136x** *** |
+| 256 | 12.4 ms | 2.1M | **6.7x** *** | — | **120x** *** |
+| 512 | 19.1 ms | 2.7M | **8.2x** *** | — | — |
+
+### [Neural Network Backends](docs/benchmark/nn-backends.md) (Burn vs Candle vs PyTorch)
+
+**Inference (no gradient):**
+
+| Benchmark | Batch | Burn | Candle | PyTorch |
+|-----------|-------|------|--------|---------|
+| PPO act | 1 | 63 us | **11 us** | 36 us |
+| DQN q-values | 1 | 335 us | **4 us** | 12 us |
+| SAC sample | 1 | 91 us | **14 us** | 52 us |
+| TD3 act | 1 | 65 us | **12 us** | 14 us |
+| Twin-Q fwd | 256 | **555 us** | 1,049 us | 550 us |
+
+**Training steps (forward + backward + optimizer):**
+
+| Benchmark | Batch | Burn | Candle | PyTorch |
+|-----------|-------|------|--------|---------|
+| DQN TD step | 64 | 191 us | **98 us** | 738 us |
+| PPO step | 64 | 1,885 us | **328 us** | 1,440 us |
+| Critic step | 256 | **2,090 us** | 3,453 us | 2,325 us |
 
 **Key takeaways:**
 - **GAE**: 140x faster than Python loops, 1700x faster than TorchRL. The sequential backward scan eliminates Python interpreter overhead entirely.
@@ -100,7 +128,8 @@ Speedup > 1.0x means rlox is faster. All results marked *** are statistically si
 - **Buffer sample**: 8-13x faster than both TorchRL and SB3. Pre-allocated ring buffer + ChaCha8 RNG with predictable latency (p99 < 15us even for batch=1024).
 - **End-to-end rollout**: 3.9x faster than SB3, 53x faster than TorchRL at 256 envs × 2048 steps. Advantages compound across the pipeline.
 - **GRPO advantages**: 34x faster than both NumPy and PyTorch — dominated by per-call overhead for small arrays.
-- At small env counts (4), Rayon scheduling overhead exceeds CartPole compute (~37ns/step) — Gymnasium wins. This is expected and honest.
+- **Env stepping**: 8.1x faster single-step vs Gymnasium, scaling to **2.7M steps/s** at 512 envs. At 4 envs, Rayon scheduling overhead exceeds CartPole compute (~37ns/step) — Gymnasium wins. Crossover at ~16 envs.
+- **NN backends**: Candle dominates low-latency inference (DQN q-values: 4us vs 335us Burn vs 12us PyTorch). Burn wins at batch=256+ training. Both Rust backends beat PyTorch 4-7.5x for DQN TD step at batch=64.
 
 ## Convergence Benchmarks (rlox vs SB3)
 
@@ -209,6 +238,11 @@ cargo test --package rlox-core
 .venv/bin/python benchmarks/bench_gae.py
 .venv/bin/python benchmarks/bench_llm_ops.py
 .venv/bin/python benchmarks/bench_e2e_rollout.py
+.venv/bin/python benchmarks/bench_env_stepping.py
+.venv/bin/python benchmarks/bench_nn_backends.py
+
+# Rust NN backend benchmarks (Burn vs Candle)
+cargo bench -p rlox-bench --bench nn_backends
 ```
 
 ## Project Layout
@@ -216,36 +250,16 @@ cargo test --package rlox-core
 ```
 crates/
   rlox-core/       Pure Rust: envs, spaces, buffers, GAE, GRPO
+  rlox-nn/         RL algorithm traits
+  rlox-burn/       Burn backend (Autodiff<NdArray>)
+  rlox-candle/     Candle backend (CPU)
   rlox-python/     PyO3 bindings
-  rlox-bench/      Criterion benchmarks
+  rlox-bench/      Criterion benchmarks (env stepping, NN backends)
 python/
   rlox/            Python package (imports Rust via _rlox_core)
-benchmarks/        Three-framework benchmark suite
+benchmarks/        Three-framework benchmark suite + NN backend baselines
 tests/python/      Python integration & benchmark TDD tests
 scripts/           Test runner, README updater
 docs/benchmark/    Detailed benchmark results & methodology
 docs/plans/        Phase-by-phase implementation plans
-docs/              User guides, math reference, paper references
-```
-
-## Documentation
-
-- [Getting Started](docs/getting-started.md) -- installation, first agent, tutorial
-- [Python User Guide](docs/python-guide.md) -- Trainer, Algorithm, and Primitive APIs
-- [Rust User Guide](docs/rust-guide.md) -- using `rlox-core` directly from Rust
-- [Mathematical Reference](docs/math-reference.md) -- full derivations for all algorithms
-- [References](docs/references.md) -- academic papers behind each algorithm
-
-## Citing rlox
-
-If you use rlox in your research, please cite it:
-
-```bibtex
-@software{rlox2026,
-  title        = {rlox: Rust-Accelerated Reinforcement Learning},
-  year         = {2026},
-  url          = {https://github.com/wojciechkpl/rlox},
-  version      = {1.0.0},
-  note         = {Rust data plane + Python control plane via PyO3}
-}
 ```

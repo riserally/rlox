@@ -1,0 +1,13 @@
+[package]
+name = "rlox-burn"
+version = "0.1.0"
+edition = "2021"
+description = "Burn backend for rlox neural network training"
+
+[dependencies]
+rlox-nn = { path = "../rlox-nn" }
+burn = { version = "0.16", features = ["autodiff", "ndarray", "wgpu"] }
+rand = "0.9"
+rand_chacha = "0.9"
+
+[dev-dependencies]

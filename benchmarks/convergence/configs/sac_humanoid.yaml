@@ -1,0 +1,22 @@
+algorithm: SAC
+environment: Humanoid-v4
+action_space: continuous
+threshold: 4000.0
+max_steps: 5_000_000
+eval_freq: 10_000
+eval_episodes: 10
+
+hyperparameters:
+  buffer_size: 1_000_000
+  batch_size: 256
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  tau: 0.005
+  learning_starts: 10_000
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: auto
+
+policy:
+  type: MlpPolicy
+  hidden_sizes: [256, 256]

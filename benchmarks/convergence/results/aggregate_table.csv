@@ -1,0 +1,15 @@
+Algorithm,Environment,Framework,Seeds,IQM Return,IQM 95% CI,Mean Final Return,Steps to T,Wall-clock to T (s),Mean SPS
+A2C,CartPole-v1,rlox,5,385.4,"[158.3, 500.0]",363.8,24800,1.8,10445
+A2C,CartPole-v1,sb3,5,401.9,"[116.9, 500.0]",347.6,12800,2.1,4206
+DQN,CartPole-v1,rlox,5,16.9,"[9.9, 33.5]",19.8,N/A,N/A,3057
+DQN,CartPole-v1,sb3,5,190.0,"[174.8, 235.9]",196.1,N/A,N/A,4412
+DQN,MountainCar-v0,rlox,5,-200.0,"[-200.0, -200.0]",-200.0,N/A,N/A,2698
+DQN,MountainCar-v0,sb3,5,-200.0,"[-200.0, -110.1]",-182.0,386000,94.0,3936
+PPO,Acrobot-v1,rlox,5,-83.6,"[-88.0, -77.5]",-82.9,58163,6.4,12030
+PPO,Acrobot-v1,sb3,5,-81.4,"[-92.2, -77.1]",-82.7,26600,9.1,7727
+PPO,CartPole-v1,rlox,5,436.5,"[339.1, 495.2]",432.0,21504,1.6,9121
+PPO,CartPole-v1,sb3,5,465.8,"[257.1, 500.0]",432.2,33800,5.2,4026
+SAC,Pendulum-v1,rlox,5,-1455.8,"[-1516.3, -1419.2]",-1462.0,N/A,N/A,200
+SAC,Pendulum-v1,sb3,5,-192.3,"[-193.0, -171.4]",-188.0,6200,29.9,174
+TD3,Pendulum-v1,rlox,5,-1386.0,"[-1533.7, -1264.1]",-1386.6,N/A,N/A,264
+TD3,Pendulum-v1,sb3,5,-187.6,"[-188.0, -163.9]",-182.6,8600,32.2,241

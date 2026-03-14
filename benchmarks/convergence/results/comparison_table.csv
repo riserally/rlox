@@ -1,0 +1,8 @@
+Algorithm,Environment,rlox IQM,SB3 IQM,P(rlox > SB3),SPS Speedup,Wall-clock Speedup
+A2C,CartPole-v1,385.4,401.9,0.59,2.48x,1.19x
+DQN,CartPole-v1,16.9,190.0,0.00,0.69x,N/A
+DQN,MountainCar-v0,-200.0,-200.0,0.00,0.69x,N/A
+PPO,Acrobot-v1,-83.6,-81.4,0.42,1.56x,1.41x
+PPO,CartPole-v1,436.5,465.8,0.43,2.27x,3.33x
+SAC,Pendulum-v1,-1455.8,-192.3,0.00,1.15x,N/A
+TD3,Pendulum-v1,-1386.0,-187.6,0.00,1.09x,N/A

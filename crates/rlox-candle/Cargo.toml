@@ -1,0 +1,14 @@
+[package]
+name = "rlox-candle"
+version = "0.1.0"
+edition = "2021"
+description = "Candle backend for rlox neural network training"
+
+[dependencies]
+rlox-nn = { path = "../rlox-nn" }
+candle-core = "0.8"
+candle-nn = "0.8"
+rand = "0.9"
+rand_chacha = "0.9"
+
+[dev-dependencies]

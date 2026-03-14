@@ -11,8 +11,17 @@ harness = false
 name = "micro_ops"
 harness = false
 
+[[bench]]
+name = "nn_backends"
+harness = false
+
 [dependencies]
 rlox-core = { path = "../rlox-core" }
+rlox-nn = { path = "../rlox-nn" }
+rlox-burn = { path = "../rlox-burn" }
+rlox-candle = { path = "../rlox-candle" }
+burn = { version = "0.16", features = ["autodiff", "ndarray"] }
+candle-core = "0.8"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

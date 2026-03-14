@@ -32,37 +32,37 @@ Draw a random batch from a full buffer (100,000 transitions, obs_dim=4).
 
 | obs_dim | rlox | TorchRL | SB3 | rlox throughput |
 |---------|------|---------|-----|-----------------|
-| 4 | 1.54 ms | 228.54 ms | 14.97 ms | 6,486,487 trans/s |
-| 28,224 | 134.50 ms | 256.89 ms | 115.01 ms | 74,347 trans/s |
+| 4 | 3.59 ms | 218.67 ms | 14.24 ms | 2,782,205 trans/s |
+| 28,224 | 136.01 ms | 248.69 ms | 109.19 ms | 73,522 trans/s |
 
 ### Push Speedup
 
 | obs_dim | vs TorchRL | 95% CI | vs SB3 | 95% CI |
 |---------|-----------|--------|--------|--------|
-| 4 | **148.2x** | [143.8, 157.6] | **9.7x** | [9.3, 10.3] |
-| 28,224 | **1.9x** | [1.8, 2.0] | **0.9x** | [0.8, 0.9] |
+| 4 | **60.8x** | [59.6, 62.3] | **4.0x** | [3.9, 4.0] |
+| 28,224 | **1.8x** | [1.7, 2.0] | **0.8x** | [0.7, 0.9] |
 
 ### Sample Latency
 
 | Batch Size | rlox (median) | rlox (p99) | TorchRL (median) | TorchRL (p99) | SB3 (median) | SB3 (p99) |
 |-----------|---------------|------------|------------------|---------------|--------------|-----------|
-| 32 | 1.5 us | 1.9 us | 20.1 us | 57.3 us | 17.5 us | 49.1 us |
-| 64 | 2.0 us | 2.5 us | 20.9 us | 26.1 us | 22.1 us | 26.1 us |
-| 256 | 4.2 us | 6.0 us | 28.5 us | 82.2 us | 40.9 us | 47.1 us |
-| 1,024 | 9.2 us | 14.7 us | 95.9 us | 135.1 us | 74.7 us | 138.3 us |
+| 32 | 1.5 us | 1.8 us | 17.2 us | 24.0 us | 17.2 us | 24.8 us |
+| 64 | 1.5 us | 2.1 us | 20.1 us | 26.4 us | 20.6 us | 35.0 us |
+| 256 | 4.2 us | 6.2 us | 22.2 us | 36.3 us | 29.3 us | 39.4 us |
+| 1,024 | 10.1 us | 17.0 us | 65.0 us | 109.4 us | 61.0 us | 75.0 us |
 
 ### Sample Speedup
 
 | Batch Size | vs TorchRL | 95% CI | vs SB3 | 95% CI |
 |-----------|-----------|--------|--------|--------|
-| 32 | **13.0x** | [13.0, 13.4] | **11.3x** | [11.1, 11.7] |
-| 64 | **10.2x** | [10.1, 10.7] | **10.8x** | [10.7, 11.3] |
-| 256 | **6.8x** | [6.6, 7.5] | **9.8x** | [9.5, 10.6] |
-| 1,024 | **10.4x** | [9.7, 11.0] | **8.1x** | [7.6, 8.4] |
+| 32 | **11.2x** | [10.9, 11.6] | **11.2x** | [10.8, 11.6] |
+| 64 | **13.4x** | [12.9, 13.6] | **13.8x** | [13.2, 14.0] |
+| 256 | **5.3x** | [5.0, 5.6] | **7.0x** | [6.7, 7.4] |
+| 1,024 | **6.5x** | [6.0, 6.8] | **6.1x** | [5.8, 6.3] |
 
 ## Analysis
 
-### Push: Why 148x faster than TorchRL for small observations
+### Push: Why 61x faster than TorchRL for small observations
 
 Each TorchRL `rb.add(td)` call:
 1. Validates the TensorDict schema
@@ -77,7 +77,7 @@ At obs_dim=28,224, each push copies ~110KB of data (28,224 × 4 bytes). The memc
 
 ### Sample: Predictable tail latency
 
-rlox's p99 latency is remarkably low (14.7us for batch=1024 vs 135-138us for TorchRL/SB3). This comes from:
+rlox's p99 latency is remarkably low (17.0us for batch=1024 vs 75-109us for TorchRL/SB3). This comes from:
 - **Pre-allocated ring buffer**: No heap allocation during sampling
 - **ChaCha8 RNG**: Deterministic, cache-friendly random number generation
 - **Contiguous memory layout**: Sequential reads from flat arrays, no pointer chasing

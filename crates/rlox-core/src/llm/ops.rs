@@ -20,20 +20,23 @@ pub fn compute_group_advantages(rewards: &[f64]) -> Vec<f64> {
 
 /// Token-level KL divergence: `sum(exp(log_p) * (log_p - log_q))`.
 ///
-/// # Panics
-/// Panics if slices have different lengths.
-pub fn compute_token_kl(log_probs_policy: &[f64], log_probs_ref: &[f64]) -> f64 {
-    assert_eq!(
-        log_probs_policy.len(),
-        log_probs_ref.len(),
-        "log_probs_policy and log_probs_ref must have the same length"
-    );
+/// Returns `Err` if slices have different lengths.
+pub fn compute_token_kl(
+    log_probs_policy: &[f64],
+    log_probs_ref: &[f64],
+) -> Result<f64, crate::error::RloxError> {
+    if log_probs_policy.len() != log_probs_ref.len() {
+        return Err(crate::error::RloxError::ShapeMismatch {
+            expected: format!("len={}", log_probs_policy.len()),
+            got: format!("len={}", log_probs_ref.len()),
+        });
+    }
 
-    log_probs_policy
+    Ok(log_probs_policy
         .iter()
         .zip(log_probs_ref.iter())
         .map(|(&log_p, &log_q)| log_p.exp() * (log_p - log_q))
-        .sum()
+        .sum())
 }
 
 /// A DPO preference pair holding tokenized prompt, chosen, and rejected sequences.
@@ -92,7 +95,7 @@ mod tests {
     #[test]
     fn test_token_kl_identical() {
         let log_p = [-1.0, -2.0, -0.5];
-        let kl = compute_token_kl(&log_p, &log_p);
+        let kl = compute_token_kl(&log_p, &log_p).unwrap();
         assert!(kl.abs() < 1e-15);
     }
 
@@ -101,14 +104,66 @@ mod tests {
         // Manual: exp(-1) * (-1 - (-2)) = exp(-1) * 1 = 0.36787944...
         let log_p = [-1.0];
         let log_q = [-2.0];
-        let kl = compute_token_kl(&log_p, &log_q);
+        let kl = compute_token_kl(&log_p, &log_q).unwrap();
         assert!((kl - (-1.0_f64).exp()).abs() < 1e-10);
     }
 
     #[test]
-    #[should_panic(expected = "same length")]
-    fn test_token_kl_mismatched_lengths() {
-        compute_token_kl(&[1.0, 2.0], &[1.0]);
+    fn test_token_kl_mismatched_lengths_returns_err() {
+        let result = compute_token_kl(&[1.0, 2.0], &[1.0]);
+        assert!(result.is_err());
+    }
+
+    // --- Bug 0.3 verification tests ---
+
+    #[test]
+    fn token_kl_mismatched_lengths_returns_err_not_panic() {
+        let log_p = vec![-1.0f64, -2.0];
+        let log_q = vec![-1.0f64];
+        let result = compute_token_kl(&log_p, &log_q);
+        assert!(result.is_err(), "mismatched lengths must return Err");
+    }
+
+    #[test]
+    fn token_kl_matching_lengths_returns_ok() {
+        let log_p = vec![-1.0f64, -2.0, -0.5];
+        let log_q = vec![-1.0f64, -2.0, -0.5];
+        let result = compute_token_kl(&log_p, &log_q);
+        assert!(result.is_ok());
+        assert!(result.unwrap().abs() < 1e-15);
+    }
+
+    #[test]
+    fn token_kl_empty_slices_returns_zero() {
+        let result = compute_token_kl(&[], &[]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0.0);
+    }
+
+    #[test]
+    fn token_kl_nan_input_propagates_to_output() {
+        let log_p = vec![f64::NAN];
+        let log_q = vec![-1.0f64];
+        let result = compute_token_kl(&log_p, &log_q);
+        match result {
+            Ok(v) => assert!(v.is_nan(), "NaN input should produce NaN output"),
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn token_kl_inf_input_does_not_panic() {
+        let log_p = vec![f64::INFINITY];
+        let log_q = vec![-1.0f64];
+        let _result = compute_token_kl(&log_p, &log_q);
+    }
+
+    #[test]
+    fn token_kl_known_value_still_correct_after_refactor() {
+        let log_p = vec![-1.0f64];
+        let log_q = vec![-2.0f64];
+        let kl = compute_token_kl(&log_p, &log_q).unwrap();
+        assert!((kl - (-1.0_f64).exp()).abs() < 1e-10);
     }
 
     #[test]

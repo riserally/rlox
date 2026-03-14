@@ -47,7 +47,7 @@ def bench_rlox_rollout(n_envs: int, n_steps: int) -> BenchmarkResult:
             for j in range(n_envs):
                 table.push(
                     obs=obs_array[j],
-                    action=0.0,
+                    action=np.array([0.0], dtype=np.float32),
                     reward=float(rewards[j]),
                     terminated=bool(terminateds[j]),
                     truncated=bool(truncateds[j]),

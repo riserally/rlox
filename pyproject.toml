@@ -13,3 +13,8 @@ manifest-path = "crates/rlox-python/Cargo.toml"
 module-name = "rlox._rlox_core"
 python-source = "python"
 features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

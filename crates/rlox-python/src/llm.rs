@@ -23,7 +23,8 @@ pub fn compute_token_kl(
 ) -> PyResult<f64> {
     let policy_slice = log_probs_policy.as_slice()?;
     let ref_slice = log_probs_ref.as_slice()?;
-    Ok(ops::compute_token_kl(policy_slice, ref_slice))
+    ops::compute_token_kl(policy_slice, ref_slice)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 /// A DPO preference pair.

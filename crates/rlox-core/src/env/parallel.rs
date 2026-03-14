@@ -8,7 +8,7 @@ use crate::seed::derive_seed;
 /// Columnar batch of transitions from parallel stepping.
 #[derive(Debug, Clone)]
 pub struct BatchTransition {
-    /// Observations: `[num_envs][obs_dim]`
+    /// Observations: `[num_envs][obs_dim]` — post-reset obs when done
     pub obs: Vec<Vec<f32>>,
     /// Rewards: `[num_envs]`
     pub rewards: Vec<f64>,
@@ -16,6 +16,9 @@ pub struct BatchTransition {
     pub terminated: Vec<bool>,
     /// Truncated flags: `[num_envs]`
     pub truncated: Vec<bool>,
+    /// Terminal observations: `Some` when terminated or truncated, `None` otherwise.
+    /// Contains the observation *before* auto-reset, needed for value bootstrapping.
+    pub terminal_obs: Vec<Option<Vec<f32>>>,
 }
 
 /// A vectorized environment that steps multiple sub-environments in parallel.
@@ -44,18 +47,20 @@ impl VecEnv {
             });
         }
 
-        let results: Vec<Result<Transition, RloxError>> = self
+        let results: Vec<Result<(Transition, Option<Vec<f32>>), RloxError>> = self
             .envs
             .par_iter_mut()
             .zip(actions.par_iter())
             .map(|(env, action)| {
                 let mut transition = env.step(action)?;
-                // Auto-reset on done
+                let mut term_obs = None;
+                // Auto-reset on done — save terminal obs first
                 if transition.terminated || transition.truncated {
+                    term_obs = Some(transition.obs.clone().into_inner());
                     let new_obs = env.reset(None)?;
                     transition.obs = new_obs;
                 }
-                Ok(transition)
+                Ok((transition, term_obs))
             })
             .collect();
 
@@ -65,13 +70,15 @@ impl VecEnv {
         let mut rewards = Vec::with_capacity(n);
         let mut terminated = Vec::with_capacity(n);
         let mut truncated = Vec::with_capacity(n);
+        let mut terminal_obs = Vec::with_capacity(n);
 
         for result in results {
-            let t = result?;
+            let (t, tobs) = result?;
             obs.push(t.obs.into_inner());
             rewards.push(t.reward);
             terminated.push(t.terminated);
             truncated.push(t.truncated);
+            terminal_obs.push(tobs);
         }
 
         Ok(BatchTransition {
@@ -79,6 +86,7 @@ impl VecEnv {
             rewards,
             terminated,
             truncated,
+            terminal_obs,
         })
     }
 
@@ -210,6 +218,97 @@ mod tests {
             match venv.step_all(&actions) {
                 Ok(_batch) => {} // should always succeed due to auto-reset
                 Err(e) => panic!("step_all should not error with auto-reset: {}", e),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod terminal_obs_tests {
+    use super::*;
+    use crate::env::builtins::CartPole;
+    use crate::seed::derive_seed;
+
+    fn make_vec_env(n: usize, seed: u64) -> VecEnv {
+        let envs: Vec<Box<dyn RLEnv>> = (0..n)
+            .map(|i| Box::new(CartPole::new(Some(derive_seed(seed, i)))) as Box<dyn RLEnv>)
+            .collect();
+        VecEnv::new(envs)
+    }
+
+    #[test]
+    fn step_result_has_terminal_obs_on_truncation() {
+        let mut venv = make_vec_env(4, 42);
+        venv.reset_all(Some(42)).unwrap();
+
+        for _ in 0..600 {
+            let actions: Vec<Action> = (0..4).map(|_| Action::Discrete(0)).collect();
+            let batch = venv.step_all(&actions).unwrap();
+
+            for i in 0..4 {
+                if batch.truncated[i] {
+                    assert!(
+                        batch.terminal_obs[i].is_some(),
+                        "terminal_obs must be Some when truncated"
+                    );
+                }
+                if batch.terminated[i] {
+                    assert!(
+                        batch.terminal_obs[i].is_some(),
+                        "terminal_obs must be Some when terminated"
+                    );
+                }
+                if !batch.terminated[i] && !batch.truncated[i] {
+                    assert!(
+                        batch.terminal_obs[i].is_none(),
+                        "terminal_obs must be None when not done"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_obs_has_correct_dimension() {
+        let mut venv = make_vec_env(2, 42);
+        venv.reset_all(Some(42)).unwrap();
+
+        for _ in 0..200 {
+            let actions: Vec<Action> = vec![Action::Discrete(1); 2];
+            let batch = venv.step_all(&actions).unwrap();
+            for i in 0..2 {
+                if let Some(tobs) = &batch.terminal_obs[i] {
+                    assert_eq!(tobs.len(), 4, "CartPole terminal obs must have dim 4");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn returned_obs_after_reset_is_fresh_not_terminal() {
+        let mut venv = make_vec_env(1, 42);
+        venv.reset_all(Some(42)).unwrap();
+
+        for _ in 0..200 {
+            let actions = vec![Action::Discrete(1)];
+            let batch = venv.step_all(&actions).unwrap();
+            if batch.terminated[0] {
+                let fresh_obs = &batch.obs[0];
+                for &v in fresh_obs {
+                    assert!(
+                        v.abs() <= 0.06,
+                        "post-reset obs should be near zero, got {v}"
+                    );
+                }
+                let tobs = batch.terminal_obs[0]
+                    .as_ref()
+                    .expect("terminal_obs must exist on termination");
+                let max_abs = tobs.iter().map(|v| v.abs()).fold(0.0_f32, f32::max);
+                assert!(
+                    max_abs > 0.05,
+                    "terminal obs should be out-of-bounds, got max_abs={max_abs}"
+                );
+                break;
             }
         }
     }

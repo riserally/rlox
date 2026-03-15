@@ -5,14 +5,14 @@ policy evaluation (PyTorch). It collects ``n_steps`` of experience from
 ``n_envs`` parallel environments and computes GAE advantages, returning
 a flat :class:`~rlox.batch.RolloutBatch` ready for SGD.
 
-.. note::
-    Currently uses ``rlox.VecEnv`` which only supports CartPole. For other
-    environments, use ``gymnasium.vector.SyncVectorEnv`` with
-    ``rlox.compute_gae`` directly (see ``benchmarks/convergence/rlox_runner.py``
-    for an example).
+For Rust-native environments (CartPole), the collector uses ``rlox.VecEnv``
+for maximum throughput. For all other Gymnasium environments, it falls back
+to :class:`~rlox.gym_vec_env.GymVecEnv`.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import numpy as np
 import torch
@@ -20,20 +20,25 @@ import torch.nn as nn
 
 import rlox
 from rlox.batch import RolloutBatch
+from rlox.gym_vec_env import GymVecEnv
+
+# Environments with native Rust implementations
+_NATIVE_ENV_IDS = frozenset({"CartPole-v1", "CartPole"})
 
 
 class RolloutCollector:
     """Collect on-policy rollout data from vectorized environments.
 
     Orchestrates the collect-then-compute pattern:
-    1. Step ``n_envs`` environments for ``n_steps`` using ``rlox.VecEnv``
+    1. Step ``n_envs`` environments for ``n_steps`` using the appropriate backend
     2. Compute GAE advantages per environment using ``rlox.compute_gae``
     3. Flatten and return a :class:`RolloutBatch`
 
     Parameters
     ----------
     env_id : str
-        Gymnasium environment ID (currently only CartPole-v1 is native).
+        Gymnasium environment ID. CartPole-v1 uses the native Rust backend;
+        all others use ``GymVecEnv`` (gymnasium SyncVectorEnv).
     n_envs : int
         Number of parallel environments.
     seed : int
@@ -48,6 +53,9 @@ class RolloutCollector:
         If True, divide rewards by running standard deviation.
     normalize_obs : bool
         If True, standardise observations using running statistics.
+    reward_fn : Callable or None
+        Optional reward shaping function ``(obs, actions, rewards) -> rewards``.
+        Applied to raw rewards before storing.
 
     Example
     -------
@@ -68,6 +76,7 @@ class RolloutCollector:
         gae_lambda: float = 0.95,
         normalize_rewards: bool = False,
         normalize_obs: bool = False,
+        reward_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None,
     ):
         self.env_id = env_id
         self.n_envs = n_envs
@@ -76,8 +85,16 @@ class RolloutCollector:
         self.gae_lambda = gae_lambda
         self.normalize_rewards = normalize_rewards
         self.normalize_obs = normalize_obs
+        self.reward_fn = reward_fn
 
-        self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
+        if env_id in _NATIVE_ENV_IDS:
+            self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
+            self._is_discrete = True
+        else:
+            self.env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
+            import gymnasium as gym
+            self._is_discrete = isinstance(self.env.action_space, gym.spaces.Discrete)
+
         self._obs: np.ndarray | None = None  # (n_envs, obs_dim)
 
         if normalize_rewards:
@@ -118,15 +135,23 @@ class RolloutCollector:
             values = policy.get_value(obs_input)
 
             # Step environment
-            actions_np = actions.cpu().numpy().astype(np.uint32).tolist()
-            step_result = self.env.step_all(actions_np)
+            actions_np = actions.cpu().numpy()
+            if self._is_discrete:
+                step_result = self.env.step_all(actions_np.astype(np.uint32).tolist())
+            else:
+                step_result = self.env.step_all(actions_np)
+
+            obs_np = self._obs  # pre-step observations for reward_fn
+            raw_rewards = step_result["rewards"]
+            if self.reward_fn is not None:
+                raw_rewards = self.reward_fn(obs_np, actions_np, raw_rewards)
 
             all_obs.append(obs_tensor)
             all_actions.append(actions)
             all_log_probs.append(log_probs)
             all_values.append(values)
             all_rewards.append(torch.as_tensor(
-                step_result["rewards"].astype(np.float32), device=self.device
+                raw_rewards.astype(np.float32), device=self.device
             ))
 
             terminated = step_result["terminated"].astype(bool)

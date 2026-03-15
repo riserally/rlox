@@ -13,4 +13,7 @@ pub enum RloxError {
 
     #[error("Buffer error: {0}")]
     BufferError(String),
+
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
 }

@@ -11,6 +11,9 @@ import torch
 import torch.nn.functional as F
 
 import rlox
+from rlox.callbacks import Callback, CallbackList
+from rlox.checkpoint import Checkpoint
+from rlox.logging import LoggerCallback
 from rlox.networks import QNetwork, DeterministicPolicy, polyak_update
 
 
@@ -36,6 +39,8 @@ class TD3:
         target_noise: float = 0.2,
         noise_clip: float = 0.5,
         exploration_noise: float = 0.1,
+        callbacks: list[Callback] | None = None,
+        logger: LoggerCallback | None = None,
     ):
         self.env = gym.make(env_id)
         self.env_id = env_id
@@ -47,11 +52,15 @@ class TD3:
         self.target_noise = target_noise
         self.noise_clip = noise_clip
         self.exploration_noise = exploration_noise
+        self.learning_rate = learning_rate
+        self.hidden = hidden
+        self.buffer_size = buffer_size
 
         obs_dim = int(np.prod(self.env.observation_space.shape))
         act_dim = int(np.prod(self.env.action_space.shape))
         act_high = float(self.env.action_space.high[0])
 
+        self.obs_dim = obs_dim
         self.act_dim = act_dim
         self.act_high = act_high
 
@@ -70,12 +79,35 @@ class TD3:
         # Replay buffer
         self.buffer = rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
 
+        # Callbacks and logger
+        self.callbacks = CallbackList(callbacks)
+        self.logger = logger
+        self._global_step = 0
+
+    def _get_config_dict(self) -> dict[str, Any]:
+        """Return a serialisable config dict for checkpointing."""
+        return {
+            "buffer_size": self.buffer_size,
+            "learning_rate": self.learning_rate,
+            "batch_size": self.batch_size,
+            "tau": self.tau,
+            "gamma": self.gamma,
+            "learning_starts": self.learning_starts,
+            "hidden": self.hidden,
+            "policy_delay": self.policy_delay,
+            "target_noise": self.target_noise,
+            "noise_clip": self.noise_clip,
+            "exploration_noise": self.exploration_noise,
+        }
+
     def train(self, total_timesteps: int) -> dict[str, float]:
         obs, _ = self.env.reset()
         episode_rewards: list[float] = []
         ep_reward = 0.0
         metrics: dict[str, float] = {}
         update_count = 0
+
+        self.callbacks.on_training_start()
 
         for step in range(total_timesteps):
             if step < self.learning_starts:
@@ -104,10 +136,25 @@ class TD3:
                 ep_reward = 0.0
                 obs, _ = self.env.reset()
 
+            # Callback: on_step
+            self._global_step += 1
+            should_continue = self.callbacks.on_step(
+                reward=ep_reward, step=self._global_step
+            )
+            if not should_continue:
+                break
+
             # Update
             if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
                 update_count += 1
                 metrics = self._update(step, update_count)
+                self.callbacks.on_train_batch(**metrics)
+
+                # Logger
+                if self.logger is not None and self._global_step % 1000 == 0:
+                    self.logger.on_train_step(self._global_step, metrics)
+
+        self.callbacks.on_training_end()
 
         metrics["mean_reward"] = float(np.mean(episode_rewards)) if episode_rewards else 0.0
         return metrics
@@ -163,3 +210,46 @@ class TD3:
             "critic_loss": (critic1_loss.item() + critic2_loss.item()) / 2,
             "actor_loss": actor_loss_val,
         }
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        data: dict[str, Any] = {
+            "actor_state_dict": self.actor.state_dict(),
+            "actor_target_state_dict": self.actor_target.state_dict(),
+            "critic1_state_dict": self.critic1.state_dict(),
+            "critic2_state_dict": self.critic2.state_dict(),
+            "critic1_target_state_dict": self.critic1_target.state_dict(),
+            "critic2_target_state_dict": self.critic2_target.state_dict(),
+            "actor_optimizer_state_dict": self.actor_optimizer.state_dict(),
+            "critic1_optimizer_state_dict": self.critic1_optimizer.state_dict(),
+            "critic2_optimizer_state_dict": self.critic2_optimizer.state_dict(),
+            "step": self._global_step,
+            "config": self._get_config_dict(),
+            "env_id": self.env_id,
+            "torch_rng_state": torch.random.get_rng_state(),
+        }
+        torch.save(data, path)
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> TD3:
+        """Restore TD3 from a checkpoint."""
+        data = torch.load(path, weights_only=False)
+        config = data["config"]
+        eid = env_id or data.get("env_id", "Pendulum-v1")
+
+        td3 = cls(env_id=eid, **config)
+        td3.actor.load_state_dict(data["actor_state_dict"])
+        td3.actor_target.load_state_dict(data["actor_target_state_dict"])
+        td3.critic1.load_state_dict(data["critic1_state_dict"])
+        td3.critic2.load_state_dict(data["critic2_state_dict"])
+        td3.critic1_target.load_state_dict(data["critic1_target_state_dict"])
+        td3.critic2_target.load_state_dict(data["critic2_target_state_dict"])
+        td3.actor_optimizer.load_state_dict(data["actor_optimizer_state_dict"])
+        td3.critic1_optimizer.load_state_dict(data["critic1_optimizer_state_dict"])
+        td3.critic2_optimizer.load_state_dict(data["critic2_optimizer_state_dict"])
+        td3._global_step = data.get("step", 0)
+
+        if "torch_rng_state" in data:
+            torch.random.set_rng_state(data["torch_rng_state"])
+
+        return td3

@@ -1,5 +1,5 @@
 use numpy::{PyArray1, PyArray2};
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -73,7 +73,7 @@ impl PyVecEnv {
     /// The `env_id` parameter defaults to "CartPole-v1" for backward compatibility.
     #[new]
     #[pyo3(signature = (n, seed = None, env_id = None))]
-    fn new(n: usize, seed: Option<u64>, env_id: Option<&str>) -> Self {
+    fn new(n: usize, seed: Option<u64>, env_id: Option<&str>) -> PyResult<Self> {
         let env_name = env_id.unwrap_or("CartPole-v1");
         let master_seed = seed.unwrap_or(0);
 
@@ -85,23 +85,16 @@ impl PyVecEnv {
                         Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
                     })
                     .collect();
-                PyVecEnv {
+                Ok(PyVecEnv {
                     inner: VecEnv::new(envs),
-                }
+                })
             }
-            _ => {
-                // For unknown env_ids, still create CartPole as fallback.
-                // Full Gymnasium interop via Python will be added in a later phase.
-                let envs: Vec<Box<dyn RLEnv>> = (0..n)
-                    .map(|i| {
-                        let s = derive_seed(master_seed, i);
-                        Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
-                    })
-                    .collect();
-                PyVecEnv {
-                    inner: VecEnv::new(envs),
-                }
-            }
+            unknown => Err(PyValueError::new_err(format!(
+                "Unknown env_id '{}'. Supported native env IDs: \
+                 [\"CartPole-v1\", \"CartPole\"]. \
+                 For Gymnasium environments, use GymVecEnv instead.",
+                unknown,
+            ))),
         }
     }
 

@@ -2,6 +2,7 @@
 name = "rlox-candle"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 description = "Candle backend for rlox neural network training"
 
 [dependencies]

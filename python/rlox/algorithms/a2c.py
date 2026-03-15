@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import gymnasium as gym
+import numpy as np
 import torch
 import torch.nn as nn
 
+from rlox.callbacks import Callback, CallbackList
 from rlox.collectors import RolloutCollector
 from rlox.logging import LoggerCallback
 from rlox.policies import DiscretePolicy
-
-
-_CARTPOLE_OBS_DIM = 4
-_CARTPOLE_N_ACTIONS = 2
 
 
 class A2C:
@@ -21,6 +20,8 @@ class A2C:
 
     Like PPO but: no ratio clipping, no epochs (single gradient step per
     rollout), and typically shorter ``n_steps``.
+
+    Auto-detects observation and action dimensions from the environment.
     """
 
     def __init__(
@@ -38,6 +39,7 @@ class A2C:
         normalize_advantages: bool = True,
         policy: nn.Module | None = None,
         logger: LoggerCallback | None = None,
+        callbacks: list[Callback] | None = None,
     ):
         self.env_id = env_id
         self.n_envs = n_envs
@@ -49,12 +51,20 @@ class A2C:
         self.normalize_advantages = normalize_advantages
         self.device = "cpu"
 
+        # Auto-detect env spaces
         if policy is not None:
             self.policy = policy
         else:
-            self.policy = DiscretePolicy(
-                obs_dim=_CARTPOLE_OBS_DIM, n_actions=_CARTPOLE_N_ACTIONS
-            )
+            tmp = gym.make(env_id)
+            obs_dim = int(np.prod(tmp.observation_space.shape))
+            is_discrete = isinstance(tmp.action_space, gym.spaces.Discrete)
+            if is_discrete:
+                self.policy = DiscretePolicy(obs_dim=obs_dim, n_actions=int(tmp.action_space.n))
+            else:
+                from rlox.policies import ContinuousPolicy
+                act_dim = int(np.prod(tmp.action_space.shape))
+                self.policy = ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
+            tmp.close()
 
         self.optimizer = torch.optim.RMSprop(
             self.policy.parameters(), lr=learning_rate, eps=1e-5, alpha=0.99
@@ -70,6 +80,7 @@ class A2C:
         )
 
         self.logger = logger
+        self.callbacks = CallbackList(callbacks)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         steps_per_rollout = self.n_envs * self.n_steps
@@ -78,9 +89,12 @@ class A2C:
         all_rewards: list[float] = []
         last_metrics: dict[str, float] = {}
 
+        self.callbacks.on_training_start()
+
         for update in range(n_updates):
             batch = self.collector.collect(self.policy, n_steps=self.n_steps)
-            all_rewards.append(batch.rewards.sum().item() / self.n_envs)
+            mean_ep_reward = batch.rewards.sum().item() / self.n_envs
+            all_rewards.append(mean_ep_reward)
 
             # Single gradient step on the full rollout
             obs = batch.obs
@@ -111,8 +125,18 @@ class A2C:
                 "entropy": entropy_loss.item(),
             }
 
+            self.callbacks.on_train_batch(loss=loss.item(), **last_metrics)
+
+            should_continue = self.callbacks.on_step(
+                reward=mean_ep_reward, step=update
+            )
+            if not should_continue:
+                break
+
             if self.logger is not None:
-                self.logger.on_train_step(update, {**last_metrics, "mean_reward": all_rewards[-1]})
+                self.logger.on_train_step(update, {**last_metrics, "mean_reward": mean_ep_reward})
+
+        self.callbacks.on_training_end()
 
         last_metrics["mean_reward"] = float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         return last_metrics

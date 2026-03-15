@@ -36,7 +36,7 @@ pub struct SampledBatch {
 }
 
 impl SampledBatch {
-    fn with_capacity(batch_size: usize, obs_dim: usize, act_dim: usize) -> Self {
+    pub(crate) fn with_capacity(batch_size: usize, obs_dim: usize, act_dim: usize) -> Self {
         Self {
             observations: Vec::with_capacity(batch_size * obs_dim),
             actions: Vec::with_capacity(batch_size * act_dim),
@@ -75,6 +75,31 @@ impl ReplayBuffer {
     /// Whether the buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.count == 0
+    }
+
+    /// Current write position in the ring buffer.
+    pub(crate) fn write_pos(&self) -> usize {
+        self.write_pos
+    }
+
+    /// Access the record at `idx` by reference.
+    ///
+    /// Returns `(obs_slice, action_slice, reward, terminated, truncated)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `idx >= self.count`.
+    pub(crate) fn get(&self, idx: usize) -> (&[f32], &[f32], f32, bool, bool) {
+        assert!(idx < self.count, "index {idx} out of bounds (count={})", self.count);
+        let obs_start = idx * self.obs_dim;
+        let act_start = idx * self.act_dim;
+        (
+            &self.observations[obs_start..obs_start + self.obs_dim],
+            &self.actions[act_start..act_start + self.act_dim],
+            self.rewards[idx],
+            self.terminated[idx],
+            self.truncated[idx],
+        )
     }
 
     /// Push a transition, overwriting the oldest if at capacity.

@@ -50,27 +50,34 @@ class PPOTrainer:
         from rlox.algorithms.ppo import PPO
 
         cfg = config or {}
-        self.algo = PPO(env_id=env, seed=seed, logger=logger, **cfg)
-        self.callbacks = CallbackList(callbacks)
+        self.algo = PPO(
+            env_id=env, seed=seed, logger=logger, callbacks=callbacks, **cfg
+        )
         self.env = env
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run PPO training.
-
-        Parameters
-        ----------
-        total_timesteps : int
-            Total environment steps to collect across all envs.
 
         Returns
         -------
         dict with keys: policy_loss, value_loss, entropy, approx_kl,
         clip_fraction, mean_reward.
         """
-        self.callbacks.on_training_start()
-        metrics = self.algo.train(total_timesteps=total_timesteps)
-        self.callbacks.on_training_end()
-        return metrics
+        return self.algo.train(total_timesteps=total_timesteps)
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        self.algo.save(path)
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env: str | None = None) -> PPOTrainer:
+        """Restore from checkpoint."""
+        from rlox.algorithms.ppo import PPO
+
+        trainer = object.__new__(cls)
+        trainer.algo = PPO.from_checkpoint(path, env_id=env)
+        trainer.env = env or trainer.algo.env_id
+        return trainer
 
 
 class SACTrainer:

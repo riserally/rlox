@@ -49,11 +49,14 @@ from rlox._rlox_core import (
     DPOPair,
     RunningStats,
     pack_sequences,
+    ActorCritic,
 )
 
 from rlox.batch import RolloutBatch
 from rlox.collectors import RolloutCollector
+from rlox.gym_vec_env import GymVecEnv
 from rlox.losses import PPOLoss
+from rlox.policies import ContinuousPolicy
 
 __version__ = "1.0.0"
 
@@ -75,8 +78,11 @@ __all__ = [
     "DPOPair",
     "RunningStats",
     "pack_sequences",
+    "ActorCritic",
     # Python Layer 1
     "RolloutBatch",
     "RolloutCollector",
+    "GymVecEnv",
+    "ContinuousPolicy",
     "PPOLoss",
 ]

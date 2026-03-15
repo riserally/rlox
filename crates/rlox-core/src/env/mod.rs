@@ -1,9 +1,11 @@
+pub mod batch;
 pub mod builtins;
 pub mod parallel;
 pub mod spaces;
 
 use std::collections::HashMap;
 
+pub use batch::BatchSteppable;
 pub use spaces::{Action, ActionSpace, ObsSpace, Observation};
 
 use crate::error::RloxError;

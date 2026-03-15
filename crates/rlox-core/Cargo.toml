@@ -2,6 +2,7 @@
 name = "rlox-core"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 
 [dependencies]
 rayon = "1.10"
@@ -9,6 +10,9 @@ rand = "0.9"
 rand_chacha = "0.9"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
+memmap2 = "0.9"
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 proptest = "1"
+tempfile = "3"

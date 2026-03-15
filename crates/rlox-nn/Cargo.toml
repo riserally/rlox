@@ -2,6 +2,7 @@
 name = "rlox-nn"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 description = "Backend-agnostic neural network traits for rlox"
 
 [dependencies]

@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 
-use crate::env::spaces::{Action, Observation};
+use crate::env::batch::BatchSteppable;
+use crate::env::spaces::{Action, ActionSpace, ObsSpace, Observation};
 use crate::env::{RLEnv, Transition};
 use crate::error::RloxError;
 use crate::seed::derive_seed;
@@ -24,11 +25,20 @@ pub struct BatchTransition {
 /// A vectorized environment that steps multiple sub-environments in parallel.
 pub struct VecEnv {
     envs: Vec<Box<dyn RLEnv>>,
+    action_space: ActionSpace,
+    obs_space: ObsSpace,
 }
 
 impl VecEnv {
     pub fn new(envs: Vec<Box<dyn RLEnv>>) -> Self {
-        VecEnv { envs }
+        assert!(!envs.is_empty(), "VecEnv requires at least one environment");
+        let action_space = envs[0].action_space().clone();
+        let obs_space = envs[0].obs_space().clone();
+        VecEnv {
+            envs,
+            action_space,
+            obs_space,
+        }
     }
 
     pub fn num_envs(&self) -> usize {
@@ -102,6 +112,28 @@ impl VecEnv {
                 env.reset(env_seed)
             })
             .collect()
+    }
+}
+
+impl BatchSteppable for VecEnv {
+    fn step_batch(&mut self, actions: &[Action]) -> Result<BatchTransition, RloxError> {
+        self.step_all(actions)
+    }
+
+    fn reset_batch(&mut self, seed: Option<u64>) -> Result<Vec<Observation>, RloxError> {
+        self.reset_all(seed)
+    }
+
+    fn num_envs(&self) -> usize {
+        self.num_envs()
+    }
+
+    fn action_space(&self) -> &ActionSpace {
+        &self.action_space
+    }
+
+    fn obs_space(&self) -> &ObsSpace {
+        &self.obs_space
     }
 }
 

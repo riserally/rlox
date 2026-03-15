@@ -8,3 +8,6 @@ members = [
     "crates/rlox-python",
     "crates/rlox-bench",
 ]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"

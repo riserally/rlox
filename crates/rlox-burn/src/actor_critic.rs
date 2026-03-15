@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::path::Path;
 
 use burn::module::AutodiffModule;
@@ -104,7 +105,7 @@ pub struct BurnActorCritic<B: AutodiffBackend> {
     device: B::Device,
     lr: f32,
     n_actions: usize,
-    rng: ChaCha8Rng,
+    rng: RefCell<ChaCha8Rng>,
 }
 
 impl<B: AutodiffBackend> BurnActorCritic<B> {
@@ -125,7 +126,7 @@ impl<B: AutodiffBackend> BurnActorCritic<B> {
             device,
             lr,
             n_actions,
-            rng: ChaCha8Rng::seed_from_u64(seed),
+            rng: RefCell::new(ChaCha8Rng::seed_from_u64(seed)),
         }
     }
 
@@ -162,9 +163,9 @@ where
         let mut actions = Vec::with_capacity(batch_size);
         let mut log_probs = Vec::with_capacity(batch_size);
 
-        let mut rng = self.rng.clone();
+        let mut rng = self.rng.borrow_mut();
         for logits in &batch_logits {
-            let u: f32 = rand::Rng::gen(&mut rng);
+            let u: f32 = rand::Rng::gen(&mut *rng);
             let action = categorical_sample(logits, u);
             let lp = categorical_log_prob(logits, action);
             actions.push(action as f32);
@@ -472,5 +473,21 @@ mod tests {
         let ac = BurnActorCritic::<TestBackend>::new(4, 2, 64, 2.5e-4, device().into(), 42);
         let obs = TensorData::zeros(vec![4]); // 1D, should fail
         assert!(ac.act(&obs).is_err());
+    }
+
+    #[test]
+    fn test_act_rng_advances() {
+        let ac = BurnActorCritic::<TestBackend>::new(4, 2, 64, 2.5e-4, device().into(), 42);
+        let obs = TensorData::zeros(vec![1, 4]);
+        let mut seen_different = false;
+        let first = ac.act(&obs).unwrap().log_probs.data[0];
+        for _ in 0..20 {
+            let lp = ac.act(&obs).unwrap().log_probs.data[0];
+            if (lp - first).abs() > 1e-6 {
+                seen_different = true;
+                break;
+            }
+        }
+        assert!(seen_different, "RNG should advance between act() calls");
     }
 }

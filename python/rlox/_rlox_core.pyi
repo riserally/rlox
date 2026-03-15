@@ -578,3 +578,115 @@ def pack_sequences(
         - ``sequence_starts``: list of start indices within the packed sequence
     """
     ...
+
+# ---------------------------------------------------------------------------
+# Phase 7: Neural Network Backends (Burn / Candle)
+# ---------------------------------------------------------------------------
+
+class ActorCritic:
+    """Discrete actor-critic policy backed by a pure-Rust NN (Burn or Candle).
+
+    Provides PPO training without PyTorch — the entire forward/backward/step
+    pipeline runs in Rust. Useful for CPU-only deployments and low-latency
+    inference.
+
+    Parameters
+    ----------
+    backend : str
+        ``"burn"`` (NdArray + autodiff) or ``"candle"`` (candle-core + candle-nn).
+    obs_dim : int
+        Observation dimension.
+    n_actions : int
+        Number of discrete actions.
+    hidden : int
+        Hidden layer width (2 layers). Default 64.
+    lr : float
+        Learning rate. Default 2.5e-4.
+    seed : int
+        RNG seed. Default 42.
+
+    Example
+    -------
+    >>> ac = ActorCritic("candle", obs_dim=4, n_actions=2)
+    >>> actions, log_probs = ac.act(obs.ravel())
+    >>> values = ac.value(obs.ravel())
+    >>> metrics = ac.ppo_step(obs_flat, actions, log_probs, adv, ret, old_v)
+    """
+    def __init__(
+        self,
+        backend: str,
+        obs_dim: int,
+        n_actions: int,
+        hidden: int = 64,
+        lr: float = 2.5e-4,
+        seed: int = 42,
+    ) -> None: ...
+
+    def act(
+        self,
+        obs: npt.NDArray[np.float32],
+    ) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+        """Sample actions from the policy (no gradient tracking).
+
+        Parameters
+        ----------
+        obs : flat f32 array of length ``batch * obs_dim``
+
+        Returns
+        -------
+        (actions, log_probs) : tuple of 1-D f32 arrays of length ``batch``
+        """
+        ...
+
+    def value(
+        self,
+        obs: npt.NDArray[np.float32],
+    ) -> npt.NDArray[np.float32]:
+        """Compute state values (no gradient tracking).
+
+        Parameters
+        ----------
+        obs : flat f32 array of length ``batch * obs_dim``
+
+        Returns
+        -------
+        values : 1-D f32 array of length ``batch``
+        """
+        ...
+
+    def ppo_step(
+        self,
+        obs: npt.NDArray[np.float32],
+        actions: npt.NDArray[np.float32],
+        old_log_probs: npt.NDArray[np.float32],
+        advantages: npt.NDArray[np.float32],
+        returns: npt.NDArray[np.float32],
+        old_values: npt.NDArray[np.float32],
+        clip_eps: float = 0.2,
+        vf_coef: float = 0.5,
+        ent_coef: float = 0.01,
+        max_grad_norm: float = 0.5,
+        clip_vloss: bool = True,
+    ) -> dict[str, float]:
+        """Perform one PPO gradient step (forward + backward + optimizer step in Rust).
+
+        Parameters
+        ----------
+        obs : flat f32 array of length ``batch * obs_dim``
+        actions, old_log_probs, advantages, returns, old_values :
+            flat f32 arrays of length ``batch``
+
+        Returns
+        -------
+        dict with keys: ``policy_loss``, ``value_loss``, ``entropy``,
+        ``approx_kl``, ``clip_fraction``
+        """
+        ...
+
+    @property
+    def learning_rate(self) -> float:
+        """Current learning rate."""
+        ...
+
+    @learning_rate.setter
+    def learning_rate(self, lr: float) -> None: ...

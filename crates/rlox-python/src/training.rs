@@ -1,8 +1,9 @@
 use numpy::{PyArray1, PyReadonlyArray1};
-use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+use rlox_core::pipeline::channel::{Pipeline, RolloutBatch};
 use rlox_core::training::gae;
 use rlox_core::training::normalization::RunningStats;
 use rlox_core::training::packing;
@@ -189,4 +190,184 @@ pub fn compute_vtrace<'py>(
         PyArray1::from_vec(py, vs),
         PyArray1::from_vec(py, pg_advantages),
     ))
+}
+
+/// Python-facing RolloutBatch — a flat batch of rollout data.
+///
+/// All arrays are 1-D numpy arrays. Shape metadata (obs_dim, act_dim, n_steps,
+/// n_envs) is stored as scalar attributes so the Python side can reshape.
+#[pyclass(name = "RolloutBatch")]
+pub struct PyRolloutBatch {
+    inner: RolloutBatch,
+}
+
+#[pymethods]
+impl PyRolloutBatch {
+    /// Create a new RolloutBatch from flat numpy arrays and shape metadata.
+    #[new]
+    #[pyo3(signature = (observations, actions, rewards, dones, advantages, returns, obs_dim, act_dim, n_steps, n_envs))]
+    fn new(
+        observations: PyReadonlyArray1<'_, f32>,
+        actions: PyReadonlyArray1<'_, f32>,
+        rewards: PyReadonlyArray1<'_, f64>,
+        dones: PyReadonlyArray1<'_, f64>,
+        advantages: PyReadonlyArray1<'_, f64>,
+        returns: PyReadonlyArray1<'_, f64>,
+        obs_dim: usize,
+        act_dim: usize,
+        n_steps: usize,
+        n_envs: usize,
+    ) -> PyResult<Self> {
+        let obs_slice = observations.as_slice()?;
+        let act_slice = actions.as_slice()?;
+        let rew_slice = rewards.as_slice()?;
+        let don_slice = dones.as_slice()?;
+        let adv_slice = advantages.as_slice()?;
+        let ret_slice = returns.as_slice()?;
+
+        let expected_obs = n_steps * n_envs * obs_dim;
+        let expected_act = n_steps * n_envs * act_dim;
+        let expected_flat = n_steps * n_envs;
+
+        if obs_slice.len() != expected_obs {
+            return Err(PyValueError::new_err(format!(
+                "observations length {} != n_steps*n_envs*obs_dim={}",
+                obs_slice.len(),
+                expected_obs
+            )));
+        }
+        if act_slice.len() != expected_act {
+            return Err(PyValueError::new_err(format!(
+                "actions length {} != n_steps*n_envs*act_dim={}",
+                act_slice.len(),
+                expected_act
+            )));
+        }
+        if rew_slice.len() != expected_flat {
+            return Err(PyValueError::new_err(format!(
+                "rewards length {} != n_steps*n_envs={}",
+                rew_slice.len(),
+                expected_flat
+            )));
+        }
+
+        Ok(Self {
+            inner: RolloutBatch {
+                observations: obs_slice.to_vec(),
+                actions: act_slice.to_vec(),
+                rewards: rew_slice.to_vec(),
+                dones: don_slice.to_vec(),
+                advantages: adv_slice.to_vec(),
+                returns: ret_slice.to_vec(),
+                obs_dim,
+                act_dim,
+                n_steps,
+                n_envs,
+            },
+        })
+    }
+
+    #[getter]
+    fn observations<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        PyArray1::from_slice(py, &self.inner.observations)
+    }
+
+    #[getter]
+    fn actions<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        PyArray1::from_slice(py, &self.inner.actions)
+    }
+
+    #[getter]
+    fn rewards<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_slice(py, &self.inner.rewards)
+    }
+
+    #[getter]
+    fn dones<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_slice(py, &self.inner.dones)
+    }
+
+    #[getter]
+    fn advantages<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_slice(py, &self.inner.advantages)
+    }
+
+    #[getter]
+    fn returns<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_slice(py, &self.inner.returns)
+    }
+
+    #[getter]
+    fn obs_dim(&self) -> usize {
+        self.inner.obs_dim
+    }
+
+    #[getter]
+    fn act_dim(&self) -> usize {
+        self.inner.act_dim
+    }
+
+    #[getter]
+    fn n_steps(&self) -> usize {
+        self.inner.n_steps
+    }
+
+    #[getter]
+    fn n_envs(&self) -> usize {
+        self.inner.n_envs
+    }
+}
+
+/// Bounded experience pipeline for decoupled collection and training.
+///
+/// Wraps a crossbeam bounded channel. The collector side calls `send()`,
+/// the learner side calls `recv()` or `try_recv()`.
+#[pyclass(name = "Pipeline")]
+pub struct PyPipeline {
+    inner: Pipeline,
+}
+
+#[pymethods]
+impl PyPipeline {
+    /// Create a new pipeline with the given buffer capacity.
+    #[new]
+    #[pyo3(signature = (capacity=4))]
+    fn new(capacity: usize) -> PyResult<Self> {
+        if capacity == 0 {
+            return Err(PyValueError::new_err("capacity must be >= 1"));
+        }
+        Ok(Self {
+            inner: Pipeline::new(capacity),
+        })
+    }
+
+    /// Send a batch into the pipeline (blocks if full).
+    fn send(&self, batch: &PyRolloutBatch) -> PyResult<()> {
+        self.inner
+            .send(batch.inner.clone())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Try to receive a batch without blocking. Returns None if empty.
+    fn try_recv(&self) -> Option<PyRolloutBatch> {
+        self.inner.try_recv().map(|b| PyRolloutBatch { inner: b })
+    }
+
+    /// Receive a batch, blocking until one is available.
+    fn recv(&self) -> PyResult<PyRolloutBatch> {
+        self.inner
+            .recv()
+            .map(|b| PyRolloutBatch { inner: b })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Number of batches currently buffered in the channel.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Whether the channel is currently empty.
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }

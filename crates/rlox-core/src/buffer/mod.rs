@@ -1,4 +1,5 @@
 pub mod columnar;
+pub mod mmap;
 pub mod priority;
 pub mod provenance;
 pub mod ringbuf;

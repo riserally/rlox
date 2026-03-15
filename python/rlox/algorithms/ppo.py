@@ -2,48 +2,61 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
+import gymnasium as gym
+import numpy as np
 import torch
 import torch.nn as nn
 
+from rlox.callbacks import Callback, CallbackList
+from rlox.checkpoint import Checkpoint
 from rlox.collectors import RolloutCollector
-from rlox.losses import PPOLoss
+from rlox.config import PPOConfig
 from rlox.logging import LoggerCallback
+from rlox.losses import PPOLoss
 from rlox.policies import DiscretePolicy
 
 
-# CartPole-v1 defaults
-_CARTPOLE_OBS_DIM = 4
-_CARTPOLE_N_ACTIONS = 2
+_RUST_NATIVE_ENVS = {"CartPole-v1", "CartPole"}
 
 
-@dataclass
-class PPOConfig:
-    n_envs: int = 8
-    n_steps: int = 128
-    n_epochs: int = 4
-    batch_size: int = 256
-    learning_rate: float = 2.5e-4
-    clip_eps: float = 0.2
-    vf_coef: float = 0.5
-    ent_coef: float = 0.01
-    max_grad_norm: float = 0.5
-    gamma: float = 0.99
-    gae_lambda: float = 0.95
-    normalize_advantages: bool = True
-    clip_vloss: bool = True
-    anneal_lr: bool = True
-    normalize_rewards: bool = False
-    normalize_obs: bool = False
+def _detect_env_spaces(env_id: str) -> tuple[int, Any, bool]:
+    """Detect obs_dim, action_space, and whether the env is discrete.
+
+    Returns (obs_dim, action_space, is_discrete).
+    """
+    tmp = gym.make(env_id)
+    obs_dim = int(np.prod(tmp.observation_space.shape))
+    action_space = tmp.action_space
+    is_discrete = isinstance(action_space, gym.spaces.Discrete)
+    tmp.close()
+    return obs_dim, action_space, is_discrete
 
 
 class PPO:
     """PPO trainer.
 
-    Accepts either a ``PPOConfig`` or individual keyword overrides.
-    If no policy is supplied, creates a ``DiscretePolicy`` for CartPole.
+    Auto-detects observation and action dimensions from the environment.
+    Selects DiscretePolicy or ContinuousPolicy based on action space type.
+    Supports callbacks, logging, and checkpoint save/load.
+
+    Parameters
+    ----------
+    env_id : str
+        Gymnasium environment ID.
+    n_envs : int
+        Number of parallel environments (default 8).
+    seed : int
+        Random seed.
+    policy : nn.Module, optional
+        Custom policy network. If None, auto-selects based on env.
+    logger : LoggerCallback, optional
+        Logger for metrics.
+    callbacks : list[Callback], optional
+        Training callbacks.
+    **config_kwargs
+        Override any PPOConfig fields.
     """
 
     def __init__(
@@ -53,12 +66,13 @@ class PPO:
         seed: int = 42,
         policy: nn.Module | None = None,
         logger: LoggerCallback | None = None,
+        callbacks: list[Callback] | None = None,
         **config_kwargs: Any,
     ):
         self.env_id = env_id
         self.seed = seed
 
-        # Build config
+        # Build config from validated PPOConfig
         cfg_fields = {f.name for f in PPOConfig.__dataclass_fields__.values()}
         cfg_dict = {k: v for k, v in config_kwargs.items() if k in cfg_fields}
         cfg_dict["n_envs"] = n_envs
@@ -66,13 +80,22 @@ class PPO:
 
         self.device = "cpu"
 
-        # Policy
+        # Detect environment spaces
+        obs_dim, action_space, is_discrete = _detect_env_spaces(env_id)
+        self._obs_dim = obs_dim
+        self._is_discrete = is_discrete
+
+        # Policy — auto-select if not provided
         if policy is not None:
             self.policy = policy
+        elif is_discrete:
+            n_actions = int(action_space.n)
+            self.policy = DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions)
         else:
-            self.policy = DiscretePolicy(
-                obs_dim=_CARTPOLE_OBS_DIM, n_actions=_CARTPOLE_N_ACTIONS
-            )
+            from rlox.policies import ContinuousPolicy
+
+            act_dim = int(np.prod(action_space.shape))
+            self.policy = ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
 
         self.optimizer = torch.optim.Adam(
             self.policy.parameters(), lr=self.config.learning_rate, eps=1e-5
@@ -98,6 +121,8 @@ class PPO:
         )
 
         self.logger = logger
+        self.callbacks = CallbackList(callbacks)
+        self._global_step = 0
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run PPO training and return final metrics."""
@@ -108,6 +133,8 @@ class PPO:
         all_rewards: list[float] = []
         last_metrics: dict[str, float] = {}
 
+        self.callbacks.on_training_start()
+
         for update in range(n_updates):
             # LR annealing
             if cfg.anneal_lr:
@@ -117,7 +144,12 @@ class PPO:
                     pg["lr"] = lr
 
             batch = self.collector.collect(self.policy, n_steps=cfg.n_steps)
-            all_rewards.append(batch.rewards.sum().item() / cfg.n_envs)
+            mean_ep_reward = batch.rewards.sum().item() / cfg.n_envs
+            all_rewards.append(mean_ep_reward)
+
+            self.callbacks.on_rollout_end(
+                mean_reward=mean_ep_reward, update=update
+            )
 
             for _epoch in range(cfg.n_epochs):
                 for mb in batch.sample_minibatches(cfg.batch_size, shuffle=True):
@@ -143,8 +175,61 @@ class PPO:
                     self.optimizer.step()
                     last_metrics = metrics
 
-            if self.logger is not None:
-                self.logger.on_train_step(update, {**last_metrics, "mean_reward": all_rewards[-1]})
+                    self._global_step += 1
+                    self.callbacks.on_train_batch(
+                        loss=loss.item(), **last_metrics
+                    )
 
-        last_metrics["mean_reward"] = float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
+            # Step callback (per rollout, not per env step)
+            should_continue = self.callbacks.on_step(
+                reward=mean_ep_reward, step=self._global_step
+            )
+            if not should_continue:
+                break
+
+            if self.logger is not None:
+                self.logger.on_train_step(
+                    update, {**last_metrics, "mean_reward": mean_ep_reward}
+                )
+
+        self.callbacks.on_training_end()
+
+        last_metrics["mean_reward"] = (
+            float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
+        )
         return last_metrics
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        Checkpoint.save(
+            path,
+            model=self.policy,
+            optimizer=self.optimizer,
+            step=self._global_step,
+            config=self.config.to_dict(),
+        )
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> PPO:
+        """Restore PPO from a checkpoint.
+
+        Parameters
+        ----------
+        path : str
+            Path to the checkpoint file.
+        env_id : str, optional
+            Environment ID. If None, uses the one stored in the checkpoint config.
+        """
+        data = Checkpoint.load(path)
+        config = data["config"]
+        eid = env_id or config.get("env_id", "CartPole-v1")
+
+        ppo = cls(env_id=eid, **config)
+        ppo.policy.load_state_dict(data["model_state_dict"])
+        ppo.optimizer.load_state_dict(data["optimizer_state_dict"])
+        ppo._global_step = data.get("step", 0)
+
+        if "torch_rng_state" in data:
+            torch.random.set_rng_state(data["torch_rng_state"])
+
+        return ppo

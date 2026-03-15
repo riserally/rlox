@@ -11,6 +11,10 @@ import torch
 import torch.nn.functional as F
 
 import rlox
+from rlox.callbacks import Callback, CallbackList
+from rlox.checkpoint import Checkpoint
+from rlox.config import DQNConfig
+from rlox.logging import LoggerCallback
 from rlox.networks import SimpleQNetwork, DuelingQNetwork
 
 
@@ -41,6 +45,8 @@ class DQN:
         beta_start: float = 0.4,
         hidden: int = 256,
         seed: int = 42,
+        callbacks: list[Callback] | None = None,
+        logger: LoggerCallback | None = None,
     ):
         self.env = gym.make(env_id)
         self.env_id = env_id
@@ -52,8 +58,28 @@ class DQN:
         self.exploration_initial_eps = exploration_initial_eps
         self.exploration_final_eps = exploration_final_eps
         self.double_dqn = double_dqn
+        self.dueling = dueling
         self.n_step = n_step
         self.prioritized = prioritized
+
+        self.config = DQNConfig(
+            learning_rate=learning_rate,
+            buffer_size=buffer_size,
+            batch_size=batch_size,
+            gamma=gamma,
+            target_update_freq=target_update_freq,
+            exploration_fraction=exploration_fraction,
+            exploration_initial_eps=exploration_initial_eps,
+            exploration_final_eps=exploration_final_eps,
+            learning_starts=learning_starts,
+            double_dqn=double_dqn,
+            dueling=dueling,
+            n_step=n_step,
+            prioritized=prioritized,
+            alpha=alpha,
+            beta_start=beta_start,
+            hidden=hidden,
+        )
 
         obs_dim = int(np.prod(self.env.observation_space.shape))
         act_dim = int(self.env.action_space.n)
@@ -78,6 +104,11 @@ class DQN:
 
         # N-step return buffer
         self._n_step_buffer: list[tuple] = []
+
+        # Callbacks and logger
+        self.callbacks = CallbackList(callbacks)
+        self.logger = logger
+        self._global_step = 0
 
     def _get_epsilon(self, step: int, total_timesteps: int) -> float:
         fraction = min(1.0, step / max(1, int(total_timesteps * self.exploration_fraction)))
@@ -124,6 +155,8 @@ class DQN:
         episode_rewards: list[float] = []
         ep_reward = 0.0
         metrics: dict[str, float] = {}
+
+        self.callbacks.on_training_start()
 
         for step in range(total_timesteps):
             eps = self._get_epsilon(step, total_timesteps)
@@ -173,13 +206,28 @@ class DQN:
                 ep_reward = 0.0
                 obs, _ = self.env.reset()
 
+            # Callback: on_step
+            self._global_step += 1
+            should_continue = self.callbacks.on_step(
+                reward=ep_reward, step=self._global_step
+            )
+            if not should_continue:
+                break
+
             # Update
             if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
                 metrics = self._update(step, total_timesteps)
+                self.callbacks.on_train_batch(**metrics)
+
+                # Logger
+                if self.logger is not None and self._global_step % 1000 == 0:
+                    self.logger.on_train_step(self._global_step, metrics)
 
             # Target network update
             if step % self.target_update_freq == 0:
                 self.target_network.load_state_dict(self.q_network.state_dict())
+
+        self.callbacks.on_training_end()
 
         metrics["mean_reward"] = float(np.mean(episode_rewards)) if episode_rewards else 0.0
         return metrics
@@ -232,3 +280,34 @@ class DQN:
             self.buffer.set_beta(0.4 + frac * (1.0 - 0.4))
 
         return {"loss": loss.item()}
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        data: dict[str, Any] = {
+            "q_network_state_dict": self.q_network.state_dict(),
+            "target_network_state_dict": self.target_network.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "step": self._global_step,
+            "config": self.config.to_dict(),
+            "env_id": self.env_id,
+            "torch_rng_state": torch.random.get_rng_state(),
+        }
+        torch.save(data, path)
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> DQN:
+        """Restore DQN from a checkpoint."""
+        data = torch.load(path, weights_only=False)
+        config = data["config"]
+        eid = env_id or data.get("env_id", "CartPole-v1")
+
+        dqn = cls(env_id=eid, **config)
+        dqn.q_network.load_state_dict(data["q_network_state_dict"])
+        dqn.target_network.load_state_dict(data["target_network_state_dict"])
+        dqn.optimizer.load_state_dict(data["optimizer_state_dict"])
+        dqn._global_step = data.get("step", 0)
+
+        if "torch_rng_state" in data:
+            torch.random.set_rng_state(data["torch_rng_state"])
+
+        return dqn

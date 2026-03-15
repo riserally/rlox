@@ -21,7 +21,8 @@ Multi-agent / advanced:
     - :class:`DreamerV3` — World-model-based RL
 """
 
-from rlox.algorithms.ppo import PPO, PPOConfig
+from rlox.algorithms.ppo import PPO
+from rlox.config import PPOConfig
 from rlox.algorithms.a2c import A2C
 from rlox.algorithms.grpo import GRPO
 from rlox.algorithms.dpo import DPO

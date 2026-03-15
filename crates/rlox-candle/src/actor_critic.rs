@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::path::Path;
 
 use candle_core::Device;
@@ -22,7 +23,7 @@ pub struct CandleActorCritic {
     device: Device,
     n_actions: usize,
     lr: f64,
-    rng: ChaCha8Rng,
+    rng: RefCell<ChaCha8Rng>,
 }
 
 impl CandleActorCritic {
@@ -60,7 +61,7 @@ impl CandleActorCritic {
             device,
             n_actions,
             lr,
-            rng: ChaCha8Rng::seed_from_u64(seed),
+            rng: RefCell::new(ChaCha8Rng::seed_from_u64(seed)),
         })
     }
 
@@ -91,9 +92,9 @@ impl rlox_nn::ActorCritic for CandleActorCritic {
         let mut actions = Vec::with_capacity(batch_size);
         let mut log_probs = Vec::with_capacity(batch_size);
 
-        let mut rng = self.rng.clone();
+        let mut rng = self.rng.borrow_mut();
         for logits in &batch_logits {
-            let u: f32 = rand::Rng::gen(&mut rng);
+            let u: f32 = rand::Rng::gen(&mut *rng);
             let action = categorical_sample(logits, u);
             let lp = categorical_log_prob(logits, action);
             actions.push(action as f32);
@@ -341,5 +342,24 @@ mod tests {
         let ac = CandleActorCritic::new(4, 2, 64, 2.5e-4, Device::Cpu, 42).unwrap();
         let obs = TensorData::zeros(vec![4]); // 1D should fail
         assert!(ac.act(&obs).is_err());
+    }
+
+    #[test]
+    fn test_act_rng_advances() {
+        let ac = CandleActorCritic::new(4, 2, 64, 2.5e-4, Device::Cpu, 42).unwrap();
+        let obs = TensorData::zeros(vec![1, 4]);
+        // Same obs, same logits → without RNG advance, same action every time.
+        // With the fix, the RNG state advances so we may get different random draws.
+        let mut seen_different = false;
+        let first = ac.act(&obs).unwrap().log_probs.data[0];
+        for _ in 0..20 {
+            let lp = ac.act(&obs).unwrap().log_probs.data[0];
+            if (lp - first).abs() > 1e-6 {
+                seen_different = true;
+                break;
+            }
+        }
+        // With 2 actions and advancing RNG, probability of 20 identical draws is (0.5)^20 ≈ 1e-6
+        assert!(seen_different, "RNG should advance between act() calls");
     }
 }

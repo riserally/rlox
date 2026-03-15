@@ -12,6 +12,7 @@ for invalid parameters.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict, fields
+from pathlib import Path
 from typing import Any
 
 
@@ -76,6 +77,8 @@ class PPOConfig:
     normalize_advantages: bool = True
     clip_vloss: bool = True
     anneal_lr: bool = True
+    normalize_rewards: bool = False
+    normalize_obs: bool = False
 
     def __post_init__(self):
         _validate_positive("learning_rate", self.learning_rate)
@@ -90,6 +93,15 @@ class PPOConfig:
         filtered = {k: v for k, v in d.items() if k in valid_keys}
         return cls(**filtered)
 
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> PPOConfig:
+        """Load config from a YAML file, ignoring unknown keys."""
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
     def merge(self, overrides: dict[str, Any]) -> PPOConfig:
         d = asdict(self)
         d.update(overrides)
@@ -97,6 +109,13 @@ class PPOConfig:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Save config to a YAML file."""
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
 
 
 @dataclass
@@ -147,6 +166,15 @@ class SACConfig:
         filtered = {k: v for k, v in d.items() if k in valid_keys}
         return cls(**filtered)
 
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> SACConfig:
+        """Load config from a YAML file, ignoring unknown keys."""
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
     def merge(self, overrides: dict[str, Any]) -> SACConfig:
         d = asdict(self)
         d.update(overrides)
@@ -154,6 +182,13 @@ class SACConfig:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Save config to a YAML file."""
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
 
 
 @dataclass
@@ -227,6 +262,15 @@ class DQNConfig:
         filtered = {k: v for k, v in d.items() if k in valid_keys}
         return cls(**filtered)
 
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> DQNConfig:
+        """Load config from a YAML file, ignoring unknown keys."""
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
     def merge(self, overrides: dict[str, Any]) -> DQNConfig:
         d = asdict(self)
         d.update(overrides)
@@ -234,3 +278,10 @@ class DQNConfig:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Save config to a YAML file."""
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)

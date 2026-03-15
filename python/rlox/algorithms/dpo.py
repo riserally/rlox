@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from rlox.callbacks import Callback, CallbackList
+from rlox.checkpoint import Checkpoint
+from rlox.logging import LoggerCallback
 
 
 class DPO:
@@ -20,6 +26,10 @@ class DPO:
         Temperature parameter for the DPO loss.
     learning_rate : float
         Optimiser learning rate.
+    callbacks : list[Callback], optional
+        Training callbacks.
+    logger : LoggerCallback, optional
+        Logger for metrics.
     """
 
     def __init__(
@@ -28,11 +38,16 @@ class DPO:
         ref_model: nn.Module,
         beta: float = 0.1,
         learning_rate: float = 1e-4,
+        callbacks: list[Callback] | None = None,
+        logger: LoggerCallback | None = None,
     ):
         self.model = model
         self.ref_model = ref_model
         self.beta = beta
         self.optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        self.callbacks = CallbackList(callbacks)
+        self.logger = logger
+        self._global_step = 0
 
     def _sequence_logprobs(
         self, model: nn.Module, input_ids: torch.Tensor
@@ -87,3 +102,33 @@ class DPO:
             "rejected_reward": rejected_reward,
         }
         return loss, metrics
+
+    def train_step(
+        self,
+        prompt: torch.Tensor,
+        chosen: torch.Tensor,
+        rejected: torch.Tensor,
+    ) -> dict[str, float]:
+        """One DPO gradient step."""
+        loss, metrics = self.compute_loss(prompt, chosen, rejected)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self._global_step += 1
+        self.callbacks.on_train_batch(loss=loss.item(), **metrics)
+        if self.logger is not None:
+            self.logger.on_train_step(self._global_step, metrics)
+
+        return metrics
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        Checkpoint.save(
+            path,
+            model=self.model,
+            optimizer=self.optimizer,
+            step=self._global_step,
+            config={"beta": self.beta},
+        )

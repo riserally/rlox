@@ -6,6 +6,8 @@ build-backend = "maturin"
 name = "rlox"
 version = "0.1.0"
 requires-python = ">=3.9"
+license = "MIT OR Apache-2.0"
+description = "Rust-accelerated reinforcement learning with Python bindings"
 dependencies = ["numpy>=1.21"]
 
 [tool.maturin]

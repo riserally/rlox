@@ -29,6 +29,17 @@ Multi-crate workspace:
 - **rlox-candle** — Candle CPU implementations of all RL algorithms
 - **rlox-python** — thin PyO3 wrappers exposing `rlox-core` to Python
 
+## Tutorials & Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | Installation, first training run, basic API |
+| [Custom Rewards & Training Loops](docs/tutorials/custom-rewards-and-training-loops.md) | Reward shaping, GRPO reward functions, custom algorithms in Python and Rust |
+| [Python Guide](docs/python-guide.md) | Python API reference and patterns |
+| [Rust Guide](docs/rust-guide.md) | Rust crate architecture and extending in Rust |
+| [Math Reference](docs/math-reference.md) | GAE, V-trace, GRPO, DPO derivations |
+| [Benchmark Details](docs/benchmark/) | Full methodology, per-benchmark analysis, reproducibility |
+
 ## Status
 
 | Phase | Description | Status |
@@ -40,6 +51,9 @@ Multi-crate workspace:
 | 4 | LLM Post-Training (GRPO, DPO, token KL) | Done |
 | 5 | Polish & API (type stubs, proptest) | Done |
 | 6 | Three-Framework Benchmark (rlox vs TorchRL vs SB3) | Done |
+| 7 | Algorithm Completeness (PPO/GRPO e2e, callbacks, save/load) | Done |
+| 8 | Production Hardening (eval toolkit, diagnostics, mmap buffer) | ~85% |
+| 9 | Distributed & Scale (pipeline, multi-GPU, vLLM/TGI) | ~65% |
 
 ## Three-Framework Benchmark Results
 
@@ -249,17 +263,24 @@ cargo bench -p rlox-bench --bench nn_backends
 
 ```
 crates/
-  rlox-core/       Pure Rust: envs, spaces, buffers, GAE, GRPO
-  rlox-nn/         RL algorithm traits
+  rlox-core/       Pure Rust: envs, buffers (ring, mmap, priority), GAE,
+                   V-trace, GRPO, pipeline (crossbeam), sequence packing
+  rlox-nn/         RL algorithm traits (ActorCritic, QFunction, etc.)
   rlox-burn/       Burn backend (Autodiff<NdArray>)
   rlox-candle/     Candle backend (CPU)
   rlox-python/     PyO3 bindings
   rlox-bench/      Criterion benchmarks (env stepping, NN backends)
-python/
-  rlox/            Python package (imports Rust via _rlox_core)
-benchmarks/        Three-framework benchmark suite + NN backend baselines
+python/rlox/
+  algorithms/      PPO, SAC, DQN, TD3, A2C, GRPO, DPO, MAPPO, DreamerV3, IMPALA
+  distributed/     Pipeline, vLLM/TGI/SGLang backends, multi-GPU (DDP)
+  llm/             LLM environment, reward model serving
+  *.py             Collectors, configs, callbacks, policies, trainers,
+                   evaluation toolkit, diagnostics, checkpointing
+benchmarks/        Three-framework benchmark suite + convergence tests
 tests/python/      Python integration & benchmark TDD tests
-scripts/           Test runner, README updater
-docs/benchmark/    Detailed benchmark results & methodology
-docs/plans/        Phase-by-phase implementation plans
+docs/
+  tutorials/       Step-by-step guides (custom rewards, training loops)
+  benchmark/       Detailed benchmark results & methodology
+  plans/           Phase-by-phase implementation plans
+  research/        Algorithm research notes (PPO, SAC, GRPO, etc.)
 ```

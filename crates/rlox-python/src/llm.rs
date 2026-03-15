@@ -27,6 +27,33 @@ pub fn compute_token_kl(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+/// Compute batched GRPO group advantages for all groups in a single call.
+/// `rewards` is a flat array of shape (n_prompts * group_size,).
+#[pyfunction]
+pub fn compute_batch_group_advantages<'py>(
+    py: Python<'py>,
+    rewards: PyReadonlyArray1<'py, f64>,
+    group_size: usize,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let slice = rewards.as_slice()?;
+    let result = ops::compute_batch_group_advantages(slice, group_size)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+/// Compute token-level KL divergence using the Schulman (2020) estimator:
+/// sum(exp(log_p - log_q) - (log_p - log_q) - 1).
+#[pyfunction]
+pub fn compute_token_kl_schulman(
+    log_probs_policy: PyReadonlyArray1<'_, f64>,
+    log_probs_ref: PyReadonlyArray1<'_, f64>,
+) -> PyResult<f64> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    ops::compute_token_kl_schulman(policy_slice, ref_slice)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 /// A DPO preference pair.
 #[pyclass(name = "DPOPair")]
 pub struct PyDPOPair {

@@ -39,6 +39,57 @@ pub fn compute_token_kl(
         .sum())
 }
 
+/// Batched GRPO group advantages: process all groups in a single call.
+///
+/// `rewards` is a flat slice of length `n_prompts * group_size`.
+/// Returns a Vec of the same length with per-group z-score normalisation.
+pub fn compute_batch_group_advantages(rewards: &[f64], group_size: usize) -> Result<Vec<f64>, crate::error::RloxError> {
+    if group_size == 0 {
+        return Err(crate::error::RloxError::ShapeMismatch {
+            expected: "group_size > 0".to_string(),
+            got: "0".to_string(),
+        });
+    }
+    if rewards.len() % group_size != 0 {
+        return Err(crate::error::RloxError::ShapeMismatch {
+            expected: format!("len divisible by {group_size}"),
+            got: format!("len={}", rewards.len()),
+        });
+    }
+
+    let mut out = Vec::with_capacity(rewards.len());
+    for group in rewards.chunks_exact(group_size) {
+        out.extend_from_slice(&compute_group_advantages(group));
+    }
+    Ok(out)
+}
+
+/// Token-level KL divergence using the Schulman (2020) estimator:
+/// `sum(exp(log_p - log_q) - (log_p - log_q) - 1)`.
+///
+/// This is the estimator used by TRL (HuggingFace). It is unbiased and
+/// numerically more stable than the exact `exp(log_p) * (log_p - log_q)`.
+pub fn compute_token_kl_schulman(
+    log_probs_policy: &[f64],
+    log_probs_ref: &[f64],
+) -> Result<f64, crate::error::RloxError> {
+    if log_probs_policy.len() != log_probs_ref.len() {
+        return Err(crate::error::RloxError::ShapeMismatch {
+            expected: format!("len={}", log_probs_policy.len()),
+            got: format!("len={}", log_probs_ref.len()),
+        });
+    }
+
+    Ok(log_probs_policy
+        .iter()
+        .zip(log_probs_ref.iter())
+        .map(|(&log_p, &log_q)| {
+            let r = log_p - log_q;
+            r.exp() - r - 1.0
+        })
+        .sum())
+}
+
 /// A DPO preference pair holding tokenized prompt, chosen, and rejected sequences.
 #[derive(Debug, Clone)]
 pub struct DPOPair {
@@ -164,6 +215,51 @@ mod tests {
         let log_q = vec![-2.0f64];
         let kl = compute_token_kl(&log_p, &log_q).unwrap();
         assert!((kl - (-1.0_f64).exp()).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_batch_group_advantages() {
+        // Two groups of 3: [1,2,3] and [10,10,10]
+        let rewards = [1.0, 2.0, 3.0, 10.0, 10.0, 10.0];
+        let adv = compute_batch_group_advantages(&rewards, 3).unwrap();
+        assert_eq!(adv.len(), 6);
+        // First group should have mean ~0
+        let g1_mean: f64 = adv[..3].iter().sum::<f64>() / 3.0;
+        assert!(g1_mean.abs() < 1e-10);
+        // Second group (constant) should be zeros
+        assert!(adv[3..6].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_batch_group_advantages_bad_size() {
+        assert!(compute_batch_group_advantages(&[1.0, 2.0, 3.0], 2).is_err());
+        assert!(compute_batch_group_advantages(&[1.0], 0).is_err());
+    }
+
+    #[test]
+    fn test_token_kl_schulman_identical() {
+        let log_p = [-1.0, -2.0, -0.5];
+        let kl = compute_token_kl_schulman(&log_p, &log_p).unwrap();
+        assert!(kl.abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_token_kl_schulman_known_value() {
+        // r = log_p - log_q = -1 - (-2) = 1
+        // schulman: exp(1) - 1 - 1 = e - 2 ≈ 0.71828
+        let log_p = [-1.0];
+        let log_q = [-2.0];
+        let kl = compute_token_kl_schulman(&log_p, &log_q).unwrap();
+        assert!((kl - (1.0_f64.exp() - 2.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_token_kl_schulman_non_negative() {
+        // Schulman estimator is always >= 0 for any r (convexity of exp)
+        let log_p = [-0.5, -1.0, -3.0, 0.0];
+        let log_q = [-1.0, -0.5, -0.1, -2.0];
+        let kl = compute_token_kl_schulman(&log_p, &log_q).unwrap();
+        assert!(kl >= 0.0, "Schulman KL should be non-negative, got {kl}");
     }
 
     #[test]

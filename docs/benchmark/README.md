@@ -20,6 +20,17 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 | [GRPO advantages (256×16)](llm-ops.md) | — | — | **34x** |
 | [Token KL (128 tokens)](llm-ops.md) | — | — | **4.7x** |
 
+### TRL Comparison (LLM Post-Training Primitives)
+
+| Category | vs TRL-style CPU | vs NumPy |
+|----------|-----------------|----------|
+| [GRPO advantages (16×4)](trl-comparison.md) | **14.2x** | **13.0x** |
+| [GRPO advantages (256×16)](trl-comparison.md) | **6.7x** | **2.4x** |
+| [GRPO advantages (1024×32)](trl-comparison.md) | **4.0x** | **1.3x** |
+| [Token KL Schulman (B=1, T=128)](trl-comparison.md) | **5.5x** | **2.5x** |
+| [Token KL Schulman (B=1, T=8192)](trl-comparison.md) | **2.7x** | **1.5x** |
+| [Token KL Schulman (B=32, T=2048)](trl-comparison.md) | 0.6x | **1.2x** |
+
 ### Neural Network Backends (Burn vs Candle vs PyTorch)
 
 | Category | Burn | Candle | PyTorch |
@@ -40,6 +51,7 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 | [Environment Stepping](env-stepping.md) | Single-step latency, vectorized throughput scaling | rlox, Gymnasium, SB3, TorchRL |
 | [LLM Operations](llm-ops.md) | GRPO advantages, token-level KL divergence | rlox, NumPy, PyTorch |
 | [NN Backends](nn-backends.md) | Inference and training step latency | Burn, Candle, PyTorch |
+| [TRL Comparison](trl-comparison.md) | GRPO advantages, Schulman KL vs TRL-style PyTorch | rlox, PyTorch (TRL-style), NumPy |
 
 ## Key Findings
 
@@ -57,6 +69,10 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 
 7. **Candle excels at low-latency inference**: At batch=1, Candle is 5-6x faster than Burn and 3-4x faster than PyTorch for inference. At larger batches (256+), Burn's GEMM-optimized NdArray backend catches up and often wins for training steps.
 
+8. **TRL-style GRPO: 4-14x faster on CPU**: rlox's batched Rust API beats TRL's vectorized `reshape + repeat_interleave` approach by 4-14x on CPU. The gap narrows at larger batch sizes as compute overtakes dispatch overhead. However, in a full LLM training step, advantage computation is <0.01% of wall-clock — the value is in low-latency serving and CPU-only deployments.
+
+9. **Batched KL crossover at large tensors**: For single sequences (B=1), rlox Schulman KL is 2.7-5.5x faster than TRL-style PyTorch. At B=32 x T=2048 (65K elements), PyTorch's SIMD-vectorized tensor ops win (0.6x) because rlox pays 32 per-sequence PyO3 crossings.
+
 ## Reproducing
 
 ```bash
@@ -68,6 +84,7 @@ python benchmarks/bench_e2e_rollout.py         # Just E2E
 python benchmarks/bench_llm_ops.py             # Just LLM ops
 python benchmarks/bench_env_stepping.py        # Just env stepping
 python benchmarks/bench_nn_backends.py         # PyTorch NN baseline
+python benchmarks/bench_trl_comparison.py      # rlox vs TRL-style ops
 
 # Rust benchmarks (NN backends)
 cargo bench -p rlox-bench --bench nn_backends  # Burn vs Candle

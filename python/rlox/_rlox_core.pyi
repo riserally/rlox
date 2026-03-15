@@ -451,6 +451,30 @@ def compute_group_advantages(
     """
     ...
 
+def compute_batch_group_advantages(
+    rewards: npt.NDArray[np.float64],
+    group_size: int,
+) -> npt.NDArray[np.float64]:
+    """Batched GRPO group advantages for all groups in a single call.
+
+    Processes ``n_prompts`` groups of ``group_size`` rewards each, applying
+    z-score normalisation within each group. Equivalent to calling
+    :func:`compute_group_advantages` for each group but with a single
+    PyO3 boundary crossing.
+
+    Parameters
+    ----------
+    rewards : array of shape (n_prompts * group_size,)
+        Flat array of all reward scores.
+    group_size : int
+        Number of completions per prompt (K).
+
+    Returns
+    -------
+    advantages : f64 array of shape (n_prompts * group_size,)
+    """
+    ...
+
 def compute_token_kl(
     log_probs_policy: npt.NDArray[np.float64],
     log_probs_ref: npt.NDArray[np.float64],
@@ -473,6 +497,30 @@ def compute_token_kl(
     -------
     float
         Scalar KL divergence value.
+    """
+    ...
+
+def compute_token_kl_schulman(
+    log_probs_policy: npt.NDArray[np.float64],
+    log_probs_ref: npt.NDArray[np.float64],
+) -> float:
+    """Token-level KL divergence using the Schulman (2020) estimator.
+
+    Computes ``sum(exp(log_p - log_q) - (log_p - log_q) - 1)`` — the
+    unbiased KL estimator used by TRL (HuggingFace). Numerically more
+    stable than the exact ``exp(log_p) * (log_p - log_q)`` form.
+
+    Parameters
+    ----------
+    log_probs_policy : array of shape (T,)
+        Log probabilities under the current policy.
+    log_probs_ref : array of shape (T,)
+        Log probabilities under the reference model.
+
+    Returns
+    -------
+    float
+        Scalar KL divergence estimate.
     """
     ...
 

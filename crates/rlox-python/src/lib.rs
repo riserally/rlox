@@ -26,5 +26,7 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(training::pack_sequences, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_group_advantages, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_token_kl, m)?)?;
+    m.add_function(wrap_pyfunction!(llm::compute_batch_group_advantages, m)?)?;
+    m.add_function(wrap_pyfunction!(llm::compute_token_kl_schulman, m)?)?;
     Ok(())
 }

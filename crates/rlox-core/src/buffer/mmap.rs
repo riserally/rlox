@@ -73,8 +73,8 @@ impl MmapReplayBuffer {
 
     /// Byte size of a single serialized record (no padding).
     fn record_byte_size(&self) -> usize {
-        // obs(f32 * obs_dim) + action(f32 * act_dim) + reward(f32) + terminated(u8) + truncated(u8)
-        (self.obs_dim + self.act_dim + 1) * 4 + 2
+        // obs(f32 * obs_dim) + next_obs(f32 * obs_dim) + action(f32 * act_dim) + reward(f32) + terminated(u8) + truncated(u8)
+        (self.obs_dim * 2 + self.act_dim + 1) * 4 + 2
     }
 
     /// Total number of records stored (hot + cold).
@@ -94,6 +94,12 @@ impl MmapReplayBuffer {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
                 got: format!("obs.len()={}", record.obs.len()),
+            });
+        }
+        if record.next_obs.len() != self.obs_dim {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("obs_dim={}", self.obs_dim),
+                got: format!("next_obs.len()={}", record.next_obs.len()),
             });
         }
         if record.action.len() != self.act_dim {
@@ -169,8 +175,9 @@ impl MmapReplayBuffer {
 
     /// Read the record at position `hot_idx` from the hot buffer into `batch`.
     fn read_hot_record_into(&self, hot_idx: usize, batch: &mut SampledBatch) {
-        let (obs, act, reward, terminated, truncated) = self.hot.get(hot_idx);
+        let (obs, next_obs, act, reward, terminated, truncated) = self.hot.get(hot_idx);
         batch.observations.extend_from_slice(obs);
+        batch.next_observations.extend_from_slice(next_obs);
         batch.actions.extend_from_slice(act);
         batch.rewards.push(reward);
         batch.terminated.push(terminated);
@@ -181,9 +188,10 @@ impl MmapReplayBuffer {
     /// which is about to be overwritten).
     fn read_oldest_hot_record(&self) -> ExperienceRecord {
         let oldest_idx = self.hot.write_pos();
-        let (obs, act, reward, terminated, truncated) = self.hot.get(oldest_idx);
+        let (obs, next_obs, act, reward, terminated, truncated) = self.hot.get(oldest_idx);
         ExperienceRecord {
             obs: obs.to_vec(),
+            next_obs: next_obs.to_vec(),
             action: act.to_vec(),
             reward,
             terminated,
@@ -199,6 +207,9 @@ impl MmapReplayBuffer {
         let record_size = self.record_byte_size();
         let mut buf = Vec::with_capacity(record_size);
         for &v in &record.obs {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+        for &v in &record.next_obs {
             buf.extend_from_slice(&v.to_le_bytes());
         }
         for &v in &record.action {
@@ -288,8 +299,21 @@ impl MmapReplayBuffer {
             batch.observations.push(val);
         }
 
+        // Parse next_obs.
+        let next_obs_base = obs_bytes;
+        for i in 0..self.obs_dim {
+            let start = next_obs_base + i * 4;
+            let val = f32::from_le_bytes([
+                data[start],
+                data[start + 1],
+                data[start + 2],
+                data[start + 3],
+            ]);
+            batch.next_observations.push(val);
+        }
+
         // Parse actions.
-        let act_base = obs_bytes;
+        let act_base = obs_bytes * 2;
         for i in 0..self.act_dim {
             let start = act_base + i * 4;
             let val = f32::from_le_bytes([
@@ -302,7 +326,7 @@ impl MmapReplayBuffer {
         }
 
         // Parse reward.
-        let reward_base = obs_bytes + act_bytes;
+        let reward_base = obs_bytes * 2 + act_bytes;
         let reward = f32::from_le_bytes([
             data[reward_base],
             data[reward_base + 1],

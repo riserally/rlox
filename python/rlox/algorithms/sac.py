@@ -117,7 +117,7 @@ class SAC:
                     obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
                     action_t, _ = self.actor.sample(obs_t)
                     action = action_t.squeeze(0).numpy()
-                action = np.clip(action, -self.act_high, self.act_high)
+                action = action * self.act_high
 
             next_obs, reward, terminated, truncated, info = self.env.step(action)
             ep_reward += float(reward)
@@ -128,6 +128,7 @@ class SAC:
                 float(reward),
                 bool(terminated),
                 bool(truncated),
+                np.asarray(next_obs, dtype=np.float32),
             )
 
             obs = next_obs
@@ -167,10 +168,12 @@ class SAC:
         rewards = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
         terminated = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
 
+        next_obs = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
+
         with torch.no_grad():
-            next_actions, next_log_prob = self.actor.sample(obs)
-            q1_next = self.critic1_target(obs, next_actions).squeeze(-1)
-            q2_next = self.critic2_target(obs, next_actions).squeeze(-1)
+            next_actions, next_log_prob = self.actor.sample(next_obs)
+            q1_next = self.critic1_target(next_obs, next_actions).squeeze(-1)
+            q2_next = self.critic2_target(next_obs, next_actions).squeeze(-1)
             q_next = torch.min(q1_next, q2_next) - self.alpha * next_log_prob
             target_q = rewards + self.gamma * (1.0 - terminated) * q_next
 
@@ -190,6 +193,7 @@ class SAC:
 
         # Actor loss
         new_actions, log_prob = self.actor.sample(obs)
+        new_actions = new_actions * self.act_high
         q1_new = self.critic1(obs, new_actions).squeeze(-1)
         q2_new = self.critic2(obs, new_actions).squeeze(-1)
         q_new = torch.min(q1_new, q2_new)

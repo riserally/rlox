@@ -10,6 +10,7 @@ pub mod varlen;
 #[derive(Debug, Clone)]
 pub struct ExperienceRecord {
     pub obs: Vec<f32>,
+    pub next_obs: Vec<f32>,
     pub action: Vec<f32>,
     pub reward: f32,
     pub terminated: bool,
@@ -20,6 +21,7 @@ pub struct ExperienceRecord {
 pub(crate) fn sample_record(obs_dim: usize) -> ExperienceRecord {
     ExperienceRecord {
         obs: vec![1.0; obs_dim],
+        next_obs: vec![2.0; obs_dim],
         action: vec![0.0],
         reward: 1.0,
         terminated: false,
@@ -31,6 +33,7 @@ pub(crate) fn sample_record(obs_dim: usize) -> ExperienceRecord {
 pub(crate) fn sample_record_multidim(obs_dim: usize, act_dim: usize) -> ExperienceRecord {
     ExperienceRecord {
         obs: vec![1.0; obs_dim],
+        next_obs: vec![2.0; obs_dim],
         action: vec![0.0; act_dim],
         reward: 1.0,
         terminated: false,
@@ -48,6 +51,7 @@ mod fix_verification_tests {
     fn experience_record_action_is_vec() {
         let record = ExperienceRecord {
             obs: vec![0.0f32; 17],
+            next_obs: vec![0.0f32; 17],
             action: vec![0.1, -0.2, 0.3, -0.4, 0.5, -0.6],
             reward: 1.0,
             terminated: false,
@@ -65,6 +69,7 @@ mod fix_verification_tests {
         let action = vec![0.1f32, -0.2, 0.3, -0.4, 0.5, -0.6];
         let record = ExperienceRecord {
             obs: vec![1.0; obs_dim],
+            next_obs: vec![2.0; obs_dim],
             action: action.clone(),
             reward: 5.0,
             terminated: false,
@@ -83,6 +88,7 @@ mod fix_verification_tests {
         let action = vec![0.5f32, -0.5, 1.0];
         let record = ExperienceRecord {
             obs: vec![0.1; obs_dim],
+            next_obs: vec![0.2; obs_dim],
             action: action.clone(),
             reward: 1.0,
             terminated: false,
@@ -100,6 +106,7 @@ mod fix_verification_tests {
         let mut table = ExperienceTable::new(4, 2);
         let record = ExperienceRecord {
             obs: vec![1.0; 4],
+            next_obs: vec![2.0; 4],
             action: vec![0.1, 0.2, 0.3], // 3 dims, table expects 2
             reward: 1.0,
             terminated: false,
@@ -119,6 +126,7 @@ mod fix_verification_tests {
         let mut table = ExperienceTable::new(4, 1);
         let record = ExperienceRecord {
             obs: vec![1.0; 4],
+            next_obs: vec![2.0; 4],
             action: vec![0.0],
             reward: 1.0,
             terminated: false,

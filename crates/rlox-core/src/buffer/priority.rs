@@ -98,6 +98,7 @@ pub struct PrioritizedReplayBuffer {
     beta: f64,
     tree: SumTree,
     observations: Vec<f32>,
+    next_observations: Vec<f32>,
     actions: Vec<f32>,
     rewards: Vec<f32>,
     terminated: Vec<bool>,
@@ -110,6 +111,7 @@ pub struct PrioritizedReplayBuffer {
 /// A sampled batch with importance-sampling weights.
 pub struct PrioritizedSampledBatch {
     pub observations: Vec<f32>,
+    pub next_observations: Vec<f32>,
     pub actions: Vec<f32>,
     pub rewards: Vec<f32>,
     pub terminated: Vec<bool>,
@@ -135,6 +137,7 @@ impl PrioritizedReplayBuffer {
             beta,
             tree: SumTree::new(capacity),
             observations: vec![0.0; capacity * obs_dim],
+            next_observations: vec![0.0; capacity * obs_dim],
             actions: vec![0.0; capacity * act_dim],
             rewards: vec![0.0; capacity],
             terminated: vec![false; capacity],
@@ -168,6 +171,12 @@ impl PrioritizedReplayBuffer {
                 got: format!("obs.len()={}", record.obs.len()),
             });
         }
+        if record.next_obs.len() != self.obs_dim {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("obs_dim={}", self.obs_dim),
+                got: format!("next_obs.len()={}", record.next_obs.len()),
+            });
+        }
         if record.action.len() != self.act_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("act_dim={}", self.act_dim),
@@ -179,6 +188,8 @@ impl PrioritizedReplayBuffer {
         let obs_start = idx * self.obs_dim;
         self.observations[obs_start..obs_start + self.obs_dim]
             .copy_from_slice(&record.obs);
+        self.next_observations[obs_start..obs_start + self.obs_dim]
+            .copy_from_slice(&record.next_obs);
         let act_start = idx * self.act_dim;
         self.actions[act_start..act_start + self.act_dim]
             .copy_from_slice(&record.action);
@@ -224,6 +235,7 @@ impl PrioritizedReplayBuffer {
 
         let mut batch = PrioritizedSampledBatch {
             observations: Vec::with_capacity(batch_size * self.obs_dim),
+            next_observations: Vec::with_capacity(batch_size * self.obs_dim),
             actions: Vec::with_capacity(batch_size * self.act_dim),
             rewards: Vec::with_capacity(batch_size),
             terminated: Vec::with_capacity(batch_size),
@@ -251,6 +263,9 @@ impl PrioritizedReplayBuffer {
             batch
                 .observations
                 .extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
+            batch
+                .next_observations
+                .extend_from_slice(&self.next_observations[obs_start..obs_start + self.obs_dim]);
             let act_start = idx * self.act_dim;
             batch
                 .actions
@@ -569,6 +584,34 @@ mod tests {
         let b2 = buf.sample(16, 42).unwrap();
         assert_eq!(b1.indices, b2.indices);
         assert_eq!(b1.weights, b2.weights);
+    }
+
+    #[test]
+    fn prb_next_obs_roundtrip() {
+        let obs_dim = 4;
+        let mut buf = PrioritizedReplayBuffer::new(100, obs_dim, 1, 0.6, 0.4);
+        let record = ExperienceRecord {
+            obs: vec![1.0; obs_dim],
+            next_obs: vec![2.0, 3.0, 4.0, 5.0],
+            action: vec![0.0],
+            reward: 1.0,
+            terminated: false,
+            truncated: false,
+        };
+        buf.push(record, 1.0).unwrap();
+        let batch = buf.sample(1, 42).unwrap();
+        assert_eq!(&batch.next_observations, &[2.0, 3.0, 4.0, 5.0]);
+    }
+
+    #[test]
+    fn prb_next_obs_shape() {
+        let obs_dim = 4;
+        let mut buf = PrioritizedReplayBuffer::new(200, obs_dim, 1, 0.6, 0.4);
+        for _ in 0..100 {
+            buf.push(sample_record(obs_dim), 1.0).unwrap();
+        }
+        let batch = buf.sample(32, 42).unwrap();
+        assert_eq!(batch.next_observations.len(), 32 * obs_dim);
     }
 
     #[test]

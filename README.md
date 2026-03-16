@@ -60,9 +60,9 @@ Multi-crate workspace ([crates.io](https://crates.io/crates/rlox-core)):
 | 6 | Three-Framework Benchmark (rlox vs TorchRL vs SB3) | Done |
 | 7 | Algorithm Completeness (PPO/SAC/DQN/TD3/GRPO e2e, callbacks, save/load) | Done |
 | 8 | Production Hardening (eval toolkit, diagnostics, mmap buffer, CI wheels) | Done |
-| 9 | Distributed & Scale (pipeline, multi-GPU, vLLM/TGI/SGLang) | ~70% |
+| 9 | Distributed & Scale (pipeline, gRPC, multi-GPU, vLLM/TGI/SGLang, API 1.0) | Done |
 
-**Test suite**: 291 Rust tests, 231 Python tests — all passing.
+**Test suite**: 294 Rust tests, 382 Python tests — all passing.
 
 **Published**: [crates.io](https://crates.io/crates/rlox-core) (rlox-core, rlox-nn, rlox-burn, rlox-candle)
 

@@ -263,6 +263,25 @@ cargo test --package rlox-core
 cargo bench -p rlox-bench --bench nn_backends
 ```
 
+## Citation
+
+If you use rlox in your research, please cite:
+
+```bibtex
+@software{kowalinski2026rlox,
+  author       = {Kowalinski, Wojciech},
+  title        = {rlox: Rust-Accelerated Reinforcement Learning},
+  year         = {2026},
+  url          = {https://github.com/riserally/rlox},
+  version      = {0.1.0},
+  license      = {MIT OR Apache-2.0}
+}
+```
+
+## License
+
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
+
 ## Project Layout
 
 ```

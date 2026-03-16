@@ -11,27 +11,30 @@
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  Python (control plane)                 │
-│  Training loops, Gymnasium bridge,      │
-│  config, logging                        │
-├────────── PyO3 boundary ────────────────┤
-│  Rust (data plane)                      │
-│  rlox-core:   envs, parallel stepping,  │
-│               buffers, GAE, GRPO        │
-│  rlox-nn:     RL algorithm traits       │
-│  rlox-burn:   Burn backend (NdArray)    │
-│  rlox-candle: Candle backend (CPU)      │
-│  rlox-python: thin PyO3 bindings        │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  Python (control plane)                          │
+│  PPO, SAC, DQN, TD3, A2C, GRPO, DPO             │
+│  GymVecEnv, callbacks, configs (YAML),           │
+│  trainers, checkpointing, diagnostics            │
+│  vLLM/TGI/SGLang backends, multi-GPU (DDP)       │
+├────────────── PyO3 boundary ─────────────────────┤
+│  Rust (data plane)                               │
+│  rlox-core:   envs, Rayon parallel stepping,     │
+│               buffers (ring, mmap, priority),    │
+│               GAE, V-trace, GRPO, pipeline       │
+│  rlox-nn:     RL algorithm traits                │
+│  rlox-burn:   Burn backend (NdArray)             │
+│  rlox-candle: Candle backend (CPU)               │
+│  rlox-python: PyO3 bindings                      │
+└──────────────────────────────────────────────────┘
 ```
 
-Multi-crate workspace:
-- **rlox-core** — pure Rust, no PyO3 dependency, testable independently
+Multi-crate workspace ([crates.io](https://crates.io/crates/rlox-core)):
+- **rlox-core** — pure Rust: environments, buffers (ring, mmap, priority), GAE, V-trace, GRPO, pipeline
 - **rlox-nn** — RL algorithm traits (`ActorCritic`, `QFunction`, `StochasticPolicy`, etc.)
-- **rlox-burn** — Burn `Autodiff<NdArray>` implementations of all RL algorithms
-- **rlox-candle** — Candle CPU implementations of all RL algorithms
-- **rlox-python** — thin PyO3 wrappers exposing `rlox-core` to Python
+- **rlox-burn** — Burn `Autodiff<NdArray>` implementations
+- **rlox-candle** — Candle CPU implementations
+- **rlox-python** — PyO3 bindings exposing `rlox-core` to Python
 
 ## Tutorials & Documentation
 
@@ -50,14 +53,18 @@ Multi-crate workspace:
 |-------|-------------|--------|
 | 0 | Skeleton (workspace, PyO3, maturin) | Done |
 | 1 | Environment Engine (CartPole, VecEnv, GymEnv bridge) | Done |
-| 2 | Experience Storage (columnar buffer, ring buffer, VarLenStore) | Done |
-| 3 | Training Core (GAE, KL controller) | Done |
-| 4 | LLM Post-Training (GRPO, DPO, token KL) | Done |
+| 2 | Experience Storage (columnar, ring, mmap, priority buffers) | Done |
+| 3 | Training Core (GAE, V-trace, KL) | Done |
+| 4 | LLM Post-Training (GRPO, DPO, token KL, sequence packing) | Done |
 | 5 | Polish & API (type stubs, proptest) | Done |
 | 6 | Three-Framework Benchmark (rlox vs TorchRL vs SB3) | Done |
-| 7 | Algorithm Completeness (PPO/GRPO e2e, callbacks, save/load) | Done |
-| 8 | Production Hardening (eval toolkit, diagnostics, mmap buffer) | ~85% |
-| 9 | Distributed & Scale (pipeline, multi-GPU, vLLM/TGI) | ~65% |
+| 7 | Algorithm Completeness (PPO/SAC/DQN/TD3/GRPO e2e, callbacks, save/load) | Done |
+| 8 | Production Hardening (eval toolkit, diagnostics, mmap buffer, CI wheels) | Done |
+| 9 | Distributed & Scale (pipeline, multi-GPU, vLLM/TGI/SGLang) | ~70% |
+
+**Test suite**: 291 Rust tests, 231 Python tests — all passing.
+
+**Published**: [crates.io](https://crates.io/crates/rlox-core) (rlox-core, rlox-nn, rlox-burn, rlox-candle)
 
 ## Three-Framework Benchmark Results
 
@@ -190,13 +197,13 @@ On-policy algorithms (PPO, A2C) using rlox's Rust GAE show **1.6-2.5x SPS improv
 
 **Where rlox wins**: On-policy algorithms (PPO, A2C) where the Rust GAE computation and vectorized stepping deliver compounding speedups. Wall-clock improvement is **1.4-3.3x** — training reaches reward thresholds faster.
 
-**Known limitations**: Off-policy algorithms (SAC, TD3, DQN) in the rlox Python layer have convergence issues under investigation. The Rust data-plane primitives (buffers, GAE) are correct — the bugs are in the Python training loop wiring. SB3's off-policy implementations converge correctly on Pendulum (SAC: -192, TD3: -188).
+**Off-policy convergence** (fixed in v0.1.1): SAC, TD3, and DQN previously failed to converge due to a missing `next_obs` field in the replay buffer and incorrect Bellman targets. Fixed by adding `next_obs` to the Rust buffer pipeline and correcting target Q computation, action scaling, and TD3 delayed updates. Off-policy algorithms should now converge correctly — re-benchmarking pending.
 
 ### Performance Profile (Agarwal et al., 2021)
 
 ![Performance Profile](docs/benchmark/convergence/performance_profile.png)
 
-The performance profile aggregates across all environments. SB3 currently leads due to off-policy convergence gaps. On the on-policy subset (PPO, A2C), rlox matches SB3's convergence while training faster.
+The performance profile aggregates across all environments. On the on-policy subset (PPO, A2C), rlox matches SB3's convergence while training 1.4-3.3x faster. Off-policy convergence bugs have been fixed (v0.1.1) — updated benchmarks pending.
 
 ### Running the Benchmarks
 
@@ -220,13 +227,60 @@ python plot_profiles.py results/
 # Create venv and install
 python3 -m venv .venv
 source .venv/bin/activate
-pip install maturin numpy gymnasium
+pip install maturin numpy gymnasium torch
 
 # Build and install
 maturin develop --release
 
 # Verify
 python -c "from rlox import CartPole; print('rlox ready')"
+```
+
+**Train PPO on CartPole in 3 lines:**
+
+```python
+from rlox.trainers import PPOTrainer
+
+trainer = PPOTrainer(env="CartPole-v1", seed=42)
+metrics = trainer.train(total_timesteps=50_000)
+print(f"Mean reward: {metrics['mean_reward']:.1f}")
+```
+
+**Train SAC on Pendulum:**
+
+```python
+from rlox.trainers import SACTrainer
+
+trainer = SACTrainer(env="Pendulum-v1", config={"learning_starts": 500})
+metrics = trainer.train(total_timesteps=20_000)
+```
+
+**Custom reward function for GRPO:**
+
+```python
+from rlox.algorithms import GRPO
+
+def math_reward(completions, prompts):
+    return [1.0 if "42" in str(c) else 0.0 for c in completions]
+
+grpo = GRPO(model=my_llm, ref_model=ref_llm, reward_fn=math_reward)
+grpo.train(prompts, n_epochs=3)
+```
+
+**Use Rust primitives directly:**
+
+```python
+import rlox
+
+# 142x faster GAE
+advantages, returns = rlox.compute_gae(rewards, values, dones, last_value, gamma=0.99, lam=0.95)
+
+# 35x faster GRPO advantages
+advantages = rlox.compute_batch_group_advantages(rewards, group_size=4)
+
+# Parallel env stepping (2.7M steps/s at 512 envs)
+env = rlox.VecEnv(n=256, seed=42, env_id="CartPole-v1")
+result = env.step_all(actions)
 ```
 
 ## Running Tests

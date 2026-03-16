@@ -116,20 +116,19 @@ class DQN:
             self.exploration_final_eps - self.exploration_initial_eps
         )
 
-    def _store_transition(self, obs, action, reward, terminated, truncated):
-        self._n_step_buffer.append((obs, action, reward, terminated, truncated))
+    def _store_transition(self, obs, action, reward, next_obs, terminated, truncated):
+        self._n_step_buffer.append((obs, action, reward, next_obs, terminated, truncated))
         if len(self._n_step_buffer) < self.n_step:
             return
 
         # Compute n-step return
         R = 0.0
         for i in reversed(range(self.n_step)):
-            _, _, r, done, trunc = self._n_step_buffer[i]
+            _, _, r, _, done, trunc = self._n_step_buffer[i]
             R = r + self.gamma * R * (1.0 - float(done or trunc))
 
-        first_obs, first_action, _, _, _ = self._n_step_buffer[0]
-        last_done = self._n_step_buffer[-1][3]
-        last_trunc = self._n_step_buffer[-1][4]
+        first_obs, first_action, _, _, _, _ = self._n_step_buffer[0]
+        _, _, _, last_next_obs, last_done, last_trunc = self._n_step_buffer[-1]
 
         if self.prioritized:
             self.buffer.push(
@@ -138,6 +137,7 @@ class DQN:
                 float(R),
                 bool(last_done),
                 bool(last_trunc),
+                np.asarray(last_next_obs, dtype=np.float32),
                 priority=1.0,
             )
         else:
@@ -147,6 +147,7 @@ class DQN:
                 float(R),
                 bool(last_done),
                 bool(last_trunc),
+                np.asarray(last_next_obs, dtype=np.float32),
             )
         self._n_step_buffer.pop(0)
 
@@ -172,7 +173,7 @@ class DQN:
             next_obs, reward, terminated, truncated, info = self.env.step(action)
             ep_reward += float(reward)
 
-            self._store_transition(obs, action, reward, terminated, truncated)
+            self._store_transition(obs, action, reward, next_obs, terminated, truncated)
 
             obs = next_obs
             if terminated or truncated:
@@ -180,16 +181,18 @@ class DQN:
                 while self._n_step_buffer:
                     R = 0.0
                     for i in reversed(range(len(self._n_step_buffer))):
-                        _, _, r, done, trunc = self._n_step_buffer[i]
+                        _, _, r, _, done, trunc = self._n_step_buffer[i]
                         R = r + self.gamma * R * (1.0 - float(done or trunc))
-                    first_obs_b, first_action_b, _, _, _ = self._n_step_buffer[0]
+                    first_obs_b, first_action_b, _, _, _, _ = self._n_step_buffer[0]
+                    _, _, _, last_next_obs_b, last_done_b, last_trunc_b = self._n_step_buffer[-1]
                     if self.prioritized:
                         self.buffer.push(
                             np.asarray(first_obs_b, dtype=np.float32),
                             np.array([float(first_action_b)], dtype=np.float32),
                             float(R),
-                            True,
-                            False,
+                            bool(last_done_b),
+                            bool(last_trunc_b),
+                            np.asarray(last_next_obs_b, dtype=np.float32),
                             priority=1.0,
                         )
                     else:
@@ -197,8 +200,9 @@ class DQN:
                             np.asarray(first_obs_b, dtype=np.float32),
                             np.array([float(first_action_b)], dtype=np.float32),
                             float(R),
-                            True,
-                            False,
+                            bool(last_done_b),
+                            bool(last_trunc_b),
+                            np.asarray(last_next_obs_b, dtype=np.float32),
                         )
                     self._n_step_buffer.pop(0)
 
@@ -246,6 +250,7 @@ class DQN:
         actions = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.long).squeeze(-1)
         rewards = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
         terminated = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
+        next_obs = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
 
         # Current Q
         q_values = self.q_network(obs)
@@ -254,10 +259,10 @@ class DQN:
         with torch.no_grad():
             if self.double_dqn:
                 # Use online network for action selection
-                next_actions = self.q_network(obs).argmax(dim=-1)
-                next_q = self.target_network(obs).gather(1, next_actions.unsqueeze(1)).squeeze(1)
+                next_actions = self.q_network(next_obs).argmax(dim=-1)
+                next_q = self.target_network(next_obs).gather(1, next_actions.unsqueeze(1)).squeeze(1)
             else:
-                next_q = self.target_network(obs).max(dim=-1).values
+                next_q = self.target_network(next_obs).max(dim=-1).values
 
             target_q = rewards + self.gamma ** self.n_step * (1.0 - terminated) * next_q
 

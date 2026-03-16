@@ -15,6 +15,7 @@ pub struct ReplayBuffer {
     act_dim: usize,
     capacity: usize,
     observations: Vec<f32>,
+    next_observations: Vec<f32>,
     actions: Vec<f32>,
     rewards: Vec<f32>,
     terminated: Vec<bool>,
@@ -26,6 +27,7 @@ pub struct ReplayBuffer {
 /// A sampled batch of transitions. Owns its data (copied from the ring buffer).
 pub struct SampledBatch {
     pub observations: Vec<f32>,
+    pub next_observations: Vec<f32>,
     pub actions: Vec<f32>,
     pub rewards: Vec<f32>,
     pub terminated: Vec<bool>,
@@ -39,6 +41,7 @@ impl SampledBatch {
     pub(crate) fn with_capacity(batch_size: usize, obs_dim: usize, act_dim: usize) -> Self {
         Self {
             observations: Vec::with_capacity(batch_size * obs_dim),
+            next_observations: Vec::with_capacity(batch_size * obs_dim),
             actions: Vec::with_capacity(batch_size * act_dim),
             rewards: Vec::with_capacity(batch_size),
             terminated: Vec::with_capacity(batch_size),
@@ -58,6 +61,7 @@ impl ReplayBuffer {
             act_dim,
             capacity,
             observations: vec![0.0; capacity * obs_dim],
+            next_observations: vec![0.0; capacity * obs_dim],
             actions: vec![0.0; capacity * act_dim],
             rewards: vec![0.0; capacity],
             terminated: vec![false; capacity],
@@ -84,17 +88,18 @@ impl ReplayBuffer {
 
     /// Access the record at `idx` by reference.
     ///
-    /// Returns `(obs_slice, action_slice, reward, terminated, truncated)`.
+    /// Returns `(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated)`.
     ///
     /// # Panics
     ///
     /// Panics if `idx >= self.count`.
-    pub(crate) fn get(&self, idx: usize) -> (&[f32], &[f32], f32, bool, bool) {
+    pub(crate) fn get(&self, idx: usize) -> (&[f32], &[f32], &[f32], f32, bool, bool) {
         assert!(idx < self.count, "index {idx} out of bounds (count={})", self.count);
         let obs_start = idx * self.obs_dim;
         let act_start = idx * self.act_dim;
         (
             &self.observations[obs_start..obs_start + self.obs_dim],
+            &self.next_observations[obs_start..obs_start + self.obs_dim],
             &self.actions[act_start..act_start + self.act_dim],
             self.rewards[idx],
             self.terminated[idx],
@@ -110,6 +115,12 @@ impl ReplayBuffer {
                 got: format!("obs.len()={}", record.obs.len()),
             });
         }
+        if record.next_obs.len() != self.obs_dim {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("obs_dim={}", self.obs_dim),
+                got: format!("next_obs.len()={}", record.next_obs.len()),
+            });
+        }
         if record.action.len() != self.act_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("act_dim={}", self.act_dim),
@@ -120,6 +131,8 @@ impl ReplayBuffer {
         let obs_start = idx * self.obs_dim;
         self.observations[obs_start..obs_start + self.obs_dim]
             .copy_from_slice(&record.obs);
+        self.next_observations[obs_start..obs_start + self.obs_dim]
+            .copy_from_slice(&record.next_obs);
         let act_start = idx * self.act_dim;
         self.actions[act_start..act_start + self.act_dim]
             .copy_from_slice(&record.action);
@@ -154,6 +167,9 @@ impl ReplayBuffer {
             batch
                 .observations
                 .extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
+            batch
+                .next_observations
+                .extend_from_slice(&self.next_observations[obs_start..obs_start + self.obs_dim]);
             let act_start = idx * self.act_dim;
             batch
                 .actions
@@ -236,6 +252,50 @@ mod tests {
         let buf = ReplayBuffer::new(100, 4, 1);
         assert_eq!(buf.len(), 0);
         assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_replay_buffer_next_obs_roundtrip() {
+        let obs_dim = 4;
+        let mut buf = ReplayBuffer::new(100, obs_dim, 1);
+        let record = ExperienceRecord {
+            obs: vec![1.0; obs_dim],
+            next_obs: vec![2.0, 3.0, 4.0, 5.0],
+            action: vec![0.0],
+            reward: 1.0,
+            terminated: false,
+            truncated: false,
+        };
+        buf.push(record).unwrap();
+        let batch = buf.sample(1, 42).unwrap();
+        assert_eq!(&batch.next_observations, &[2.0, 3.0, 4.0, 5.0]);
+    }
+
+    #[test]
+    fn test_replay_buffer_next_obs_shape() {
+        let obs_dim = 4;
+        let mut buf = ReplayBuffer::new(1000, obs_dim, 1);
+        for _ in 0..100 {
+            buf.push(sample_record(obs_dim)).unwrap();
+        }
+        let batch = buf.sample(32, 42).unwrap();
+        assert_eq!(batch.next_observations.len(), 32 * obs_dim);
+    }
+
+    #[test]
+    fn test_replay_buffer_next_obs_dim_mismatch_errors() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        let record = ExperienceRecord {
+            obs: vec![1.0; 4],
+            next_obs: vec![2.0; 3], // wrong dim
+            action: vec![0.0],
+            reward: 1.0,
+            terminated: false,
+            truncated: false,
+        };
+        let result = buf.push(record);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("next_obs"));
     }
 
     mod proptests {

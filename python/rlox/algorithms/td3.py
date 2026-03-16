@@ -128,6 +128,7 @@ class TD3:
                 float(reward),
                 bool(terminated),
                 bool(truncated),
+                np.asarray(next_obs, dtype=np.float32),
             )
 
             obs = next_obs
@@ -168,14 +169,16 @@ class TD3:
         rewards = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
         terminated = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
 
+        next_obs = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
+
         with torch.no_grad():
             # Target policy smoothing
             noise = torch.randn_like(actions) * self.target_noise
             noise = noise.clamp(-self.noise_clip, self.noise_clip)
-            next_actions = (self.actor_target(obs) + noise).clamp(-self.act_high, self.act_high)
+            next_actions = (self.actor_target(next_obs) + noise).clamp(-self.act_high, self.act_high)
 
-            q1_next = self.critic1_target(obs, next_actions).squeeze(-1)
-            q2_next = self.critic2_target(obs, next_actions).squeeze(-1)
+            q1_next = self.critic1_target(next_obs, next_actions).squeeze(-1)
+            q2_next = self.critic2_target(next_obs, next_actions).squeeze(-1)
             target_q = rewards + self.gamma * (1.0 - terminated) * torch.min(q1_next, q2_next)
 
         # Critic updates
@@ -192,6 +195,10 @@ class TD3:
         critic2_loss.backward()
         self.critic2_optimizer.step()
 
+        # Every step: update critic targets
+        polyak_update(self.critic1, self.critic1_target, self.tau)
+        polyak_update(self.critic2, self.critic2_target, self.tau)
+
         actor_loss_val = 0.0
 
         # Delayed policy update
@@ -203,8 +210,6 @@ class TD3:
             actor_loss_val = actor_loss.item()
 
             polyak_update(self.actor, self.actor_target, self.tau)
-            polyak_update(self.critic1, self.critic1_target, self.tau)
-            polyak_update(self.critic2, self.critic2_target, self.tau)
 
         return {
             "critic_loss": (critic1_loss.item() + critic2_loss.item()) / 2,

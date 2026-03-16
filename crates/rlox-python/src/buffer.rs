@@ -29,7 +29,8 @@ impl PyExperienceTable {
         self.inner.len()
     }
 
-    #[pyo3(signature = (obs, action, reward, terminated, truncated))]
+    /// Push a transition. ``next_obs`` is optional for on-policy use.
+    #[pyo3(signature = (obs, action, reward, terminated, truncated, next_obs=None))]
     fn push(
         &mut self,
         obs: PyReadonlyArray1<f32>,
@@ -37,9 +38,16 @@ impl PyExperienceTable {
         reward: f32,
         terminated: bool,
         truncated: bool,
+        next_obs: Option<PyReadonlyArray1<f32>>,
     ) -> PyResult<()> {
+        let obs_vec = obs.as_slice()?.to_vec();
+        let next_obs_vec = match next_obs {
+            Some(n) => n.as_slice()?.to_vec(),
+            None => vec![0.0; obs_vec.len()],
+        };
         let record = ExperienceRecord {
-            obs: obs.as_slice()?.to_vec(),
+            obs: obs_vec,
+            next_obs: next_obs_vec,
             action: action.as_slice()?.to_vec(),
             reward,
             terminated,
@@ -92,7 +100,8 @@ impl PyReplayBuffer {
         self.inner.len()
     }
 
-    #[pyo3(signature = (obs, action, reward, terminated, truncated))]
+    /// Push a transition. ``next_obs`` defaults to zeros if omitted.
+    #[pyo3(signature = (obs, action, reward, terminated, truncated, next_obs=None))]
     fn push(
         &mut self,
         obs: PyReadonlyArray1<f32>,
@@ -100,9 +109,16 @@ impl PyReplayBuffer {
         reward: f32,
         terminated: bool,
         truncated: bool,
+        next_obs: Option<PyReadonlyArray1<f32>>,
     ) -> PyResult<()> {
+        let obs_vec = obs.as_slice()?.to_vec();
+        let next_obs_vec = match next_obs {
+            Some(n) => n.as_slice()?.to_vec(),
+            None => vec![0.0; obs_vec.len()],
+        };
         let record = ExperienceRecord {
-            obs: obs.as_slice()?.to_vec(),
+            obs: obs_vec,
+            next_obs: next_obs_vec,
             action: action.as_slice()?.to_vec(),
             reward,
             terminated,
@@ -132,6 +148,11 @@ impl PyReplayBuffer {
             .reshape([batch.batch_size, batch.obs_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("obs", obs_2d)?;
+        let next_obs_1d = PyArray1::from_vec(py, batch.next_observations);
+        let next_obs_2d = next_obs_1d
+            .reshape([batch.batch_size, batch.obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("next_obs", next_obs_2d)?;
         let act_1d = PyArray1::from_vec(py, batch.actions);
         if batch.act_dim > 1 {
             let act_2d = act_1d
@@ -172,7 +193,7 @@ impl PyPrioritizedReplayBuffer {
         self.inner.len()
     }
 
-    #[pyo3(signature = (obs, action, reward, terminated, truncated, priority=1.0))]
+    #[pyo3(signature = (obs, action, reward, terminated, truncated, next_obs=None, priority=1.0))]
     fn push(
         &mut self,
         obs: PyReadonlyArray1<f32>,
@@ -180,10 +201,17 @@ impl PyPrioritizedReplayBuffer {
         reward: f32,
         terminated: bool,
         truncated: bool,
+        next_obs: Option<PyReadonlyArray1<f32>>,
         priority: f64,
     ) -> PyResult<()> {
+        let obs_vec = obs.as_slice()?.to_vec();
+        let next_obs_vec = match next_obs {
+            Some(n) => n.as_slice()?.to_vec(),
+            None => vec![0.0; obs_vec.len()],
+        };
         let record = ExperienceRecord {
-            obs: obs.as_slice()?.to_vec(),
+            obs: obs_vec,
+            next_obs: next_obs_vec,
             action: action.as_slice()?.to_vec(),
             reward,
             terminated,
@@ -213,6 +241,11 @@ impl PyPrioritizedReplayBuffer {
             .reshape([batch.batch_size, batch.obs_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("obs", obs_2d)?;
+        let next_obs_1d = PyArray1::from_vec(py, batch.next_observations);
+        let next_obs_2d = next_obs_1d
+            .reshape([batch.batch_size, batch.obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("next_obs", next_obs_2d)?;
         let act_1d = PyArray1::from_vec(py, batch.actions);
         if batch.act_dim > 1 {
             let act_2d = act_1d

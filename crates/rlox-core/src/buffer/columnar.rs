@@ -11,6 +11,7 @@ pub struct ExperienceTable {
     obs_dim: usize,
     act_dim: usize,
     observations: Vec<f32>,
+    next_observations: Vec<f32>,
     actions: Vec<f32>,
     rewards: Vec<f32>,
     terminated: Vec<bool>,
@@ -25,6 +26,7 @@ impl ExperienceTable {
             obs_dim,
             act_dim,
             observations: Vec::new(),
+            next_observations: Vec::new(),
             actions: Vec::new(),
             rewards: Vec::new(),
             terminated: Vec::new(),
@@ -61,6 +63,12 @@ impl ExperienceTable {
                 got: format!("obs.len()={}", record.obs.len()),
             });
         }
+        if record.next_obs.len() != self.obs_dim {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("obs_dim={}", self.obs_dim),
+                got: format!("next_obs.len()={}", record.next_obs.len()),
+            });
+        }
         if record.action.len() != self.act_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("act_dim={}", self.act_dim),
@@ -68,6 +76,7 @@ impl ExperienceTable {
             });
         }
         self.observations.extend_from_slice(&record.obs);
+        self.next_observations.extend_from_slice(&record.next_obs);
         self.actions.extend_from_slice(&record.action);
         self.rewards.push(record.reward);
         self.terminated.push(record.terminated);
@@ -104,6 +113,7 @@ impl ExperienceTable {
     /// Drop all stored data.
     pub fn clear(&mut self) {
         self.observations.clear();
+        self.next_observations.clear();
         self.actions.clear();
         self.rewards.clear();
         self.terminated.clear();

@@ -1,4 +1,4 @@
-"""rlox — Rust-accelerated reinforcement learning.
+"""rlox -- Rust-accelerated reinforcement learning.
 
 The Polars architecture pattern applied to RL: Rust data plane for
 environments, buffers, and advantage computation; Python control plane
@@ -6,18 +6,21 @@ for training logic, policies, and neural networks.
 
 Rust primitives (via PyO3)
 --------------------------
-- :class:`CartPole`, :class:`VecEnv`, :class:`GymEnv` — environment stepping
-- :class:`ExperienceTable`, :class:`ReplayBuffer`, :class:`PrioritizedReplayBuffer` — storage
-- :func:`compute_gae`, :func:`compute_vtrace` — advantage estimation
-- :func:`compute_group_advantages`, :func:`compute_token_kl` — LLM post-training
-- :class:`DPOPair`, :class:`VarLenStore`, :func:`pack_sequences` — sequence handling
-- :class:`RunningStats` — online mean/variance
+- :class:`CartPole`, :class:`VecEnv`, :class:`GymEnv` -- environment stepping
+- :class:`ExperienceTable`, :class:`ReplayBuffer`, :class:`PrioritizedReplayBuffer` -- storage
+- :func:`compute_gae`, :func:`compute_vtrace` -- advantage estimation
+- :func:`compute_group_advantages`, :func:`compute_token_kl` -- LLM post-training
+- :class:`DPOPair`, :class:`VarLenStore`, :func:`pack_sequences` -- sequence handling
+- :class:`RunningStats` -- online mean/variance
+- :class:`ActorCritic` -- NN backend
 
 Python layer
 ------------
-- :class:`RolloutBatch` — flat-tensor container for on-policy data
-- :class:`RolloutCollector` — VecEnv + GAE rollout collection
-- :class:`PPOLoss` — clipped PPO objective
+- :class:`RolloutBatch` -- flat-tensor container for on-policy data
+- :class:`RolloutCollector` -- VecEnv + GAE rollout collection
+- :class:`PPOLoss` -- clipped PPO objective
+- :class:`GymVecEnv` -- gymnasium wrapper with VecEnv interface
+- :class:`ContinuousPolicy`, :class:`DiscretePolicy` -- default policy networks
 
 For algorithm implementations, see :mod:`rlox.algorithms`.
 For high-level trainers, see :mod:`rlox.trainers`.
@@ -32,6 +35,7 @@ Quick start::
     print(f"Mean reward: {metrics['mean_reward']:.1f}")
 """
 
+# -- Rust primitives (PyO3) ---------------------------------------------------
 from rlox._rlox_core import (
     CartPole,
     VecEnv,
@@ -52,11 +56,42 @@ from rlox._rlox_core import (
     ActorCritic,
 )
 
+# -- Python Layer 1 -----------------------------------------------------------
 from rlox.batch import RolloutBatch
 from rlox.collectors import RolloutCollector
 from rlox.gym_vec_env import GymVecEnv
 from rlox.losses import PPOLoss
-from rlox.policies import ContinuousPolicy
+from rlox.policies import ContinuousPolicy, DiscretePolicy
+
+# -- Configs -------------------------------------------------------------------
+from rlox.config import PPOConfig, SACConfig, DQNConfig
+
+# -- Callbacks -----------------------------------------------------------------
+from rlox.callbacks import (
+    Callback,
+    CallbackList,
+    EvalCallback,
+    EarlyStoppingCallback,
+    CheckpointCallback,
+)
+
+# -- Logging -------------------------------------------------------------------
+from rlox.logging import LoggerCallback, WandbLogger, TensorBoardLogger
+
+# -- Evaluation ----------------------------------------------------------------
+from rlox.evaluation import (
+    interquartile_mean,
+    performance_profiles,
+    stratified_bootstrap_ci,
+    aggregate_metrics,
+    probability_of_improvement,
+)
+
+# -- Diagnostics ---------------------------------------------------------------
+from rlox.diagnostics import TrainingDiagnostics
+
+# -- Checkpoint ----------------------------------------------------------------
+from rlox.checkpoint import Checkpoint
 
 __version__ = "1.0.0"
 
@@ -83,6 +118,31 @@ __all__ = [
     "RolloutBatch",
     "RolloutCollector",
     "GymVecEnv",
-    "ContinuousPolicy",
     "PPOLoss",
+    "ContinuousPolicy",
+    "DiscretePolicy",
+    # Configs
+    "PPOConfig",
+    "SACConfig",
+    "DQNConfig",
+    # Callbacks
+    "Callback",
+    "CallbackList",
+    "EvalCallback",
+    "EarlyStoppingCallback",
+    "CheckpointCallback",
+    # Logging
+    "LoggerCallback",
+    "WandbLogger",
+    "TensorBoardLogger",
+    # Evaluation
+    "interquartile_mean",
+    "performance_profiles",
+    "stratified_bootstrap_ci",
+    "aggregate_metrics",
+    "probability_of_improvement",
+    # Diagnostics
+    "TrainingDiagnostics",
+    # Checkpoint
+    "Checkpoint",
 ]

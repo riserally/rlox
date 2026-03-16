@@ -10,20 +10,68 @@ import queue
 import threading
 from typing import Any
 
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import rlox
+from rlox.callbacks import Callback, CallbackList
+from rlox.logging import LoggerCallback
 from rlox.policies import DiscretePolicy
+
+
+def _detect_env_spaces(env_id: str) -> tuple[int, Any, bool]:
+    """Detect obs_dim, action_space, and whether the env is discrete.
+
+    Returns (obs_dim, action_space, is_discrete).
+    """
+    tmp = gym.make(env_id)
+    obs_dim = int(np.prod(tmp.observation_space.shape))
+    action_space = tmp.action_space
+    is_discrete = isinstance(action_space, gym.spaces.Discrete)
+    tmp.close()
+    return obs_dim, action_space, is_discrete
 
 
 class IMPALA:
     """IMPALA with V-trace off-policy correction.
 
+    Auto-detects observation and action dimensions from the environment.
     Actors collect data in parallel threads with the current policy snapshot.
     The learner applies V-trace corrected updates.
+
+    Parameters
+    ----------
+    env_id : str
+        Gymnasium environment ID.
+    n_actors : int
+        Number of actor threads (default 2).
+    n_envs : int
+        Number of environments per actor (default 2).
+    seed : int
+        Random seed (default 42).
+    n_steps : int
+        Rollout length per actor per batch (default 32).
+    learning_rate : float
+        RMSprop learning rate (default 5e-4).
+    gamma : float
+        Discount factor (default 0.99).
+    rho_bar : float
+        V-trace truncation for importance weights (default 1.0).
+    c_bar : float
+        V-trace truncation for trace coefficients (default 1.0).
+    vf_coef : float
+        Value loss coefficient (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.01).
+    max_grad_norm : float
+        Maximum gradient norm for clipping (default 40.0).
+    logger : LoggerCallback, optional
+        Logger for metrics.
+    callbacks : list[Callback], optional
+        Training callbacks.
     """
 
     def __init__(
@@ -40,8 +88,8 @@ class IMPALA:
         vf_coef: float = 0.5,
         ent_coef: float = 0.01,
         max_grad_norm: float = 40.0,
-        obs_dim: int = 4,
-        n_actions: int = 2,
+        logger: LoggerCallback | None = None,
+        callbacks: list[Callback] | None = None,
     ):
         self.env_id = env_id
         self.n_actors = n_actors
@@ -53,16 +101,28 @@ class IMPALA:
         self.vf_coef = vf_coef
         self.ent_coef = ent_coef
         self.max_grad_norm = max_grad_norm
-        self.obs_dim = obs_dim
-        self.n_actions = n_actions
         self.device = "cpu"
         self.seed = seed
 
+        # Auto-detect environment spaces
+        obs_dim, action_space, is_discrete = _detect_env_spaces(env_id)
+        self.obs_dim = obs_dim
+        self._is_discrete = is_discrete
+
+        if is_discrete:
+            self.n_actions = int(action_space.n)
+        else:
+            self.n_actions = int(np.prod(action_space.shape))
+
         # Learner policy
-        self.policy = DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions)
+        self.policy = DiscretePolicy(obs_dim=self.obs_dim, n_actions=self.n_actions)
         self.optimizer = torch.optim.RMSprop(
             self.policy.parameters(), lr=learning_rate, eps=1e-5
         )
+
+        self.logger = logger
+        self.callbacks = CallbackList(callbacks)
+        self._global_step = 0
 
         self._queue: queue.Queue = queue.Queue(maxsize=n_actors * 2)
         self._stop_event = threading.Event()
@@ -233,8 +293,10 @@ class IMPALA:
         all_rewards: list[float] = []
         last_metrics: dict[str, float] = {}
 
+        self.callbacks.on_training_start()
+
         try:
-            for _ in range(n_updates):
+            for update in range(n_updates):
                 try:
                     data = self._queue.get(timeout=30.0)
                 except queue.Empty:
@@ -244,10 +306,32 @@ class IMPALA:
                 reward = data["rewards"].sum().item() / self.n_envs
                 all_rewards.append(reward)
                 last_metrics = metrics
+
+                self._global_step += 1
+
+                self.callbacks.on_rollout_end(
+                    mean_reward=reward, update=update
+                )
+                self.callbacks.on_train_batch(
+                    loss=sum(metrics.values()), **metrics
+                )
+
+                should_continue = self.callbacks.on_step(
+                    reward=reward, step=self._global_step
+                )
+                if not should_continue:
+                    break
+
+                if self.logger is not None:
+                    self.logger.on_train_step(
+                        update, {**metrics, "mean_reward": reward}
+                    )
         finally:
             self._stop_event.set()
             for t in actors:
                 t.join(timeout=5.0)
+
+        self.callbacks.on_training_end()
 
         last_metrics["mean_reward"] = (
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0

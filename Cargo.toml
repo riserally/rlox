@@ -7,6 +7,7 @@ members = [
     "crates/rlox-candle",
     "crates/rlox-python",
     "crates/rlox-bench",
+    "crates/rlox-grpc",
 ]
 
 [workspace.package]

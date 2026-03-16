@@ -138,6 +138,7 @@ class DreamerV3:
             actions_list = actions.cpu().numpy().astype(np.uint32).tolist()
             step_result = self.env.step_all(actions_list)
 
+            next_obs = step_result["obs"]
             for i in range(self.n_envs):
                 self.buffer.push(
                     obs[i].astype(np.float32),
@@ -145,6 +146,7 @@ class DreamerV3:
                     float(step_result["rewards"][i]),
                     bool(step_result["terminated"][i]),
                     bool(step_result["truncated"][i]),
+                    next_obs[i].astype(np.float32),
                 )
 
             total_reward += step_result["rewards"].sum()

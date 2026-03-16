@@ -8,19 +8,71 @@ from __future__ import annotations
 
 from typing import Any
 
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
 
 import rlox
+from rlox.callbacks import Callback, CallbackList
 from rlox.collectors import RolloutCollector
-from rlox.policies import DiscretePolicy
+from rlox.logging import LoggerCallback
+from rlox.policies import DiscretePolicy, ContinuousPolicy
+
+
+def _detect_env_spaces(env_id: str) -> tuple[int, Any, bool]:
+    """Detect obs_dim, action_space, and whether the env is discrete.
+
+    Returns (obs_dim, action_space, is_discrete).
+    """
+    tmp = gym.make(env_id)
+    obs_dim = int(np.prod(tmp.observation_space.shape))
+    action_space = tmp.action_space
+    is_discrete = isinstance(action_space, gym.spaces.Discrete)
+    tmp.close()
+    return obs_dim, action_space, is_discrete
 
 
 class MAPPO:
     """Multi-Agent PPO with centralized critic, decentralized actors.
 
+    Auto-detects observation and action dimensions from the environment.
     For n_agents=1, this reduces to standard PPO on single-agent envs.
+
+    Parameters
+    ----------
+    env_id : str
+        Gymnasium environment ID.
+    n_agents : int
+        Number of agents (default 1).
+    n_envs : int
+        Number of parallel environments (default 4).
+    seed : int
+        Random seed (default 42).
+    n_steps : int
+        Rollout length per environment per update (default 64).
+    n_epochs : int
+        Number of SGD passes per rollout (default 4).
+    batch_size : int
+        Minibatch size for SGD (default 128).
+    learning_rate : float
+        Adam learning rate (default 2.5e-4).
+    gamma : float
+        Discount factor (default 0.99).
+    gae_lambda : float
+        GAE lambda (default 0.95).
+    clip_eps : float
+        PPO clipping range (default 0.2).
+    vf_coef : float
+        Value loss coefficient (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.01).
+    max_grad_norm : float
+        Maximum gradient norm for clipping (default 0.5).
+    logger : LoggerCallback, optional
+        Logger for metrics.
+    callbacks : list[Callback], optional
+        Training callbacks.
     """
 
     def __init__(
@@ -39,8 +91,8 @@ class MAPPO:
         vf_coef: float = 0.5,
         ent_coef: float = 0.01,
         max_grad_norm: float = 0.5,
-        obs_dim: int = 4,
-        n_actions: int = 2,
+        logger: LoggerCallback | None = None,
+        callbacks: list[Callback] | None = None,
     ):
         self.env_id = env_id
         self.n_agents = n_agents
@@ -56,11 +108,24 @@ class MAPPO:
         self.gae_lambda = gae_lambda
         self.device = "cpu"
 
-        # Each agent gets its own actor; shared critic
-        self.actors = nn.ModuleList([
-            DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions)
-            for _ in range(n_agents)
-        ])
+        # Auto-detect environment spaces
+        obs_dim, action_space, is_discrete = _detect_env_spaces(env_id)
+        self._obs_dim = obs_dim
+        self._is_discrete = is_discrete
+
+        if is_discrete:
+            n_actions = int(action_space.n)
+            self.actors = nn.ModuleList([
+                DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions)
+                for _ in range(n_agents)
+            ])
+        else:
+            act_dim = int(np.prod(action_space.shape))
+            self.actors = nn.ModuleList([
+                ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
+                for _ in range(n_agents)
+            ])
+
         # Centralized critic takes concatenated observations
         self.critic = nn.Sequential(
             nn.Linear(obs_dim * n_agents, 64),
@@ -82,6 +147,10 @@ class MAPPO:
             gae_lambda=gae_lambda,
         )
 
+        self.logger = logger
+        self.callbacks = CallbackList(callbacks)
+        self._global_step = 0
+
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run MAPPO training loop."""
         steps_per_rollout = self.n_envs * self.n_steps
@@ -93,9 +162,16 @@ class MAPPO:
         # For single-agent, use agent 0's actor as the policy
         policy = self.actors[0]
 
+        self.callbacks.on_training_start()
+
         for update in range(n_updates):
             batch = self.collector.collect(policy, n_steps=self.n_steps)
-            all_rewards.append(batch.rewards.sum().item() / self.n_envs)
+            mean_ep_reward = batch.rewards.sum().item() / self.n_envs
+            all_rewards.append(mean_ep_reward)
+
+            self.callbacks.on_rollout_end(
+                mean_reward=mean_ep_reward, update=update
+            )
 
             for _epoch in range(self.n_epochs):
                 for mb in batch.sample_minibatches(self.batch_size, shuffle=True):
@@ -138,6 +214,25 @@ class MAPPO:
                         "value_loss": value_loss.item(),
                         "entropy": entropy_loss.item(),
                     }
+
+                    self._global_step += 1
+                    self.callbacks.on_train_batch(
+                        loss=loss.item(), **last_metrics
+                    )
+
+            # Step callback (per rollout)
+            should_continue = self.callbacks.on_step(
+                reward=mean_ep_reward, step=self._global_step
+            )
+            if not should_continue:
+                break
+
+            if self.logger is not None:
+                self.logger.on_train_step(
+                    update, {**last_metrics, "mean_reward": mean_ep_reward}
+                )
+
+        self.callbacks.on_training_end()
 
         last_metrics["mean_reward"] = (
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0

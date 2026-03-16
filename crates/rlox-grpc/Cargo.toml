@@ -1,0 +1,18 @@
+[package]
+name = "rlox-grpc"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+description = "gRPC distributed environment workers for rlox"
+publish = false
+
+[dependencies]
+rlox-core = { version = "0.1.0", path = "../rlox-core" }
+tonic = "0.13"
+prost = "0.13"
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+serde_json = "1"
+
+[build-dependencies]
+tonic-build = "0.13"

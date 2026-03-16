@@ -3,6 +3,10 @@ name = "rlox-core"
 version = "0.1.0"
 edition = "2021"
 license.workspace = true
+description = "Rust-accelerated reinforcement learning core: environments, buffers, GAE, GRPO"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 rayon = "1.10"

@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2021"
 license.workspace = true
 description = "Burn backend for rlox neural network training"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
-rlox-nn = { path = "../rlox-nn" }
+rlox-nn = { version = "0.1.0", path = "../rlox-nn" }
 burn = { version = "0.16", features = ["autodiff", "ndarray", "wgpu"] }
 rand = "0.9"
 rand_chacha = "0.9"

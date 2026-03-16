@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license.workspace = true
 description = "Backend-agnostic neural network traits for rlox"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 thiserror = "2"

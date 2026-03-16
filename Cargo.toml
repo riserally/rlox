@@ -11,3 +11,6 @@ members = [
 
 [workspace.package]
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/riserally/rlox"
+keywords = ["reinforcement-learning", "rl", "pyo3", "machine-learning"]
+categories = ["science", "algorithms"]

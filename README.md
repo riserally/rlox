@@ -1,6 +1,10 @@
-# rlox
+<p align="center">
+  <img src="assets/rlox_logo.png" alt="rlox logo" width="500">
+</p>
 
-Rust-accelerated reinforcement learning — the Polars architecture pattern applied to RL.
+<h1 align="center">rlox</h1>
+
+<p align="center">Rust-accelerated reinforcement learning — the Polars architecture pattern applied to RL.</p>
 
 **Rust data plane + Python control plane**, connected via PyO3. Environments step in Rust with Rayon work-stealing parallelism; Python stays in charge of training logic.
 

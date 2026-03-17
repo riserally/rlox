@@ -66,7 +66,7 @@ impl CartPole {
     }
 
     fn obs(&self) -> Observation {
-        Observation(self.state.iter().map(|&v| v as f32).collect())
+        Observation::Flat(self.state.iter().map(|&v| v as f32).collect())
     }
 }
 
@@ -178,8 +178,8 @@ mod tests {
     fn cartpole_reset_produces_valid_obs() {
         let env = CartPole::new(Some(42));
         let obs = env.obs();
-        assert_eq!(obs.0.len(), 4);
-        for &v in &obs.0 {
+        assert_eq!(obs.as_slice().len(), 4);
+        for &v in obs.as_slice() {
             assert!(v.abs() <= 0.05, "initial state out of range: {}", v);
         }
     }

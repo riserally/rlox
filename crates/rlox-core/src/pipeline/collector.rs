@@ -57,6 +57,9 @@ impl AsyncCollector {
                     shape.iter().product()
                 }
                 crate::env::spaces::ObsSpace::MultiDiscrete(v) => v.len(),
+                crate::env::spaces::ObsSpace::Dict(entries) => {
+                    entries.iter().map(|(_, d)| d).sum()
+                }
             };
 
             // Derive act_dim from the action space

@@ -4,10 +4,92 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use rlox_core::buffer::columnar::ExperienceTable;
+use rlox_core::buffer::extra_columns::ColumnHandle;
 use rlox_core::buffer::priority::PrioritizedReplayBuffer;
 use rlox_core::buffer::ringbuf::ReplayBuffer;
 use rlox_core::buffer::varlen::VarLenStore;
 use rlox_core::buffer::ExperienceRecord;
+
+// ---------------------------------------------------------------------------
+// BatchDictBuilder — shared helper for constructing Python sample dicts
+// ---------------------------------------------------------------------------
+
+/// Builder for constructing the Python dict returned by `sample()`.
+///
+/// Centralises the numpy array construction that was previously duplicated
+/// across `PyReplayBuffer::sample` and `PyPrioritizedReplayBuffer::sample`.
+struct BatchDictBuilder<'py> {
+    dict: Bound<'py, PyDict>,
+    py: Python<'py>,
+}
+
+impl<'py> BatchDictBuilder<'py> {
+    fn new(py: Python<'py>) -> Self {
+        Self {
+            dict: PyDict::new(py),
+            py,
+        }
+    }
+
+    /// Add a 2D f32 array (observations, next_obs).
+    fn add_2d(&self, key: &str, data: Vec<f32>, rows: usize, cols: usize) -> PyResult<()> {
+        let arr = PyArray1::from_vec(self.py, data);
+        let arr_2d = arr
+            .reshape([rows, cols])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        self.dict.set_item(key, arr_2d)
+    }
+
+    /// Add a 1D f32 array (rewards, 1D actions).
+    fn add_1d_f32(&self, key: &str, data: Vec<f32>) -> PyResult<()> {
+        self.dict.set_item(key, PyArray1::from_vec(self.py, data))
+    }
+
+    /// Add actions — 2D if act_dim > 1, 1D otherwise.
+    fn add_actions(&self, data: Vec<f32>, batch_size: usize, act_dim: usize) -> PyResult<()> {
+        let arr = PyArray1::from_vec(self.py, data);
+        if act_dim > 1 {
+            let arr_2d = arr
+                .reshape([batch_size, act_dim])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            self.dict.set_item("actions", arr_2d)
+        } else {
+            self.dict.set_item("actions", arr)
+        }
+    }
+
+    /// Add a 1D bool-as-u8 array (terminated, truncated).
+    fn add_bool(&self, key: &str, data: &[bool]) -> PyResult<()> {
+        let u8s: Vec<u8> = data.iter().map(|&b| b as u8).collect();
+        self.dict
+            .set_item(key, PyArray1::from_slice(self.py, &u8s))
+    }
+
+    /// Add extra columns from the sampled batch.
+    fn add_extra_columns(
+        &self,
+        extra: &[(String, Vec<f32>)],
+        batch_size: usize,
+    ) -> PyResult<()> {
+        for (name, data) in extra {
+            let dim = data.len() / batch_size;
+            let arr = PyArray1::from_slice(self.py, data);
+            if dim > 1 {
+                let arr_2d = arr
+                    .reshape([batch_size, dim])
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                self.dict.set_item(name.as_str(), arr_2d)?;
+            } else {
+                self.dict.set_item(name.as_str(), arr)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn build(self) -> Bound<'py, PyDict> {
+        self.dict
+    }
+}
 
 // ---------- ExperienceTable ----------
 
@@ -85,6 +167,8 @@ impl PyExperienceTable {
 #[pyclass(name = "ReplayBuffer")]
 pub struct PyReplayBuffer {
     inner: ReplayBuffer,
+    /// Column handles stored by registration order, for PyO3 integer-based access.
+    column_handles: Vec<ColumnHandle>,
 }
 
 #[pymethods]
@@ -93,11 +177,36 @@ impl PyReplayBuffer {
     fn new(capacity: usize, obs_dim: usize, act_dim: usize) -> Self {
         Self {
             inner: ReplayBuffer::new(capacity, obs_dim, act_dim),
+            column_handles: Vec::new(),
         }
     }
 
     fn __len__(&self) -> usize {
         self.inner.len()
+    }
+
+    /// Register an extra f32 column. Returns an integer handle.
+    ///
+    /// Example::
+    ///
+    ///     lp = buf.register_column("log_prob", 1)
+    ///     buf.push(obs, action, reward, term, trunc, next_obs)
+    ///     buf.push_extra(lp, np.array([0.5], dtype=np.float32))
+    fn register_column(&mut self, name: &str, dim: usize) -> usize {
+        let handle = self.inner.register_column(name, dim);
+        self.column_handles.push(handle);
+        handle.index()
+    }
+
+    /// Push extra column data for the most recently pushed transition.
+    fn push_extra(&mut self, handle: usize, values: PyReadonlyArray1<f32>) -> PyResult<()> {
+        let h = self
+            .column_handles
+            .get(handle)
+            .ok_or_else(|| PyRuntimeError::new_err(format!("invalid column handle: {handle}")))?;
+        self.inner
+            .push_extra(*h, values.as_slice()?)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     /// Push a transition. ``next_obs`` defaults to zeros if omitted.
@@ -130,6 +239,8 @@ impl PyReplayBuffer {
     }
 
     /// Sample a batch. Returns a dict with numpy arrays.
+    ///
+    /// Extra columns (if registered) appear as additional keys in the dict.
     #[pyo3(signature = (batch_size, seed))]
     fn sample<'py>(
         &self,
@@ -142,33 +253,17 @@ impl PyReplayBuffer {
             .sample(batch_size, seed)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-        let dict = PyDict::new(py);
-        let obs_1d = PyArray1::from_vec(py, batch.observations);
-        let obs_2d = obs_1d
-            .reshape([batch.batch_size, batch.obs_dim])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        dict.set_item("obs", obs_2d)?;
-        let next_obs_1d = PyArray1::from_vec(py, batch.next_observations);
-        let next_obs_2d = next_obs_1d
-            .reshape([batch.batch_size, batch.obs_dim])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        dict.set_item("next_obs", next_obs_2d)?;
-        let act_1d = PyArray1::from_vec(py, batch.actions);
-        if batch.act_dim > 1 {
-            let act_2d = act_1d
-                .reshape([batch.batch_size, batch.act_dim])
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            dict.set_item("actions", act_2d)?;
-        } else {
-            dict.set_item("actions", act_1d)?;
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d("next_obs", batch.next_observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_bool("terminated", &batch.terminated)?;
+        builder.add_bool("truncated", &batch.truncated)?;
+        if !batch.extra.is_empty() {
+            builder.add_extra_columns(&batch.extra, batch.batch_size)?;
         }
-        dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
-
-        let term: Vec<u8> = batch.terminated.iter().map(|&b| b as u8).collect();
-        let trunc: Vec<u8> = batch.truncated.iter().map(|&b| b as u8).collect();
-        dict.set_item("terminated", PyArray1::from_slice(py, &term))?;
-        dict.set_item("truncated", PyArray1::from_slice(py, &trunc))?;
-        Ok(dict)
+        Ok(builder.build())
     }
 }
 
@@ -235,40 +330,21 @@ impl PyPrioritizedReplayBuffer {
             .sample(batch_size, seed)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-        let dict = PyDict::new(py);
-        let obs_1d = PyArray1::from_vec(py, batch.observations);
-        let obs_2d = obs_1d
-            .reshape([batch.batch_size, batch.obs_dim])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        dict.set_item("obs", obs_2d)?;
-        let next_obs_1d = PyArray1::from_vec(py, batch.next_observations);
-        let next_obs_2d = next_obs_1d
-            .reshape([batch.batch_size, batch.obs_dim])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        dict.set_item("next_obs", next_obs_2d)?;
-        let act_1d = PyArray1::from_vec(py, batch.actions);
-        if batch.act_dim > 1 {
-            let act_2d = act_1d
-                .reshape([batch.batch_size, batch.act_dim])
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            dict.set_item("actions", act_2d)?;
-        } else {
-            dict.set_item("actions", act_1d)?;
-        }
-        dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
-
-        let term: Vec<u8> = batch.terminated.iter().map(|&b| b as u8).collect();
-        let trunc: Vec<u8> = batch.truncated.iter().map(|&b| b as u8).collect();
-        dict.set_item("terminated", PyArray1::from_slice(py, &term))?;
-        dict.set_item("truncated", PyArray1::from_slice(py, &trunc))?;
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d("next_obs", batch.next_observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_bool("terminated", &batch.terminated)?;
+        builder.add_bool("truncated", &batch.truncated)?;
 
         // Prioritized-specific fields
         let weights: Vec<f32> = batch.weights.iter().map(|&w| w as f32).collect();
-        dict.set_item("weights", PyArray1::from_vec(py, weights))?;
+        builder.add_1d_f32("weights", weights)?;
         let indices: Vec<u64> = batch.indices.iter().map(|&i| i as u64).collect();
-        dict.set_item("indices", PyArray1::from_vec(py, indices))?;
+        builder.dict.set_item("indices", PyArray1::from_vec(py, indices))?;
 
-        Ok(dict)
+        Ok(builder.build())
     }
 
     /// Update priorities for previously sampled indices.

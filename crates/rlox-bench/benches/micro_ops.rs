@@ -18,7 +18,7 @@ fn bench_observation_clone(c: &mut Criterion) {
             BenchmarkId::new("obs_dim", obs_dim),
             &obs_dim,
             |b, &dim| {
-                let obs = Observation(vec![0.42_f32; dim]);
+                let obs = Observation::Flat(vec![0.42_f32; dim]);
                 b.iter(|| black_box(obs.clone()));
             },
         );

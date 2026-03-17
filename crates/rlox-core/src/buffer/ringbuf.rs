@@ -4,12 +4,17 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::error::RloxError;
 
+use super::extra_columns::{ColumnHandle, ExtraColumns};
 use super::ExperienceRecord;
 
 /// Fixed-capacity ring buffer with uniform random sampling.
 ///
 /// Pre-allocates all arrays at construction for zero-allocation push.
 /// Oldest transitions are overwritten when capacity is reached.
+///
+/// Supports optional extra f32 columns (e.g. log-probs, value estimates)
+/// via [`ColumnHandle`]. When no extra columns are registered, there is
+/// zero overhead — no allocations and no branches in the hot push/sample path.
 pub struct ReplayBuffer {
     obs_dim: usize,
     act_dim: usize,
@@ -22,6 +27,7 @@ pub struct ReplayBuffer {
     truncated: Vec<bool>,
     write_pos: usize,
     count: usize,
+    extra: ExtraColumns,
 }
 
 /// A sampled batch of transitions. Owns its data (copied from the ring buffer).
@@ -35,6 +41,10 @@ pub struct SampledBatch {
     pub obs_dim: usize,
     pub act_dim: usize,
     pub batch_size: usize,
+    /// Extra column data, populated only when columns are registered.
+    /// Each entry is `(column_name, flat_data)` where `flat_data` has
+    /// length `batch_size * column_dim`.
+    pub extra: Vec<(String, Vec<f32>)>,
 }
 
 impl SampledBatch {
@@ -49,6 +59,7 @@ impl SampledBatch {
             obs_dim,
             act_dim,
             batch_size: 0,
+            extra: Vec::new(),
         }
     }
 }
@@ -68,7 +79,38 @@ impl ReplayBuffer {
             truncated: vec![false; capacity],
             write_pos: 0,
             count: 0,
+            extra: ExtraColumns::new(),
         }
+    }
+
+    /// Register an extra f32 column with the given name and dimensionality.
+    ///
+    /// Returns a [`ColumnHandle`] for O(1) push/sample access.
+    /// Must be called before any `push()` — the column is pre-allocated to
+    /// match the buffer's capacity.
+    pub fn register_column(&mut self, name: &str, dim: usize) -> ColumnHandle {
+        let handle = self.extra.register(name, dim);
+        self.extra.allocate(self.capacity);
+        handle
+    }
+
+    /// Push extra column data for the most recently pushed transition.
+    ///
+    /// Must be called *after* `push()` and before the next `push()`.
+    /// The `values` slice length must match the column's registered dim.
+    pub fn push_extra(&mut self, handle: ColumnHandle, values: &[f32]) -> Result<(), RloxError> {
+        if self.count == 0 {
+            return Err(RloxError::BufferError(
+                "push_extra called before any push()".into(),
+            ));
+        }
+        // The most recently written position is one step behind write_pos
+        let pos = if self.write_pos == 0 {
+            self.capacity - 1
+        } else {
+            self.write_pos - 1
+        };
+        self.extra.push(handle, pos, values)
     }
 
     /// Number of valid transitions currently stored.
@@ -151,6 +193,9 @@ impl ReplayBuffer {
     ///
     /// Uses ChaCha8Rng seeded with `seed` for deterministic cross-platform
     /// reproducibility. Returns owned `SampledBatch`.
+    ///
+    /// If extra columns have been registered, their data is included in
+    /// `SampledBatch::extra`.
     pub fn sample(&self, batch_size: usize, seed: u64) -> Result<SampledBatch, RloxError> {
         if batch_size > self.count {
             return Err(RloxError::BufferError(format!(
@@ -160,6 +205,13 @@ impl ReplayBuffer {
         }
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut batch = SampledBatch::with_capacity(batch_size, self.obs_dim, self.act_dim);
+
+        let has_extra = self.extra.num_columns() > 0;
+        let mut indices = if has_extra {
+            Vec::with_capacity(batch_size)
+        } else {
+            Vec::new()
+        };
 
         for _ in 0..batch_size {
             let idx = rng.random_range(0..self.count);
@@ -177,9 +229,23 @@ impl ReplayBuffer {
             batch.rewards.push(self.rewards[idx]);
             batch.terminated.push(self.terminated[idx]);
             batch.truncated.push(self.truncated[idx]);
+
+            if has_extra {
+                indices.push(idx);
+            }
         }
         batch.batch_size = batch_size;
+
+        if has_extra {
+            batch.extra = self.extra.sample_all(&indices);
+        }
+
         Ok(batch)
+    }
+
+    /// Access the extra columns storage (for advanced use / testing).
+    pub fn extra_columns(&self) -> &ExtraColumns {
+        &self.extra
     }
 }
 
@@ -296,6 +362,61 @@ mod tests {
         let result = buf.push(record);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("next_obs"));
+    }
+
+    #[test]
+    fn test_replay_buffer_with_extra_columns_roundtrip() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        let lp = buf.register_column("log_prob", 1);
+        let val = buf.register_column("value", 1);
+
+        for i in 0..10 {
+            buf.push(sample_record(4)).unwrap();
+            buf.push_extra(lp, &[i as f32 * 0.1]).unwrap();
+            buf.push_extra(val, &[i as f32]).unwrap();
+        }
+
+        let batch = buf.sample(5, 42).unwrap();
+        assert_eq!(batch.extra.len(), 2);
+        assert_eq!(batch.extra[0].0, "log_prob");
+        assert_eq!(batch.extra[0].1.len(), 5); // batch_size * dim(1)
+        assert_eq!(batch.extra[1].0, "value");
+        assert_eq!(batch.extra[1].1.len(), 5);
+    }
+
+    #[test]
+    fn test_replay_buffer_no_extra_columns_has_empty_extra() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        for _ in 0..10 {
+            buf.push(sample_record(4)).unwrap();
+        }
+        let batch = buf.sample(5, 42).unwrap();
+        assert!(batch.extra.is_empty());
+    }
+
+    #[test]
+    fn test_push_extra_before_push_errors() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        let h = buf.register_column("test", 1);
+        let result = buf.push_extra(h, &[1.0]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_extra_columns_multidim_roundtrip() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        let h = buf.register_column("action_mean", 3);
+
+        for i in 0..5 {
+            buf.push(sample_record(4)).unwrap();
+            let v = i as f32;
+            buf.push_extra(h, &[v, v + 1.0, v + 2.0]).unwrap();
+        }
+
+        let batch = buf.sample(3, 42).unwrap();
+        assert_eq!(batch.extra.len(), 1);
+        assert_eq!(batch.extra[0].0, "action_mean");
+        assert_eq!(batch.extra[0].1.len(), 9); // 3 * 3
     }
 
     mod proptests {

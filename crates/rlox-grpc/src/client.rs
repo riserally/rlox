@@ -75,11 +75,11 @@ impl RemoteEnvClient {
             response
                 .obs
                 .chunks_exact(obs_dim)
-                .map(|c| Observation(c.to_vec()))
+                .map(|c| Observation::Flat(c.to_vec()))
                 .collect()
         } else {
             let num_envs = response.num_envs as usize;
-            vec![Observation(vec![]); num_envs]
+            vec![Observation::Flat(vec![]); num_envs]
         };
 
         Ok(observations)

@@ -283,6 +283,8 @@ env = rlox.VecEnv(n=256, seed=42, env_id="CartPole-v1")
 result = env.step_all(actions)
 ```
 
+> More examples in [`examples/`](examples/) — PPO, SAC, GRPO custom rewards, fast GAE, VecEnv throughput.
+
 ## Running Tests
 
 ```bash
@@ -327,7 +329,7 @@ If you use rlox in your research, please cite:
   title        = {rlox: Rust-Accelerated Reinforcement Learning},
   year         = {2026},
   url          = {https://github.com/riserally/rlox},
-  version      = {0.1.0},
+  version      = {0.2.0},
   license      = {MIT OR Apache-2.0}
 }
 ```

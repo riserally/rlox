@@ -93,7 +93,7 @@ from rlox.diagnostics import TrainingDiagnostics
 # -- Checkpoint ----------------------------------------------------------------
 from rlox.checkpoint import Checkpoint
 
-__version__ = "1.0.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # Rust primitives

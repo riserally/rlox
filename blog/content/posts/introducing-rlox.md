@@ -76,6 +76,32 @@ Raw throughput doesn't matter if the agent doesn't learn. We ran PPO and A2C wit
 
 Both frameworks converge to the same reward thresholds — rlox just gets there faster because the data plane isn't waiting on Python.
 
+#### Training Throughput (Steps Per Second)
+
+On-policy algorithms (PPO, A2C) show 1.6-2.5x SPS improvements thanks to Rust GAE. Off-policy algorithms (SAC, TD3) are bottlenecked by single-env stepping and NN updates, as expected.
+
+![SPS Comparison](/images/benchmarks/sps_comparison.png)
+
+#### Learning Curves
+
+**PPO on CartPole-v1** — rlox converges to the same reward, 3.3x faster wall-clock:
+
+![PPO CartPole](/images/benchmarks/learning_curve_PPO_CartPole-v1.png)
+
+**PPO on Acrobot-v1** — both converge to ~-83, rlox reaches threshold 1.4x faster:
+
+![PPO Acrobot](/images/benchmarks/learning_curve_PPO_Acrobot-v1.png)
+
+**A2C on CartPole-v1** — matched convergence, rlox 2.5x faster throughput:
+
+![A2C CartPole](/images/benchmarks/learning_curve_A2C_CartPole-v1.png)
+
+#### Performance Profile (Agarwal et al., 2021)
+
+Aggregated across all environments. On the on-policy subset (PPO, A2C), rlox matches SB3's convergence while training 1.4-3.3x faster.
+
+![Performance Profile](/images/benchmarks/performance_profile.png)
+
 ## Beyond Classic RL: LLM Post-Training
 
 rlox isn't just for CartPole. We built first-class support for LLM post-training:

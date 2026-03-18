@@ -8,7 +8,7 @@
 #   2. python-env     — Python venv, maturin build, PyO3 bindings, pytest
 #   3. experiment-runner (final) — lean runtime image with everything baked in
 
-ARG RUST_VERSION=1.83
+ARG RUST_VERSION=1.86
 ARG PYTHON_VERSION=3.12
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,15 @@ RUN set -eux; \
         mkdir -p crates/$crate/src; \
         echo "fn main() {}" > crates/$crate/src/main.rs; \
         echo "" > crates/$crate/src/lib.rs; \
-    done
+    done; \
+    # rlox-bench declares [[bench]] entries — stub them so cargo fetch works \
+    mkdir -p crates/rlox-bench/benches; \
+    for b in env_stepping micro_ops nn_backends; do \
+        echo "fn main() {}" > crates/rlox-bench/benches/$b.rs; \
+    done; \
+    # rlox-grpc has a build.rs that needs a proto file \
+    mkdir -p crates/rlox-grpc/proto; \
+    touch crates/rlox-grpc/proto/env.proto
 
 # Pre-fetch and compile dependencies (cached layer).
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -122,7 +130,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH \
-    RUST_VERSION=1.83.0
+    RUST_VERSION=1.86.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --no-modify-path --default-toolchain ${RUST_VERSION} \
     && rustup component add rustfmt clippy
@@ -153,19 +161,22 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Layer C: RL frameworks under benchmark
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
-        "stable-baselines3==2.3.2" \
-        "torchrl==0.6.0" \
-        "gymnasium[mujoco]==1.0.0" \
-        "envpool==0.8.4"
+        "stable-baselines3>=2.3.0" \
+        "torchrl>=0.8.0" \
+        "gymnasium[mujoco]>=1.0.0" \
+        "envpool>=0.8.4" || pip install --no-cache-dir \
+        "stable-baselines3>=2.3.0" \
+        "torchrl>=0.8.0" \
+        "gymnasium[mujoco]>=1.0.0"
 
 # Layer D: analysis + visualization stack for paper plots
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
-        "rliable==1.0.8" \
-        "matplotlib==3.9.4" \
-        "seaborn==0.13.2" \
-        "pandas==2.2.3" \
-        "pyyaml==6.0.2"
+        "rliable>=1.0.8" \
+        "matplotlib>=3.9" \
+        "seaborn>=0.13" \
+        "pandas>=2.2" \
+        "pyyaml>=6.0"
 
 # Layer E: test tooling
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -182,18 +193,20 @@ WORKDIR /build/rlox
 # Copy only the files maturin needs for its build phase before copying all
 # source, so the expensive Rust recompile is cached when only Python files
 # change.
-COPY Cargo.toml Cargo.lock pyproject.toml ./
+COPY Cargo.toml Cargo.lock pyproject.toml README.md ./
 COPY crates/ crates/
 COPY python/ python/
 # benchmarks/ is needed here so it can be forwarded to the final stage via
 # COPY --from and so pytest can import conftest during the test run.
 COPY benchmarks/ benchmarks/
 
-# Build and install the extension into the venv.
+# Build a wheel and install it (not develop mode, so the package is
+# self-contained in site-packages without .pth back-references).
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/rlox/target \
-    maturin develop --release
+    maturin build --release --out /build/wheels \
+    && pip install /build/wheels/rlox-*.whl
 
 # ---- Verify: Python tests must pass ----
 COPY tests/ tests/
@@ -215,7 +228,7 @@ LABEL org.opencontainers.image.title="rlox experiment runner" \
       org.opencontainers.image.version="0.2.3" \
       org.opencontainers.image.source="https://github.com/riserally/rlox" \
       org.opencontainers.image.licenses="MIT OR Apache-2.0" \
-      rlox.rust-version="1.83" \
+      rlox.rust-version="1.86" \
       rlox.python-version="3.12" \
       rlox.build-date="2026-03-18"
 

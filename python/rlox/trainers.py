@@ -46,6 +46,7 @@ class PPOTrainer:
         callbacks: list[Callback] | None = None,
         logger: Any | None = None,
         seed: int = 42,
+        compile: bool = False,
     ):
         from rlox.algorithms.ppo import PPO
 
@@ -54,6 +55,11 @@ class PPOTrainer:
             env_id=env, seed=seed, logger=logger, callbacks=callbacks, **cfg
         )
         self.env = env
+
+        if compile:
+            from rlox.compile import compile_policy
+
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run PPO training.
@@ -101,6 +107,7 @@ class SACTrainer:
         config: dict[str, Any] | None = None,
         callbacks: list[Callback] | None = None,
         seed: int = 42,
+        compile: bool = False,
     ):
         from rlox.algorithms.sac import SAC
 
@@ -108,6 +115,11 @@ class SACTrainer:
         self.algo = SAC(env_id=env, seed=seed, **cfg)
         self.callbacks = CallbackList(callbacks)
         self.env = env
+
+        if compile:
+            from rlox.compile import compile_policy
+
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         self.callbacks.on_training_start()
@@ -137,6 +149,7 @@ class DQNTrainer:
         config: dict[str, Any] | None = None,
         callbacks: list[Callback] | None = None,
         seed: int = 42,
+        compile: bool = False,
     ):
         from rlox.algorithms.dqn import DQN
 
@@ -144,6 +157,11 @@ class DQNTrainer:
         self.algo = DQN(env_id=env, seed=seed, **cfg)
         self.callbacks = CallbackList(callbacks)
         self.env = env
+
+        if compile:
+            from rlox.compile import compile_policy
+
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         self.callbacks.on_training_start()

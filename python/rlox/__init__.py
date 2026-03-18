@@ -93,6 +93,12 @@ from rlox.diagnostics import TrainingDiagnostics
 # -- Checkpoint ----------------------------------------------------------------
 from rlox.checkpoint import Checkpoint
 
+# -- Hub -----------------------------------------------------------------------
+from rlox.hub import push_to_hub, load_from_hub
+
+# -- Compile -------------------------------------------------------------------
+from rlox.compile import compile_policy
+
 __version__ = "0.2.3"
 
 __all__ = [
@@ -145,4 +151,9 @@ __all__ = [
     "TrainingDiagnostics",
     # Checkpoint
     "Checkpoint",
+    # Hub
+    "push_to_hub",
+    "load_from_hub",
+    # Compile
+    "compile_policy",
 ]

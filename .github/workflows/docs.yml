@@ -48,6 +48,8 @@ jobs:
 
       - name: Build Python extension and MkDocs
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           pip install maturin numpy
           maturin develop --release
           pip install mkdocs-material "mkdocstrings[python]"

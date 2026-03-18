@@ -9,3 +9,8 @@ __pycache__
 *.pdb
 /benchmark_results
 *.dSYM
+
+# Claude artifacts
+.claude/
+CLAUDE.md
+PLAN.md

@@ -1,0 +1,77 @@
+# rlox .dockerignore
+# Excludes files that must not be baked into the image:
+#   - build artifacts (target/, dist/, dist-ci/)
+#   - local Python environments
+#   - large data / checkpoint directories
+#   - documentation build artefacts
+#   - private experiment content (rlox-priv; mounted at runtime)
+#   - VCS metadata
+#   - editor / OS artefacts
+
+# ---- Rust build artefacts ----
+target/
+**/target/
+
+# ---- Python artefacts ----
+.venv/
+venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.egg-info/
+**/*.egg-info/
+dist/
+dist-ci/
+*.whl
+*.sdist
+
+# ---- Local results and benchmark outputs ----
+benchmark_results/
+results/
+
+# ---- Documentation build outputs ----
+_site/
+site/
+book/
+blog/
+docs-landing/
+mkdocs-docs/
+.doctrees/
+
+# ---- Private experiments (mounted at runtime from rlox-priv) ----
+# If this repo is ever placed inside rlox-workspace the priv content must not
+# be included.
+../rlox-priv/
+
+# ---- VCS ----
+.git/
+.gitignore
+.gitmodules
+.github/
+
+# ---- Editor / IDE ----
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ---- CI artefacts ----
+.cargo/
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# ---- Notebooks (outputs may contain large binary blobs) ----
+**/.ipynb_checkpoints/
+*.ipynb
+
+# ---- Miscellaneous ----
+CHANGELOG.md
+CITATION.cff
+mkdocs.yml
+book.toml
+assets/

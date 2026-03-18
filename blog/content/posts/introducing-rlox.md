@@ -16,22 +16,125 @@ If you've trained RL agents with Stable-Baselines3 or TorchRL, you've probably n
 
 This isn't a Python problem per se — it's an architecture problem. Polars solved the same issue for DataFrames by pushing compute-intensive operations into Rust while keeping the user-facing API in Python. We asked: can the same pattern work for RL?
 
+## The Polars Pattern
+
+Before diving into rlox's architecture, here's the pattern it borrows from. Polars doesn't try to make Python faster — it moves the work out of Python entirely:
+
+<div class="mermaid">
+graph LR
+    subgraph Traditional["Traditional RL (SB3 / TorchRL)"]
+        direction TB
+        P1[Python: env.step]
+        P2[Python: buffer.push]
+        P3[Python: compute GAE]
+        P4[Python: sample batch]
+        P5[Python: optimizer.step]
+        P1 --> P2 --> P3 --> P4 --> P5
+    end
+
+    subgraph Polars["rlox (Polars Pattern)"]
+        direction TB
+        R1[Rust: env.step ∥ Rayon]
+        R2[Rust: buffer.push zero-copy]
+        R3[Rust: compute GAE]
+        R4[Rust: sample batch]
+        PY[Python: optimizer.step]
+        R1 --> R2 --> R3 --> R4 --> PY
+    end
+</div>
+
+Python only runs where it adds value: neural network training via PyTorch. Everything else is Rust.
+
 ## The Architecture
 
-```
-┌──────────────────────────────────────────────────┐
-│  Python (control plane)                          │
-│  PPO, SAC, DQN, TD3, A2C, GRPO, DPO             │
-│  Trainers, callbacks, configs, checkpointing     │
-├────────────── PyO3 boundary ─────────────────────┤
-│  Rust (data plane)                               │
-│  Environments, parallel stepping (Rayon),        │
-│  buffers (ring, mmap, priority), GAE, V-trace,   │
-│  GRPO advantages, pipeline orchestration         │
-└──────────────────────────────────────────────────┘
-```
+The full system has three layers connected by PyO3:
+
+<div class="mermaid">
+graph TB
+    subgraph Python["Python Control Plane"]
+        API[Researcher API<br/>train / evaluate / sweep]
+        Torch[PyTorch<br/>Autograd & Models]
+        HF[HuggingFace<br/>Transformers & Datasets]
+        WB[W&B / MLflow<br/>Logging]
+    end
+
+    subgraph Rust["Rust Data Plane (rlox-core)"]
+        ENV[Environment Engine<br/>parallel stepping via Rayon]
+        BUF[Experience Store<br/>ring, mmap, priority buffers]
+        LOOP[Training Orchestrator<br/>GAE, V-trace, GRPO, batching]
+        SER[Serialization<br/>zero-copy Arrow/numpy]
+        DIST[Distribution Layer<br/>gRPC workers, pipeline]
+    end
+
+    subgraph Envs["Environment Backends"]
+        GYM[Gymnasium<br/>via PyO3 bridge]
+        LLM_ENV[LLM Generation<br/>vLLM / TGI / SGLang]
+        CUSTOM[Custom Rust Envs<br/>CartPole built-in]
+    end
+
+    API -->|PyO3 FFI| ENV
+    API -->|PyO3 FFI| BUF
+    API -->|PyO3 FFI| LOOP
+    Torch <-->|zero-copy tensors| SER
+    HF <-->|tokenized batches| SER
+    ENV --> GYM
+    ENV --> LLM_ENV
+    ENV --> CUSTOM
+    ENV -->|transitions| BUF
+    BUF -->|batches| LOOP
+    LOOP -->|grads request| Torch
+    LOOP <-->|distributed sync| DIST
+</div>
 
 The boundary is deliberate. Everything above the line is where researchers spend their time — algorithm logic, hyperparameter tuning, experiment configs. Everything below is plumbing that should be fast and invisible. PyO3 connects the two with zero-copy where possible.
+
+### Data Flow: One Training Step
+
+Here's what happens during a single PPO training iteration:
+
+<div class="mermaid">
+sequenceDiagram
+    participant P as Python (PPOTrainer)
+    participant R as Rust (rlox-core)
+    participant E as Environments (Rayon)
+    participant T as PyTorch
+
+    P->>R: collect_rollout(policy)
+    R->>E: step_all(actions) [parallel]
+    E-->>R: obs, rewards, dones
+    R->>R: buffer.push(transitions)
+    R->>R: compute_gae(rewards, values)
+    R-->>P: RolloutBatch (zero-copy)
+    P->>T: forward + backward pass
+    T-->>P: gradients
+    P->>P: optimizer.step()
+    P->>P: log metrics, callbacks
+</div>
+
+The critical insight: Rust handles steps 2-6 (the data plane) as a single fused operation. There's no Python interpreter overhead between env stepping, buffer storage, and advantage computation — it's one Rust call that returns a ready-to-train batch.
+
+### Crate Architecture
+
+The Rust side is organized as a multi-crate workspace, each with a single responsibility:
+
+<div class="mermaid">
+graph TB
+    subgraph Workspace["rlox workspace"]
+        CORE[rlox-core<br/>envs, buffers, GAE,<br/>V-trace, GRPO, pipeline]
+        NN[rlox-nn<br/>ActorCritic, QFunction,<br/>StochasticPolicy traits]
+        BURN[rlox-burn<br/>Burn Autodiff NdArray]
+        CANDLE[rlox-candle<br/>Candle CPU inference]
+        GRPC[rlox-grpc<br/>tonic gRPC workers]
+        PY[rlox-python<br/>PyO3 bindings]
+    end
+
+    NN --> BURN
+    NN --> CANDLE
+    CORE --> NN
+    CORE --> GRPC
+    PY --> CORE
+    PY --> NN
+</div>
 
 ## What's Fast and Why
 

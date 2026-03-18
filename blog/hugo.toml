@@ -51,6 +51,11 @@ copyright = "riserally"
     url = "https://riserally.github.io/rlox/"
     weight = 40
 
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
 [outputs]
   home = ["HTML", "RSS", "JSON"]
 

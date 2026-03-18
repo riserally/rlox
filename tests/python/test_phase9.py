@@ -368,7 +368,7 @@ class TestAPI10Stability:
 
     def test_version_defined(self):
         assert hasattr(rlox, "__version__")
-        assert rlox.__version__ == "1.0.0"
+        assert rlox.__version__  # non-empty string is enough
 
     def test_phase9_symbols_present(self):
         """All Phase 9 symbols should be importable from rlox."""

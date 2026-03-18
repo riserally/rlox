@@ -62,7 +62,7 @@ Multi-crate workspace ([crates.io](https://crates.io/crates/rlox-core)):
 | 8 | Production Hardening (eval toolkit, diagnostics, mmap buffer, CI wheels) | Done |
 | 9 | Distributed & Scale (pipeline, gRPC, multi-GPU, vLLM/TGI/SGLang, API 1.0) | Done |
 
-**Test suite**: 294 Rust tests, 382 Python tests — all passing.
+**Test suite**: 313 Rust tests, 382 Python tests — all passing.
 
 **Published**: [crates.io](https://crates.io/crates/rlox-core) (rlox-core, rlox-nn, rlox-burn, rlox-candle)
 

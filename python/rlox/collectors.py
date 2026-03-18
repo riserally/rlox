@@ -212,7 +212,7 @@ class RolloutCollector:
         # Flatten (n_steps, n_envs, ...) -> (n_steps * n_envs, ...)
         total = n_steps * self.n_envs
         return RolloutBatch(
-            obs=obs_t.reshape(total, -1),
+            obs=obs_t.reshape(total, *obs_t.shape[2:]),
             actions=actions_t.reshape(total) if actions_t.dim() == 2 else actions_t.reshape(total, -1),
             rewards=rewards_t.reshape(total),
             dones=dones_t.reshape(total),

@@ -1,0 +1,48 @@
+site_name: "rlox Python API"
+site_url: https://riserally.github.io/rlox/python/
+repo_url: https://github.com/riserally/rlox
+docs_dir: mkdocs-docs
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: deep purple
+  features:
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - python
+          options:
+            show_source: true
+            show_root_heading: true
+            members_order: source
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.arithmatex:
+      generic: true
+
+nav:
+  - Home: index.md
+  - API Reference:
+    - Core (Rust/PyO3): api/core.md
+    - Algorithms: api/algorithms.md
+    - Trainers: api/trainers.md
+    - Policies & Networks: api/policies.md
+    - Callbacks: api/callbacks.md
+    - Logging: api/logging.md
+    - Evaluation: api/evaluation.md
+    - LLM Post-Training: api/llm.md
+    - Distributed: api/distributed.md
+    - Configuration: api/config.md

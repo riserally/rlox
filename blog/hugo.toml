@@ -1,0 +1,59 @@
+baseURL = "https://riserally.github.io/rlox/blog/"
+languageCode = "en-us"
+title = "riserally blog"
+theme = "PaperMod"
+copyright = "riserally"
+
+[params]
+  env = "production"
+  description = "Engineering blog by riserally — Rust-accelerated reinforcement learning, benchmarks, and technical deep-dives"
+  author = "Wojciech Kowalinski"
+  ShowReadingTime = true
+  ShowShareButtons = false
+  ShowPostNavLinks = true
+  ShowBreadCrumbs = true
+  ShowCodeCopyButtons = true
+  ShowToc = true
+  TocOpen = false
+  defaultTheme = "dark"
+
+  [params.homeInfoParams]
+    Title = "riserally blog"
+    Content = "Engineering blog by riserally — updates, benchmarks, and technical deep-dives on Rust-accelerated reinforcement learning."
+
+  [[params.socialIcons]]
+    name = "github"
+    url = "https://github.com/riserally"
+
+  [[params.socialIcons]]
+    name = "github"
+    url = "https://github.com/riserally/rlox"
+
+[menu]
+  [[menu.main]]
+    identifier = "home"
+    name = "Home"
+    url = "/"
+    weight = 10
+  [[menu.main]]
+    identifier = "archives"
+    name = "Archives"
+    url = "/archives/"
+    weight = 20
+  [[menu.main]]
+    identifier = "tags"
+    name = "Tags"
+    url = "/tags/"
+    weight = 30
+  [[menu.main]]
+    identifier = "docs"
+    name = "Docs"
+    url = "https://riserally.github.io/rlox/"
+    weight = 40
+
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
+
+[taxonomies]
+  tag = "tags"
+  category = "categories"

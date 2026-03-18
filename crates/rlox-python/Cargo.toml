@@ -8,6 +8,7 @@ publish = false
 [lib]
 name = "_rlox_core"
 crate-type = ["cdylib"]
+doc = false
 
 [dependencies]
 rlox-core = { path = "../rlox-core" }

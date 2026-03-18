@@ -10,6 +10,13 @@ __pycache__
 /benchmark_results
 *.dSYM
 
+# Build artifacts
+book/build/
+site/
+_site/
+blog/public/
+blog/resources/
+
 # Claude artifacts
 .claude/
 CLAUDE.md

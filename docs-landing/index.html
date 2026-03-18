@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rlox — Documentation</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }
+
+    .tagline {
+      margin-top: 0.5rem;
+      font-size: 1.15rem;
+      color: #90a4ae;
+    }
+
+    .cards {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 960px;
+    }
+
+    .card {
+      background: #16213e;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 2rem 1.75rem;
+      width: 280px;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: #7c4dff;
+    }
+
+    .card h2 {
+      font-size: 1.25rem;
+      color: #ffffff;
+      margin-bottom: 0.6rem;
+    }
+
+    .card p {
+      font-size: 0.95rem;
+      color: #90a4ae;
+      line-height: 1.5;
+    }
+
+    footer {
+      margin-top: 3rem;
+      font-size: 0.85rem;
+      color: #546e7a;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>rlox</h1>
+    <p class="tagline">Rust-accelerated reinforcement learning</p>
+  </header>
+
+  <div class="cards">
+    <a class="card" href="./rust/rlox_core/">
+      <h2>Rust API Reference</h2>
+      <p>Auto-generated API documentation for the core Rust crates.</p>
+    </a>
+    <a class="card" href="./book/">
+      <h2>Architecture &amp; Guides</h2>
+      <p>Design decisions, architecture overview, and contributor guides.</p>
+    </a>
+    <a class="card" href="./python/">
+      <h2>Python API Reference</h2>
+      <p>Python bindings reference built with MkDocs and mkdocstrings.</p>
+    </a>
+    <a class="card" href="./blog/">
+      <h2>Blog</h2>
+      <p>Updates, benchmarks, and technical deep-dives by riserally.</p>
+    </a>
+  </div>
+
+  <footer>rlox documentation</footer>
+</body>
+</html>

@@ -1,0 +1,77 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "latest"
+          extended: true
+
+      - name: Build Rust API docs
+        run: cargo doc --workspace --no-deps --exclude rlox-python --exclude rlox-bench
+
+      - name: Install and run mdbook
+        run: |
+          cargo install mdbook
+          mdbook build
+
+      - name: Build Python extension and MkDocs
+        run: |
+          pip install maturin numpy
+          maturin develop --release
+          pip install mkdocs-material "mkdocstrings[python]"
+          mkdocs build -d site
+
+      - name: Build Hugo blog
+        run: |
+          cd blog && hugo --minify
+
+      - name: Assemble unified site
+        run: |
+          mkdir -p _site
+          cp -r target/doc _site/rust
+          cp -r book/build _site/book
+          cp -r site _site/python
+          cp -r blog/public _site/blog
+          cp docs-landing/index.html _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

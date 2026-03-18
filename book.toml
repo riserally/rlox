@@ -1,0 +1,11 @@
+[book]
+title = "rlox Guide"
+authors = ["Wojciech Kowalinski"]
+src = "book/src"
+
+[build]
+build-dir = "book/build"
+
+[output.html]
+git-repository-url = "https://github.com/riserally/rlox"
+mathjax-support = true

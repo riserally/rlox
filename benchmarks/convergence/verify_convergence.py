@@ -84,8 +84,8 @@ def evaluate_ppo(agent, env_id: str, n_episodes: int, seed: int) -> list[float]:
         while not done:
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
-                dist, _ = agent.policy(obs_t)
-                action = dist.probs.argmax(dim=-1).item()
+                action, _ = agent.policy.get_action_and_logprob(obs_t)
+                action = action.item()
             obs, reward, terminated, truncated, _ = env.step(int(action))
             ep_return += float(reward)
             done = terminated or truncated

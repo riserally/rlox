@@ -123,40 +123,21 @@ services:
     <<: *rlox-base
     container_name: rlox-bench-convergence
     entrypoint: ["/bin/bash", "-c"]
-    environment:
-      PYTHONUNBUFFERED: "1"
-      MUJOCO_GL: "egl"
-      RAYON_NUM_THREADS: "0"
-      RLOX_RESULTS_DIR: /workspace/results
-      TF_CPP_MIN_LOG_LEVEL: "3"
-      CUBLAS_WORKSPACE_CONFIG: ":4096:8"
-      CONVERGENCE_ENVS: "${CONVERGENCE_ENVS:-CartPole-v1,HalfCheetah-v4,Hopper-v4}"
     command:
       - |
         set -euo pipefail
         echo "=== Convergence benchmarks ==="
-        echo "Environments: $$CONVERGENCE_ENVS"
 
         OUTDIR=/workspace/results/convergence
         mkdir -p "$$OUTDIR"
 
-        # Prefer the private experiment scripts if mounted; fall back to the
-        # open-source convergence benchmarks bundled in the image.
-        if [ -d /workspace/experiments/convergence ]; then
-          CONV_DIR=/workspace/experiments/convergence
-        else
-          CONV_DIR=/opt/rlox/benchmarks/convergence
-        fi
+        CONV_SCRIPT=/opt/rlox/benchmarks/convergence/run_experiment.py
 
-        echo "Using convergence scripts from: $$CONV_DIR"
+        echo "Running convergence experiments (phase: all)"
 
-        python "$$CONV_DIR/run_all.py" \
-            --output-dir "$$OUTDIR" \
-            --envs "$$CONVERGENCE_ENVS" \
-          2>&1 | tee "$$OUTDIR/convergence.log" || \
-        python -m pytest "$$CONV_DIR" -v --timeout=3600 \
-            --tb=short \
-            --junitxml="$$OUTDIR/convergence-results.xml" \
+        python "$$CONV_SCRIPT" \
+            --phase all \
+            --results-dir "$$OUTDIR" \
           2>&1 | tee "$$OUTDIR/convergence.log"
 
         echo "=== Convergence benchmarks complete — results in $$OUTDIR ==="
@@ -219,14 +200,6 @@ services:
     <<: *rlox-base
     container_name: rlox-bench-all
     entrypoint: ["/bin/bash", "-c"]
-    environment:
-      PYTHONUNBUFFERED: "1"
-      MUJOCO_GL: "egl"
-      RAYON_NUM_THREADS: "0"
-      RLOX_RESULTS_DIR: /workspace/results
-      TF_CPP_MIN_LOG_LEVEL: "3"
-      CUBLAS_WORKSPACE_CONFIG: ":4096:8"
-      CONVERGENCE_ENVS: "${CONVERGENCE_ENVS:-CartPole-v1,HalfCheetah-v4,Hopper-v4}"
     command:
       - |
         set -euo pipefail
@@ -254,19 +227,9 @@ services:
         CONV_OUTDIR=/workspace/results/convergence
         mkdir -p "$$CONV_OUTDIR"
 
-        if [ -d /workspace/experiments/convergence ]; then
-          CONV_DIR=/workspace/experiments/convergence
-        else
-          CONV_DIR=/opt/rlox/benchmarks/convergence
-        fi
-
-        python "$$CONV_DIR/run_all.py" \
-            --output-dir "$$CONV_OUTDIR" \
-            --envs "$$CONVERGENCE_ENVS" \
-          2>&1 | tee "$$CONV_OUTDIR/convergence.log" || \
-        python -m pytest "$$CONV_DIR" -v --timeout=3600 \
-            --tb=short \
-            --junitxml="$$CONV_OUTDIR/convergence-results.xml" \
+        python /opt/rlox/benchmarks/convergence/run_experiment.py \
+            --phase all \
+            --results-dir "$$CONV_OUTDIR" \
           2>&1 | tee "$$CONV_OUTDIR/convergence.log"
 
         echo "=== Full benchmark suite complete ==="

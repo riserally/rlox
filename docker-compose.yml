@@ -91,14 +91,14 @@ services:
         set -euo pipefail
         echo "=== Component benchmarks ==="
         OUTDIR=/workspace/results/component_benchmarks
-        mkdir -p "$OUTDIR"
+        mkdir -p "$$OUTDIR"
 
         run_bench() {
-          local name=$1
-          local script=$2
-          echo "--- $name ---"
-          python "$script" --output-dir "$OUTDIR" 2>&1 | tee "$OUTDIR/${name}.log" || \
-            echo "WARN: $name exited with error — check $OUTDIR/${name}.log"
+          local name=$$1
+          local script=$$2
+          echo "--- $$name ---"
+          python "$$script" --output-dir "$$OUTDIR" 2>&1 | tee "$$OUTDIR/$${name}.log" || \
+            echo "WARN: $$name exited with error — check $$OUTDIR/$${name}.log"
         }
 
         cd /opt/rlox
@@ -111,7 +111,7 @@ services:
         run_bench bench_llm_ops    benchmarks/bench_llm_ops.py
         run_bench bench_trl        benchmarks/bench_trl_comparison.py
 
-        echo "=== Component benchmarks complete — results in $OUTDIR ==="
+        echo "=== Component benchmarks complete — results in $$OUTDIR ==="
 
   # --------------------------------------------------------------------------
   # benchmark-convergence: long-running convergence experiments (hours)
@@ -135,10 +135,10 @@ services:
       - |
         set -euo pipefail
         echo "=== Convergence benchmarks ==="
-        echo "Environments: $CONVERGENCE_ENVS"
+        echo "Environments: $$CONVERGENCE_ENVS"
 
         OUTDIR=/workspace/results/convergence
-        mkdir -p "$OUTDIR"
+        mkdir -p "$$OUTDIR"
 
         # Prefer the private experiment scripts if mounted; fall back to the
         # open-source convergence benchmarks bundled in the image.
@@ -148,18 +148,18 @@ services:
           CONV_DIR=/opt/rlox/benchmarks/convergence
         fi
 
-        echo "Using convergence scripts from: $CONV_DIR"
+        echo "Using convergence scripts from: $$CONV_DIR"
 
-        python "$CONV_DIR/run_all.py" \
-            --output-dir "$OUTDIR" \
-            --envs "$CONVERGENCE_ENVS" \
-          2>&1 | tee "$OUTDIR/convergence.log" || \
-        python -m pytest "$CONV_DIR" -v --timeout=3600 \
+        python "$$CONV_DIR/run_all.py" \
+            --output-dir "$$OUTDIR" \
+            --envs "$$CONVERGENCE_ENVS" \
+          2>&1 | tee "$$OUTDIR/convergence.log" || \
+        python -m pytest "$$CONV_DIR" -v --timeout=3600 \
             --tb=short \
-            --junitxml="$OUTDIR/convergence-results.xml" \
-          2>&1 | tee "$OUTDIR/convergence.log"
+            --junitxml="$$OUTDIR/convergence-results.xml" \
+          2>&1 | tee "$$OUTDIR/convergence.log"
 
-        echo "=== Convergence benchmarks complete — results in $OUTDIR ==="
+        echo "=== Convergence benchmarks complete — results in $$OUTDIR ==="
 
   # --------------------------------------------------------------------------
   # experiments: TDD experiment suite (correctness → performance → convergence)
@@ -233,7 +233,7 @@ services:
         echo "=== Full benchmark suite ==="
 
         COMP_OUTDIR=/workspace/results/component_benchmarks
-        mkdir -p "$COMP_OUTDIR"
+        mkdir -p "$$COMP_OUTDIR"
 
         cd /opt/rlox
 
@@ -245,14 +245,14 @@ services:
             benchmarks/bench_e2e_rollout.py \
             benchmarks/bench_llm_ops.py \
             benchmarks/bench_trl_comparison.py; do
-          name=$(basename "$bench" .py)
-          echo "--- $name ---"
-          python "$bench" --output-dir "$COMP_OUTDIR" 2>&1 | tee "$COMP_OUTDIR/${name}.log" || \
-            echo "WARN: $name failed — see log"
+          name=$$(basename "$$bench" .py)
+          echo "--- $$name ---"
+          python "$$bench" --output-dir "$$COMP_OUTDIR" 2>&1 | tee "$$COMP_OUTDIR/$${name}.log" || \
+            echo "WARN: $$name failed — see log"
         done
 
         CONV_OUTDIR=/workspace/results/convergence
-        mkdir -p "$CONV_OUTDIR"
+        mkdir -p "$$CONV_OUTDIR"
 
         if [ -d /workspace/experiments/convergence ]; then
           CONV_DIR=/workspace/experiments/convergence
@@ -260,14 +260,14 @@ services:
           CONV_DIR=/opt/rlox/benchmarks/convergence
         fi
 
-        python "$CONV_DIR/run_all.py" \
-            --output-dir "$CONV_OUTDIR" \
-            --envs "$CONVERGENCE_ENVS" \
-          2>&1 | tee "$CONV_OUTDIR/convergence.log" || \
-        python -m pytest "$CONV_DIR" -v --timeout=3600 \
+        python "$$CONV_DIR/run_all.py" \
+            --output-dir "$$CONV_OUTDIR" \
+            --envs "$$CONVERGENCE_ENVS" \
+          2>&1 | tee "$$CONV_OUTDIR/convergence.log" || \
+        python -m pytest "$$CONV_DIR" -v --timeout=3600 \
             --tb=short \
-            --junitxml="$CONV_OUTDIR/convergence-results.xml" \
-          2>&1 | tee "$CONV_OUTDIR/convergence.log"
+            --junitxml="$$CONV_OUTDIR/convergence-results.xml" \
+          2>&1 | tee "$$CONV_OUTDIR/convergence.log"
 
         echo "=== Full benchmark suite complete ==="
         echo "Results written to /workspace/results"

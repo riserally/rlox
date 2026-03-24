@@ -1,0 +1,49 @@
+# GPU override for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm benchmark-components
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm benchmark-convergence
+#
+# Requires:
+#   - NVIDIA GPU with drivers installed on the host
+#   - NVIDIA Container Toolkit (nvidia-docker2)
+#     https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+x-gpu-base: &gpu-base
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+      limits:
+        memory: 48G
+  environment:
+    PYTHONUNBUFFERED: "1"
+    MUJOCO_GL: "egl"
+    RAYON_NUM_THREADS: "0"
+    RLOX_RESULTS_DIR: /workspace/results
+    TF_CPP_MIN_LOG_LEVEL: "3"
+    CUBLAS_WORKSPACE_CONFIG: ":4096:8"
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+services:
+  test:
+    <<: *gpu-base
+
+  benchmark-components:
+    <<: *gpu-base
+
+  benchmark-convergence:
+    <<: *gpu-base
+
+  benchmark-all:
+    <<: *gpu-base
+
+  experiments:
+    <<: *gpu-base
+
+  experiments-full:
+    <<: *gpu-base

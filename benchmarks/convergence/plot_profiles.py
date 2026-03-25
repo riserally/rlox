@@ -24,6 +24,9 @@ import seaborn as sns
 
 sns.set_theme(style="whitegrid", font_scale=1.1)
 
+DEFAULT_N_BOOTSTRAP: int = 10_000
+DEFAULT_BOOTSTRAP_SEED: int = 42
+
 FRAMEWORK_COLORS = {"rlox": "#E63946", "sb3": "#457B9D"}
 FRAMEWORK_LABELS = {"rlox": "rlox (Rust)", "sb3": "Stable-Baselines3"}
 
@@ -123,7 +126,7 @@ def plot_probability_of_improvement(results: list[dict], output_dir: Path) -> No
     ci_lower = []
     ci_upper = []
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(DEFAULT_BOOTSTRAP_SEED)
 
     for (algo, env), fw_scores in sorted(by_task.items()):
         rlox_s = fw_scores.get("rlox", [])
@@ -136,7 +139,7 @@ def plot_probability_of_improvement(results: list[dict], output_dir: Path) -> No
         n = min(len(rlox_arr), len(sb3_arr))
 
         # Bootstrap P(rlox > sb3)
-        n_bootstrap = 10_000
+        n_bootstrap = DEFAULT_N_BOOTSTRAP
         wins = np.empty(n_bootstrap)
         for b in range(n_bootstrap):
             idx = rng.integers(0, n, size=n)

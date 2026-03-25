@@ -22,12 +22,26 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from conftest import BenchmarkResult, ComparisonResult, timed_run, system_info, write_report
 
+# ---------------------------------------------------------------------------
+# Default repetition / warmup constants
+# ---------------------------------------------------------------------------
+DEFAULT_N_WARMUP_SINGLE = 100
+DEFAULT_N_REPS_SINGLE = 1000
+DEFAULT_N_WARMUP_BATCH = 5
+DEFAULT_N_REPS_BATCH = 50
+DEFAULT_N_WARMUP_HEAVY = 3
+DEFAULT_N_REPS_HEAVY = 20
+DEFAULT_N_WARMUP_NATIVE = 100
+DEFAULT_N_REPS_NATIVE = 500
+DEFAULT_N_BATCH_STEPS = 50
+DEFAULT_N_REPS_FRAMEWORK = 10
+
 
 # ---------------------------------------------------------------------------
 # 3.1.1 Single environment step latency
 # ---------------------------------------------------------------------------
 
-def bench_rlox_single_step(n_reps: int = 1000) -> BenchmarkResult:
+def bench_rlox_single_step(n_reps: int = DEFAULT_N_REPS_SINGLE) -> BenchmarkResult:
     from rlox import CartPole
     env = CartPole(seed=42)
 
@@ -36,14 +50,14 @@ def bench_rlox_single_step(n_reps: int = 1000) -> BenchmarkResult:
         if result["terminated"] or result["truncated"]:
             env.reset(seed=42)
 
-    times = timed_run(step, n_warmup=100, n_reps=n_reps)
+    times = timed_run(step, n_warmup=DEFAULT_N_WARMUP_SINGLE, n_reps=n_reps)
     return BenchmarkResult(
         name="single_step", category="env_stepping",
         framework="rlox", times_ns=times,
     )
 
 
-def bench_gymnasium_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
+def bench_gymnasium_single_step(n_reps: int = DEFAULT_N_REPS_SINGLE) -> BenchmarkResult | None:
     try:
         import gymnasium as gym
     except ImportError:
@@ -58,7 +72,7 @@ def bench_gymnasium_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
         if term or trunc:
             env.reset(seed=42)
 
-    times = timed_run(step, n_warmup=100, n_reps=n_reps)
+    times = timed_run(step, n_warmup=DEFAULT_N_WARMUP_SINGLE, n_reps=n_reps)
     env.close()
     return BenchmarkResult(
         name="single_step", category="env_stepping",
@@ -70,7 +84,7 @@ def bench_gymnasium_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
 # 3.1.2 Vectorized environment throughput
 # ---------------------------------------------------------------------------
 
-def bench_rlox_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50) -> BenchmarkResult:
+def bench_rlox_vecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_BATCH) -> BenchmarkResult:
     from rlox import VecEnv
     env = VecEnv(n=num_envs, seed=42)
     actions = [0] * num_envs
@@ -79,7 +93,7 @@ def bench_rlox_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50)
         for _ in range(n_batch_steps):
             env.step_all(actions)
 
-    times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
+    times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_BATCH, n_reps=n_reps)
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
         name=f"vecenv_{num_envs}", category="env_stepping",
@@ -88,7 +102,7 @@ def bench_rlox_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50)
     )
 
 
-def bench_gymnasium_sync_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50) -> BenchmarkResult | None:
+def bench_gymnasium_sync_vecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_BATCH) -> BenchmarkResult | None:
     try:
         import gymnasium as gym
         from gymnasium.vector import SyncVectorEnv
@@ -103,7 +117,7 @@ def bench_gymnasium_sync_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps:
         for _ in range(n_batch_steps):
             env.step(actions)
 
-    times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
+    times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_BATCH, n_reps=n_reps)
     env.close()
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
@@ -113,7 +127,7 @@ def bench_gymnasium_sync_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps:
     )
 
 
-def bench_gymnasium_async_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 20) -> BenchmarkResult | None:
+def bench_gymnasium_async_vecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_HEAVY) -> BenchmarkResult | None:
     try:
         import gymnasium as gym
         from gymnasium.vector import AsyncVectorEnv
@@ -128,7 +142,7 @@ def bench_gymnasium_async_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps
         for _ in range(n_batch_steps):
             env.step(actions)
 
-    times = timed_run(step_batch, n_warmup=3, n_reps=n_reps)
+    times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_HEAVY, n_reps=n_reps)
     env.close()
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
@@ -138,7 +152,7 @@ def bench_gymnasium_async_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps
     )
 
 
-def bench_sb3_dummyvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50) -> BenchmarkResult | None:
+def bench_sb3_dummyvecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_BATCH) -> BenchmarkResult | None:
     try:
         from stable_baselines3.common.vec_env import DummyVecEnv
         import gymnasium as gym
@@ -153,7 +167,7 @@ def bench_sb3_dummyvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int =
         for _ in range(n_batch_steps):
             env.step(actions)
 
-    times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
+    times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_BATCH, n_reps=n_reps)
     env.close()
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
@@ -163,7 +177,7 @@ def bench_sb3_dummyvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int =
     )
 
 
-def bench_sb3_subprocvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 20) -> BenchmarkResult | None:
+def bench_sb3_subprocvecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_HEAVY) -> BenchmarkResult | None:
     try:
         from stable_baselines3.common.vec_env import SubprocVecEnv
         import gymnasium as gym
@@ -178,7 +192,7 @@ def bench_sb3_subprocvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int
         for _ in range(n_batch_steps):
             env.step(actions)
 
-    times = timed_run(step_batch, n_warmup=3, n_reps=n_reps)
+    times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_HEAVY, n_reps=n_reps)
     env.close()
     total_steps_per_call = num_envs * n_batch_steps
     return BenchmarkResult(
@@ -192,7 +206,7 @@ def bench_sb3_subprocvecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int
 # 3.1.2b TorchRL environment stepping
 # ---------------------------------------------------------------------------
 
-def bench_torchrl_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
+def bench_torchrl_single_step(n_reps: int = DEFAULT_N_REPS_SINGLE) -> BenchmarkResult | None:
     try:
         from torchrl.envs import GymEnv
         import torch
@@ -213,7 +227,7 @@ def bench_torchrl_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
         else:
             td = next_td
 
-    times = timed_run(step, n_warmup=100, n_reps=n_reps)
+    times = timed_run(step, n_warmup=DEFAULT_N_WARMUP_SINGLE, n_reps=n_reps)
     env.close()
     return BenchmarkResult(
         name="single_step", category="env_stepping",
@@ -221,7 +235,7 @@ def bench_torchrl_single_step(n_reps: int = 1000) -> BenchmarkResult | None:
     )
 
 
-def bench_torchrl_serial_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 50) -> BenchmarkResult | None:
+def bench_torchrl_serial_vecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_BATCH) -> BenchmarkResult | None:
     try:
         from torchrl.envs import GymEnv, SerialEnv
         import torch
@@ -239,7 +253,7 @@ def bench_torchrl_serial_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps:
                 td = env.step(td)
                 td = td.get("next")
 
-        times = timed_run(step_batch, n_warmup=5, n_reps=n_reps)
+        times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_BATCH, n_reps=n_reps)
         env.close()
     except Exception as e:
         print(f"    [skip] torchrl SerialEnv failed ({num_envs} envs): {e}")
@@ -253,7 +267,7 @@ def bench_torchrl_serial_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps:
     )
 
 
-def bench_torchrl_parallel_vecenv(num_envs: int, n_batch_steps: int = 100, n_reps: int = 20) -> BenchmarkResult | None:
+def bench_torchrl_parallel_vecenv(num_envs: int, n_batch_steps: int = DEFAULT_N_BATCH_STEPS, n_reps: int = DEFAULT_N_REPS_HEAVY) -> BenchmarkResult | None:
     try:
         from torchrl.envs import GymEnv, ParallelEnv
         import torch
@@ -271,7 +285,7 @@ def bench_torchrl_parallel_vecenv(num_envs: int, n_batch_steps: int = 100, n_rep
                 td = env.step(td)
                 td = td.get("next")
 
-        times = timed_run(step_batch, n_warmup=3, n_reps=n_reps)
+        times = timed_run(step_batch, n_warmup=DEFAULT_N_WARMUP_HEAVY, n_reps=n_reps)
         env.close()
     except Exception as e:
         print(f"    [skip] torchrl ParallelEnv failed ({num_envs} envs): {e}")
@@ -289,7 +303,7 @@ def bench_torchrl_parallel_vecenv(num_envs: int, n_batch_steps: int = 100, n_rep
 # 3.1.3 Bridge overhead
 # ---------------------------------------------------------------------------
 
-def bench_bridge_overhead(n_reps: int = 500) -> tuple[BenchmarkResult, BenchmarkResult | None]:
+def bench_bridge_overhead(n_reps: int = DEFAULT_N_REPS_NATIVE) -> tuple[BenchmarkResult, BenchmarkResult | None]:
     from rlox import CartPole
 
     native_env = CartPole(seed=42)
@@ -298,7 +312,7 @@ def bench_bridge_overhead(n_reps: int = 500) -> tuple[BenchmarkResult, Benchmark
         if result["terminated"] or result["truncated"]:
             native_env.reset(seed=42)
 
-    native_times = timed_run(native_step, n_warmup=100, n_reps=n_reps)
+    native_times = timed_run(native_step, n_warmup=DEFAULT_N_WARMUP_NATIVE, n_reps=n_reps)
     native_result = BenchmarkResult(
         name="bridge_overhead", category="env_stepping",
         framework="rlox_native", times_ns=native_times,
@@ -318,7 +332,7 @@ def bench_bridge_overhead(n_reps: int = 500) -> tuple[BenchmarkResult, Benchmark
             if result["terminated"] or result["truncated"]:
                 bridge_env.reset(seed=42)
 
-        bridge_times = timed_run(bridge_step, n_warmup=100, n_reps=n_reps)
+        bridge_times = timed_run(bridge_step, n_warmup=DEFAULT_N_WARMUP_NATIVE, n_reps=n_reps)
         gym_raw.close()
         bridge_result = BenchmarkResult(
             name="bridge_overhead", category="env_stepping",
@@ -334,13 +348,27 @@ def bench_bridge_overhead(n_reps: int = 500) -> tuple[BenchmarkResult, Benchmark
 # Main runner
 # ---------------------------------------------------------------------------
 
-def run_all(output_dir: str = "benchmark_results"):
+def _scale(n: int, scale: float) -> int:
+    """Scale a rep count by *scale*, clamping to at least 1."""
+    return max(1, int(n * scale))
+
+
+def run_all(output_dir: str = "benchmark_results", reps_scale: float = 1.0):
     print("=" * 70)
     print("rlox Benchmark 3.1: Environment Stepping")
     print("=" * 70)
     print(f"\nSystem: {sys.platform}, Python {sys.version.split()[0]}")
     print(f"CPU cores: {os.cpu_count()}")
+    if reps_scale != 1.0:
+        print(f"Reps scale: {reps_scale:.2f}x")
     print()
+
+    # Pre-compute scaled rep counts
+    n_reps_single = _scale(DEFAULT_N_REPS_SINGLE, reps_scale)
+    n_reps_batch = _scale(DEFAULT_N_REPS_BATCH, reps_scale)
+    n_reps_heavy = _scale(DEFAULT_N_REPS_HEAVY, reps_scale)
+    n_reps_native = _scale(DEFAULT_N_REPS_NATIVE, reps_scale)
+    n_reps_framework = _scale(DEFAULT_N_REPS_FRAMEWORK, reps_scale)
 
     all_results = []
     all_comparisons = []
@@ -349,11 +377,11 @@ def run_all(output_dir: str = "benchmark_results"):
     print("3.1.1 Single Step Latency")
     print("-" * 40)
 
-    rlox_single = bench_rlox_single_step()
+    rlox_single = bench_rlox_single_step(n_reps=n_reps_single)
     print(f"  rlox:       {rlox_single.median_ns:>10.0f} ns (IQR: {rlox_single.iqr_ns:.0f})")
     all_results.append(rlox_single.summary())
 
-    gym_single = bench_gymnasium_single_step()
+    gym_single = bench_gymnasium_single_step(n_reps=n_reps_single)
     if gym_single:
         print(f"  gymnasium:  {gym_single.median_ns:>10.0f} ns (IQR: {gym_single.iqr_ns:.0f})")
         all_results.append(gym_single.summary())
@@ -362,7 +390,7 @@ def run_all(output_dir: str = "benchmark_results"):
         print(f"  -> rlox speedup: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
         all_comparisons.append(comp.summary())
 
-    torchrl_single = bench_torchrl_single_step()
+    torchrl_single = bench_torchrl_single_step(n_reps=n_reps_single)
     if torchrl_single:
         print(f"  torchrl:    {torchrl_single.median_ns:>10.0f} ns (IQR: {torchrl_single.iqr_ns:.0f})")
         all_results.append(torchrl_single.summary())
@@ -381,12 +409,12 @@ def run_all(output_dir: str = "benchmark_results"):
     for n in env_counts:
         print(f"\n  num_envs = {n}:")
 
-        rlox_vec = bench_rlox_vecenv(n)
+        rlox_vec = bench_rlox_vecenv(n, n_reps=n_reps_batch)
         throughput = rlox_vec.throughput
         print(f"    rlox:            {rlox_vec.median_ns/1e6:>8.2f} ms  ({throughput:>12,.0f} steps/s)")
         all_results.append(rlox_vec.summary())
 
-        gym_sync = bench_gymnasium_sync_vecenv(n)
+        gym_sync = bench_gymnasium_sync_vecenv(n, n_reps=n_reps_batch)
         if gym_sync:
             throughput_gs = gym_sync.throughput
             print(f"    gym sync:        {gym_sync.median_ns/1e6:>8.2f} ms  ({throughput_gs:>12,.0f} steps/s)")
@@ -398,7 +426,7 @@ def run_all(output_dir: str = "benchmark_results"):
 
         # Only run async/subproc for moderate env counts (too slow otherwise)
         if n <= 128:
-            gym_async = bench_gymnasium_async_vecenv(n, n_batch_steps=50, n_reps=10)
+            gym_async = bench_gymnasium_async_vecenv(n, n_batch_steps=DEFAULT_N_BATCH_STEPS, n_reps=n_reps_framework)
             if gym_async:
                 throughput_ga = gym_async.throughput
                 print(f"    gym async:       {gym_async.median_ns/1e6:>8.2f} ms  ({throughput_ga:>12,.0f} steps/s)")
@@ -408,7 +436,7 @@ def run_all(output_dir: str = "benchmark_results"):
                 print(f"    -> vs gym async: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
                 all_comparisons.append(comp.summary())
 
-            sb3_dummy = bench_sb3_dummyvecenv(n)
+            sb3_dummy = bench_sb3_dummyvecenv(n, n_reps=n_reps_batch)
             if sb3_dummy:
                 throughput_sd = sb3_dummy.throughput
                 print(f"    sb3 dummy:       {sb3_dummy.median_ns/1e6:>8.2f} ms  ({throughput_sd:>12,.0f} steps/s)")
@@ -420,7 +448,7 @@ def run_all(output_dir: str = "benchmark_results"):
 
         # TorchRL serial
         if n <= 256:
-            torchrl_serial = bench_torchrl_serial_vecenv(n)
+            torchrl_serial = bench_torchrl_serial_vecenv(n, n_reps=n_reps_batch)
             if torchrl_serial:
                 throughput_ts = torchrl_serial.throughput
                 print(f"    torchrl serial:  {torchrl_serial.median_ns/1e6:>8.2f} ms  ({throughput_ts:>12,.0f} steps/s)")
@@ -432,7 +460,7 @@ def run_all(output_dir: str = "benchmark_results"):
 
         # TorchRL parallel (multiprocess)
         if n <= 64:
-            torchrl_par = bench_torchrl_parallel_vecenv(n, n_batch_steps=50, n_reps=10)
+            torchrl_par = bench_torchrl_parallel_vecenv(n, n_batch_steps=DEFAULT_N_BATCH_STEPS, n_reps=n_reps_framework)
             if torchrl_par:
                 throughput_tp = torchrl_par.throughput
                 print(f"    torchrl parallel: {torchrl_par.median_ns/1e6:>8.2f} ms  ({throughput_tp:>12,.0f} steps/s)")
@@ -443,7 +471,7 @@ def run_all(output_dir: str = "benchmark_results"):
                 all_comparisons.append(comp.summary())
 
         if n <= 64:
-            sb3_subproc = bench_sb3_subprocvecenv(n, n_batch_steps=50, n_reps=10)
+            sb3_subproc = bench_sb3_subprocvecenv(n, n_batch_steps=DEFAULT_N_BATCH_STEPS, n_reps=n_reps_framework)
             if sb3_subproc:
                 throughput_ss = sb3_subproc.throughput
                 print(f"    sb3 subproc:     {sb3_subproc.median_ns/1e6:>8.2f} ms  ({throughput_ss:>12,.0f} steps/s)")
@@ -459,7 +487,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("3.1.3 Bridge Overhead")
     print("-" * 40)
 
-    native, bridge = bench_bridge_overhead()
+    native, bridge = bench_bridge_overhead(n_reps=n_reps_native)
     print(f"  native:  {native.median_ns:>10.0f} ns")
     all_results.append(native.summary())
 
@@ -492,5 +520,9 @@ def run_all(output_dir: str = "benchmark_results"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="rlox env stepping benchmarks")
     parser.add_argument("--output-dir", default="benchmark_results")
+    parser.add_argument(
+        "--n-reps-scale", type=float, default=1.0,
+        help="Multiplier for all rep counts (e.g. 0.1 for a quick smoke run, 2.0 for thorough)",
+    )
     args = parser.parse_args()
-    run_all(args.output_dir)
+    run_all(args.output_dir, reps_scale=args.n_reps_scale)

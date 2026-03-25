@@ -1,94 +1,191 @@
-/// GRPO group advantage: `(reward - mean) / std`.
-/// Returns zeros if std < 1e-8.
-pub fn compute_group_advantages(rewards: &[f64]) -> Vec<f64> {
-    if rewards.is_empty() {
-        return Vec::new();
-    }
+macro_rules! impl_kl_ops {
+    ($mod_name:ident, $float:ty) => {
+        pub mod $mod_name {
+            use crate::error::RloxError;
 
-    let n = rewards.len() as f64;
-    let mean = rewards.iter().sum::<f64>() / n;
-    let variance = rewards.iter().map(|&r| (r - mean) * (r - mean)).sum::<f64>() / n;
-    let std = variance.sqrt();
+            /// GRPO group advantage: `(reward - mean) / std`.
+            /// Returns zeros if std < 1e-8.
+            pub fn compute_group_advantages(rewards: &[$float]) -> Vec<$float> {
+                if rewards.is_empty() {
+                    return Vec::new();
+                }
 
-    if std < 1e-8 {
-        return vec![0.0; rewards.len()];
-    }
+                let n = rewards.len() as $float;
+                let mean = rewards.iter().sum::<$float>() / n;
+                let variance = rewards.iter().map(|&r| (r - mean) * (r - mean)).sum::<$float>() / n;
+                let std = variance.sqrt();
 
-    let inv_std = 1.0 / std;
-    rewards.iter().map(|&r| (r - mean) * inv_std).collect()
+                if std < 1e-8 as $float {
+                    return vec![0.0 as $float; rewards.len()];
+                }
+
+                let inv_std = 1.0 as $float / std;
+                rewards.iter().map(|&r| (r - mean) * inv_std).collect()
+            }
+
+            /// Token-level KL divergence: `sum(exp(log_p) * (log_p - log_q))`.
+            pub fn compute_token_kl(
+                log_probs_policy: &[$float],
+                log_probs_ref: &[$float],
+            ) -> Result<$float, RloxError> {
+                if log_probs_policy.len() != log_probs_ref.len() {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len={}", log_probs_policy.len()),
+                        got: format!("len={}", log_probs_ref.len()),
+                    });
+                }
+
+                Ok(log_probs_policy
+                    .iter()
+                    .zip(log_probs_ref.iter())
+                    .map(|(&log_p, &log_q)| log_p.exp() * (log_p - log_q))
+                    .sum())
+            }
+
+            /// Batched GRPO group advantages: process all groups in a single call.
+            ///
+            /// `rewards` is a flat slice of length `n_prompts * group_size`.
+            /// Returns a Vec of the same length with per-group z-score normalisation.
+            pub fn compute_batch_group_advantages(rewards: &[$float], group_size: usize) -> Result<Vec<$float>, RloxError> {
+                if group_size == 0 {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: "group_size > 0".to_string(),
+                        got: "0".to_string(),
+                    });
+                }
+                if rewards.len() % group_size != 0 {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len divisible by {group_size}"),
+                        got: format!("len={}", rewards.len()),
+                    });
+                }
+
+                let mut out = Vec::with_capacity(rewards.len());
+                for group in rewards.chunks_exact(group_size) {
+                    out.extend_from_slice(&compute_group_advantages(group));
+                }
+                Ok(out)
+            }
+
+            /// Token-level KL divergence using the Schulman (2020) estimator:
+            /// `sum(exp(log_p - log_q) - (log_p - log_q) - 1)`.
+            ///
+            /// This is the estimator used by TRL (HuggingFace). It is unbiased and
+            /// numerically more stable than the exact `exp(log_p) * (log_p - log_q)`.
+            pub fn compute_token_kl_schulman(
+                log_probs_policy: &[$float],
+                log_probs_ref: &[$float],
+            ) -> Result<$float, RloxError> {
+                if log_probs_policy.len() != log_probs_ref.len() {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len={}", log_probs_policy.len()),
+                        got: format!("len={}", log_probs_ref.len()),
+                    });
+                }
+
+                Ok(log_probs_policy
+                    .iter()
+                    .zip(log_probs_ref.iter())
+                    .map(|(&log_p, &log_q)| {
+                        let r = log_p - log_q;
+                        r.exp() - r - 1.0 as $float
+                    })
+                    .sum())
+            }
+
+            /// Batched token-level KL divergence: process all sequences in a single call.
+            ///
+            /// `log_probs_policy` and `log_probs_ref` are flat slices of length `batch * seq_len`.
+            /// Returns a Vec of length `batch` with per-sequence KL values.
+            pub fn compute_batch_token_kl(
+                log_probs_policy: &[$float],
+                log_probs_ref: &[$float],
+                seq_len: usize,
+            ) -> Result<Vec<$float>, RloxError> {
+                if log_probs_policy.len() != log_probs_ref.len() {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len={}", log_probs_policy.len()),
+                        got: format!("len={}", log_probs_ref.len()),
+                    });
+                }
+                if seq_len == 0 {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: "seq_len > 0".to_string(),
+                        got: "0".to_string(),
+                    });
+                }
+                if log_probs_policy.len() % seq_len != 0 {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len divisible by {seq_len}"),
+                        got: format!("len={}", log_probs_policy.len()),
+                    });
+                }
+
+                let out: Vec<$float> = log_probs_policy
+                    .chunks_exact(seq_len)
+                    .zip(log_probs_ref.chunks_exact(seq_len))
+                    .map(|(ps, qs)| {
+                        ps.iter()
+                            .zip(qs.iter())
+                            .map(|(&log_p, &log_q)| log_p.exp() * (log_p - log_q))
+                            .sum()
+                    })
+                    .collect();
+                Ok(out)
+            }
+
+            /// Batched token-level KL divergence using the Schulman (2020) estimator.
+            ///
+            /// `log_probs_policy` and `log_probs_ref` are flat slices of length `batch * seq_len`.
+            /// Returns a Vec of length `batch` with per-sequence KL values.
+            pub fn compute_batch_token_kl_schulman(
+                log_probs_policy: &[$float],
+                log_probs_ref: &[$float],
+                seq_len: usize,
+            ) -> Result<Vec<$float>, RloxError> {
+                if log_probs_policy.len() != log_probs_ref.len() {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len={}", log_probs_policy.len()),
+                        got: format!("len={}", log_probs_ref.len()),
+                    });
+                }
+                if seq_len == 0 {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: "seq_len > 0".to_string(),
+                        got: "0".to_string(),
+                    });
+                }
+                if log_probs_policy.len() % seq_len != 0 {
+                    return Err(RloxError::ShapeMismatch {
+                        expected: format!("len divisible by {seq_len}"),
+                        got: format!("len={}", log_probs_policy.len()),
+                    });
+                }
+
+                let out: Vec<$float> = log_probs_policy
+                    .chunks_exact(seq_len)
+                    .zip(log_probs_ref.chunks_exact(seq_len))
+                    .map(|(ps, qs)| {
+                        ps.iter()
+                            .zip(qs.iter())
+                            .map(|(&log_p, &log_q)| {
+                                let r = log_p - log_q;
+                                r.exp() - r - 1.0 as $float
+                            })
+                            .sum()
+                    })
+                    .collect();
+                Ok(out)
+            }
+        }
+    };
 }
 
-/// Token-level KL divergence: `sum(exp(log_p) * (log_p - log_q))`.
-///
-/// Returns `Err` if slices have different lengths.
-pub fn compute_token_kl(
-    log_probs_policy: &[f64],
-    log_probs_ref: &[f64],
-) -> Result<f64, crate::error::RloxError> {
-    if log_probs_policy.len() != log_probs_ref.len() {
-        return Err(crate::error::RloxError::ShapeMismatch {
-            expected: format!("len={}", log_probs_policy.len()),
-            got: format!("len={}", log_probs_ref.len()),
-        });
-    }
+impl_kl_ops!(f64_ops, f64);
+impl_kl_ops!(f32_ops, f32);
 
-    Ok(log_probs_policy
-        .iter()
-        .zip(log_probs_ref.iter())
-        .map(|(&log_p, &log_q)| log_p.exp() * (log_p - log_q))
-        .sum())
-}
-
-/// Batched GRPO group advantages: process all groups in a single call.
-///
-/// `rewards` is a flat slice of length `n_prompts * group_size`.
-/// Returns a Vec of the same length with per-group z-score normalisation.
-pub fn compute_batch_group_advantages(rewards: &[f64], group_size: usize) -> Result<Vec<f64>, crate::error::RloxError> {
-    if group_size == 0 {
-        return Err(crate::error::RloxError::ShapeMismatch {
-            expected: "group_size > 0".to_string(),
-            got: "0".to_string(),
-        });
-    }
-    if rewards.len() % group_size != 0 {
-        return Err(crate::error::RloxError::ShapeMismatch {
-            expected: format!("len divisible by {group_size}"),
-            got: format!("len={}", rewards.len()),
-        });
-    }
-
-    let mut out = Vec::with_capacity(rewards.len());
-    for group in rewards.chunks_exact(group_size) {
-        out.extend_from_slice(&compute_group_advantages(group));
-    }
-    Ok(out)
-}
-
-/// Token-level KL divergence using the Schulman (2020) estimator:
-/// `sum(exp(log_p - log_q) - (log_p - log_q) - 1)`.
-///
-/// This is the estimator used by TRL (HuggingFace). It is unbiased and
-/// numerically more stable than the exact `exp(log_p) * (log_p - log_q)`.
-pub fn compute_token_kl_schulman(
-    log_probs_policy: &[f64],
-    log_probs_ref: &[f64],
-) -> Result<f64, crate::error::RloxError> {
-    if log_probs_policy.len() != log_probs_ref.len() {
-        return Err(crate::error::RloxError::ShapeMismatch {
-            expected: format!("len={}", log_probs_policy.len()),
-            got: format!("len={}", log_probs_ref.len()),
-        });
-    }
-
-    Ok(log_probs_policy
-        .iter()
-        .zip(log_probs_ref.iter())
-        .map(|(&log_p, &log_q)| {
-            let r = log_p - log_q;
-            r.exp() - r - 1.0
-        })
-        .sum())
-}
+// Re-export f64 versions at module level for backward compatibility.
+pub use f64_ops::*;
 
 /// A DPO preference pair holding tokenized prompt, chosen, and rejected sequences.
 #[derive(Debug, Clone)]
@@ -125,7 +222,6 @@ mod tests {
         let rewards = [1.0, 0.5, 0.8];
         let adv = compute_group_advantages(&rewards);
         assert_eq!(adv.len(), 3);
-        // Mean of advantages should be ~0
         let mean: f64 = adv.iter().sum::<f64>() / adv.len() as f64;
         assert!(mean.abs() < 1e-10);
     }
@@ -152,7 +248,6 @@ mod tests {
 
     #[test]
     fn test_token_kl_known_value() {
-        // Manual: exp(-1) * (-1 - (-2)) = exp(-1) * 1 = 0.36787944...
         let log_p = [-1.0];
         let log_q = [-2.0];
         let kl = compute_token_kl(&log_p, &log_q).unwrap();
@@ -164,8 +259,6 @@ mod tests {
         let result = compute_token_kl(&[1.0, 2.0], &[1.0]);
         assert!(result.is_err());
     }
-
-    // --- Bug 0.3 verification tests ---
 
     #[test]
     fn token_kl_mismatched_lengths_returns_err_not_panic() {
@@ -219,14 +312,11 @@ mod tests {
 
     #[test]
     fn test_batch_group_advantages() {
-        // Two groups of 3: [1,2,3] and [10,10,10]
         let rewards = [1.0, 2.0, 3.0, 10.0, 10.0, 10.0];
         let adv = compute_batch_group_advantages(&rewards, 3).unwrap();
         assert_eq!(adv.len(), 6);
-        // First group should have mean ~0
         let g1_mean: f64 = adv[..3].iter().sum::<f64>() / 3.0;
         assert!(g1_mean.abs() < 1e-10);
-        // Second group (constant) should be zeros
         assert!(adv[3..6].iter().all(|&v| v == 0.0));
     }
 
@@ -245,8 +335,6 @@ mod tests {
 
     #[test]
     fn test_token_kl_schulman_known_value() {
-        // r = log_p - log_q = -1 - (-2) = 1
-        // schulman: exp(1) - 1 - 1 = e - 2 ≈ 0.71828
         let log_p = [-1.0];
         let log_q = [-2.0];
         let kl = compute_token_kl_schulman(&log_p, &log_q).unwrap();
@@ -255,7 +343,6 @@ mod tests {
 
     #[test]
     fn test_token_kl_schulman_non_negative() {
-        // Schulman estimator is always >= 0 for any r (convexity of exp)
         let log_p = [-0.5, -1.0, -3.0, 0.0];
         let log_q = [-1.0, -0.5, -0.1, -2.0];
         let kl = compute_token_kl_schulman(&log_p, &log_q).unwrap();
@@ -268,5 +355,70 @@ mod tests {
         assert_eq!(pair.chosen_len(), 2);
         assert_eq!(pair.rejected_len(), 3);
         assert_eq!(pair.prompt_tokens.len(), 3);
+    }
+
+    // --- Batched KL tests ---
+
+    #[test]
+    fn test_batch_token_kl_matches_unbatched() {
+        let log_p = vec![-1.0, -2.0, -0.5, -1.5, -0.3, -2.5];
+        let log_q = vec![-1.1, -1.9, -0.6, -1.4, -0.4, -2.4];
+        let batched = compute_batch_token_kl(&log_p, &log_q, 3).unwrap();
+        let kl0 = compute_token_kl(&log_p[..3], &log_q[..3]).unwrap();
+        let kl1 = compute_token_kl(&log_p[3..], &log_q[3..]).unwrap();
+        assert_eq!(batched.len(), 2);
+        assert!((batched[0] - kl0).abs() < 1e-12);
+        assert!((batched[1] - kl1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_batch_token_kl_schulman_matches_unbatched() {
+        let log_p = vec![-1.0, -2.0, -0.5, -1.5, -0.3, -2.5];
+        let log_q = vec![-1.1, -1.9, -0.6, -1.4, -0.4, -2.4];
+        let batched = compute_batch_token_kl_schulman(&log_p, &log_q, 3).unwrap();
+        let kl0 = compute_token_kl_schulman(&log_p[..3], &log_q[..3]).unwrap();
+        let kl1 = compute_token_kl_schulman(&log_p[3..], &log_q[3..]).unwrap();
+        assert_eq!(batched.len(), 2);
+        assert!((batched[0] - kl0).abs() < 1e-12);
+        assert!((batched[1] - kl1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_batch_token_kl_bad_seq_len() {
+        assert!(compute_batch_token_kl(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0], 0).is_err());
+        assert!(compute_batch_token_kl(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0], 2).is_err());
+    }
+
+    #[test]
+    fn test_batch_token_kl_mismatched_lengths() {
+        assert!(compute_batch_token_kl(&[1.0, 2.0], &[1.0], 1).is_err());
+    }
+
+    // --- f32 variant tests ---
+
+    #[test]
+    fn test_f32_token_kl_identical() {
+        let log_p: Vec<f32> = vec![-1.0, -2.0, -0.5];
+        let kl = f32_ops::compute_token_kl(&log_p, &log_p).unwrap();
+        assert!(kl.abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_f32_batch_token_kl_schulman() {
+        let log_p: Vec<f32> = vec![-1.0, -2.0, -0.5, -1.5];
+        let log_q: Vec<f32> = vec![-1.1, -1.9, -0.6, -1.4];
+        let batched = f32_ops::compute_batch_token_kl_schulman(&log_p, &log_q, 2).unwrap();
+        assert_eq!(batched.len(), 2);
+        let kl0 = f32_ops::compute_token_kl_schulman(&log_p[..2], &log_q[..2]).unwrap();
+        assert!((batched[0] - kl0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_f32_group_advantages() {
+        let rewards: Vec<f32> = vec![1.0, 2.0, 3.0];
+        let adv = f32_ops::compute_group_advantages(&rewards);
+        assert_eq!(adv.len(), 3);
+        let mean: f32 = adv.iter().sum::<f32>() / 3.0;
+        assert!(mean.abs() < 1e-5);
     }
 }

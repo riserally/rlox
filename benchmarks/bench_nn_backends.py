@@ -19,6 +19,15 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from conftest import BenchmarkResult, ComparisonResult, timed_run, write_report
 
+# ---------------------------------------------------------------------------
+# Benchmark defaults
+# ---------------------------------------------------------------------------
+
+DEFAULT_N_WARMUP_INFERENCE = 50
+DEFAULT_N_REPS_INFERENCE = 200
+DEFAULT_N_WARMUP_TRAINING = 20
+DEFAULT_N_REPS_TRAINING = 100
+
 
 # ---------------------------------------------------------------------------
 # PyTorch helpers
@@ -43,7 +52,7 @@ def _random_obs(batch: int, dim: int):
 # ActorCritic (PPO) inference
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_actor_critic_act(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
+def bench_pytorch_actor_critic_act(batch_size: int, n_reps: int = DEFAULT_N_REPS_INFERENCE) -> BenchmarkResult:
     import torch
 
     obs_dim, n_actions, hidden = 4, 2, 64
@@ -60,7 +69,7 @@ def bench_pytorch_actor_critic_act(batch_size: int, n_reps: int = 200) -> Benchm
             values = critic(obs).squeeze(-1)
         return actions, log_probs, values
 
-    times = timed_run(run, n_warmup=50, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_INFERENCE, n_reps=n_reps)
     return BenchmarkResult(
         name=f"actor_critic_act_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -72,7 +81,7 @@ def bench_pytorch_actor_critic_act(batch_size: int, n_reps: int = 200) -> Benchm
 # PPO training step
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_ppo_step(batch_size: int, n_reps: int = 100) -> BenchmarkResult:
+def bench_pytorch_ppo_step(batch_size: int, n_reps: int = DEFAULT_N_REPS_TRAINING) -> BenchmarkResult:
     import torch
     import torch.nn as nn
 
@@ -112,7 +121,7 @@ def bench_pytorch_ppo_step(batch_size: int, n_reps: int = 100) -> BenchmarkResul
         nn.utils.clip_grad_norm_(params, 0.5)
         optimizer.step()
 
-    times = timed_run(run, n_warmup=20, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_TRAINING, n_reps=n_reps)
     return BenchmarkResult(
         name=f"ppo_step_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -124,7 +133,7 @@ def bench_pytorch_ppo_step(batch_size: int, n_reps: int = 100) -> BenchmarkResul
 # DQN Q-values (inference)
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_dqn_q_values(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
+def bench_pytorch_dqn_q_values(batch_size: int, n_reps: int = DEFAULT_N_REPS_INFERENCE) -> BenchmarkResult:
     import torch
 
     obs_dim, n_actions, hidden = 4, 2, 64
@@ -135,7 +144,7 @@ def bench_pytorch_dqn_q_values(batch_size: int, n_reps: int = 200) -> BenchmarkR
         with torch.no_grad():
             return q_net(obs)
 
-    times = timed_run(run, n_warmup=50, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_INFERENCE, n_reps=n_reps)
     return BenchmarkResult(
         name=f"dqn_q_values_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -147,7 +156,7 @@ def bench_pytorch_dqn_q_values(batch_size: int, n_reps: int = 200) -> BenchmarkR
 # DQN TD step (training)
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_dqn_td_step(batch_size: int, n_reps: int = 100) -> BenchmarkResult:
+def bench_pytorch_dqn_td_step(batch_size: int, n_reps: int = DEFAULT_N_REPS_TRAINING) -> BenchmarkResult:
     import torch
     import torch.nn.functional as F
 
@@ -167,7 +176,7 @@ def bench_pytorch_dqn_td_step(batch_size: int, n_reps: int = 100) -> BenchmarkRe
         loss.backward()
         optimizer.step()
 
-    times = timed_run(run, n_warmup=20, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_TRAINING, n_reps=n_reps)
     return BenchmarkResult(
         name=f"dqn_td_step_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -179,7 +188,7 @@ def bench_pytorch_dqn_td_step(batch_size: int, n_reps: int = 100) -> BenchmarkRe
 # SAC stochastic policy (sample actions)
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_sac_sample(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
+def bench_pytorch_sac_sample(batch_size: int, n_reps: int = DEFAULT_N_REPS_INFERENCE) -> BenchmarkResult:
     import torch
     import torch.nn as nn
 
@@ -214,7 +223,7 @@ def bench_pytorch_sac_sample(batch_size: int, n_reps: int = 200) -> BenchmarkRes
         with torch.no_grad():
             return policy(obs)
 
-    times = timed_run(run, n_warmup=50, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_INFERENCE, n_reps=n_reps)
     return BenchmarkResult(
         name=f"sac_sample_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -226,7 +235,7 @@ def bench_pytorch_sac_sample(batch_size: int, n_reps: int = 200) -> BenchmarkRes
 # TD3 deterministic policy (act)
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_td3_act(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
+def bench_pytorch_td3_act(batch_size: int, n_reps: int = DEFAULT_N_REPS_INFERENCE) -> BenchmarkResult:
     import torch
     import torch.nn as nn
 
@@ -242,7 +251,7 @@ def bench_pytorch_td3_act(batch_size: int, n_reps: int = 200) -> BenchmarkResult
         with torch.no_grad():
             return actor(obs)
 
-    times = timed_run(run, n_warmup=50, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_INFERENCE, n_reps=n_reps)
     return BenchmarkResult(
         name=f"td3_act_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -254,7 +263,7 @@ def bench_pytorch_td3_act(batch_size: int, n_reps: int = 200) -> BenchmarkResult
 # Twin-Q critic (forward)
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_twin_q(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
+def bench_pytorch_twin_q(batch_size: int, n_reps: int = DEFAULT_N_REPS_INFERENCE) -> BenchmarkResult:
     import torch
     import torch.nn as nn
 
@@ -286,7 +295,7 @@ def bench_pytorch_twin_q(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
         with torch.no_grad():
             return critic(obs, actions)
 
-    times = timed_run(run, n_warmup=50, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_INFERENCE, n_reps=n_reps)
     return BenchmarkResult(
         name=f"twin_q_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -298,7 +307,7 @@ def bench_pytorch_twin_q(batch_size: int, n_reps: int = 200) -> BenchmarkResult:
 # Twin-Q critic training step
 # ---------------------------------------------------------------------------
 
-def bench_pytorch_critic_step(batch_size: int, n_reps: int = 100) -> BenchmarkResult:
+def bench_pytorch_critic_step(batch_size: int, n_reps: int = DEFAULT_N_REPS_TRAINING) -> BenchmarkResult:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -337,7 +346,7 @@ def bench_pytorch_critic_step(batch_size: int, n_reps: int = 100) -> BenchmarkRe
         loss.backward()
         optimizer.step()
 
-    times = timed_run(run, n_warmup=20, n_reps=n_reps)
+    times = timed_run(run, n_warmup=DEFAULT_N_WARMUP_TRAINING, n_reps=n_reps)
     return BenchmarkResult(
         name=f"critic_step_{batch_size}", category="nn_backends",
         framework="pytorch", times_ns=times,
@@ -349,7 +358,11 @@ def bench_pytorch_critic_step(batch_size: int, n_reps: int = 100) -> BenchmarkRe
 # Main runner
 # ---------------------------------------------------------------------------
 
-def run_all(output_dir: str = "benchmark_results"):
+def run_all(
+    output_dir: str = "benchmark_results",
+    n_reps_inference: int = DEFAULT_N_REPS_INFERENCE,
+    n_reps_training: int = DEFAULT_N_REPS_TRAINING,
+):
     try:
         import torch
     except ImportError:
@@ -372,7 +385,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("ActorCritic (PPO) Inference")
     print("-" * 40)
     for bs in batch_sizes_inference:
-        r = bench_pytorch_actor_critic_act(bs)
+        r = bench_pytorch_actor_critic_act(bs, n_reps=n_reps_inference)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -381,7 +394,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("PPO Training Step")
     print("-" * 40)
     for bs in batch_sizes_training:
-        r = bench_pytorch_ppo_step(bs)
+        r = bench_pytorch_ppo_step(bs, n_reps=n_reps_training)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -390,7 +403,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("DQN Q-Values (Inference)")
     print("-" * 40)
     for bs in batch_sizes_inference:
-        r = bench_pytorch_dqn_q_values(bs)
+        r = bench_pytorch_dqn_q_values(bs, n_reps=n_reps_inference)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -399,7 +412,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("DQN TD Step (Training)")
     print("-" * 40)
     for bs in batch_sizes_training:
-        r = bench_pytorch_dqn_td_step(bs)
+        r = bench_pytorch_dqn_td_step(bs, n_reps=n_reps_training)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -408,7 +421,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("SAC Sample Actions (Inference)")
     print("-" * 40)
     for bs in batch_sizes_inference:
-        r = bench_pytorch_sac_sample(bs)
+        r = bench_pytorch_sac_sample(bs, n_reps=n_reps_inference)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -417,7 +430,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("TD3 Deterministic Action (Inference)")
     print("-" * 40)
     for bs in batch_sizes_inference:
-        r = bench_pytorch_td3_act(bs)
+        r = bench_pytorch_td3_act(bs, n_reps=n_reps_inference)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -426,7 +439,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("Twin-Q Forward (Inference)")
     print("-" * 40)
     for bs in batch_sizes_inference:
-        r = bench_pytorch_twin_q(bs)
+        r = bench_pytorch_twin_q(bs, n_reps=n_reps_inference)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -435,7 +448,7 @@ def run_all(output_dir: str = "benchmark_results"):
     print("Twin-Q Critic Step (Training)")
     print("-" * 40)
     for bs in batch_sizes_training:
-        r = bench_pytorch_critic_step(bs)
+        r = bench_pytorch_critic_step(bs, n_reps=n_reps_training)
         print(f"  batch={bs:>4d}:  {r.median_ns/1e3:>8.1f} us (IQR: {r.iqr_ns/1e3:.1f})")
         all_results.append(r.summary())
     print()
@@ -448,5 +461,10 @@ def run_all(output_dir: str = "benchmark_results"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="rlox nn backend benchmarks (PyTorch baseline)")
     parser.add_argument("--output-dir", default="benchmark_results")
+    parser.add_argument("--n-reps-inference", type=int, default=DEFAULT_N_REPS_INFERENCE,
+                        help="repetitions per inference benchmark (default: %(default)s)")
+    parser.add_argument("--n-reps-training", type=int, default=DEFAULT_N_REPS_TRAINING,
+                        help="repetitions per training benchmark (default: %(default)s)")
     args = parser.parse_args()
-    run_all(args.output_dir)
+    run_all(args.output_dir, n_reps_inference=args.n_reps_inference,
+            n_reps_training=args.n_reps_training)

@@ -22,6 +22,9 @@ import seaborn as sns
 
 sns.set_theme(style="whitegrid", font_scale=1.1)
 
+DEFAULT_N_BOOTSTRAP: int = 2_000
+DEFAULT_BOOTSTRAP_SEED: int = 42
+
 FRAMEWORK_COLORS = {"rlox": "#E63946", "sb3": "#457B9D"}
 FRAMEWORK_LABELS = {"rlox": "rlox (Rust)", "sb3": "Stable-Baselines3"}
 
@@ -64,7 +67,7 @@ def _interpolate_curves(
 
 def _bootstrap_ci(
     y_matrix: np.ndarray,
-    n_bootstrap: int = 2000,
+    n_bootstrap: int = DEFAULT_N_BOOTSTRAP,
     ci: float = 0.95,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute mean and bootstrapped CI at each x point.
@@ -72,7 +75,7 @@ def _bootstrap_ci(
     Returns mean, lower, upper arrays.
     """
     n_runs, n_points = y_matrix.shape
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(DEFAULT_BOOTSTRAP_SEED)
 
     mean = y_matrix.mean(axis=0)
     lower = np.empty(n_points)

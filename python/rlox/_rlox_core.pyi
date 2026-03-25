@@ -524,6 +524,82 @@ def compute_token_kl_schulman(
     """
     ...
 
+def compute_batch_token_kl(
+    log_probs_policy: npt.NDArray[np.float64],
+    log_probs_ref: npt.NDArray[np.float64],
+    seq_len: int,
+) -> npt.NDArray[np.float64]:
+    """Batched token-level KL divergence: process all sequences in a single call.
+
+    Parameters
+    ----------
+    log_probs_policy : array of shape (batch * seq_len,)
+        Flat array of log probabilities under the current policy.
+    log_probs_ref : array of shape (batch * seq_len,)
+        Flat array of log probabilities under the reference model.
+    seq_len : int
+        Sequence length (tokens per sequence).
+
+    Returns
+    -------
+    kl : f64 array of shape (batch,)
+        Per-sequence KL divergence values.
+    """
+    ...
+
+def compute_batch_token_kl_schulman(
+    log_probs_policy: npt.NDArray[np.float64],
+    log_probs_ref: npt.NDArray[np.float64],
+    seq_len: int,
+) -> npt.NDArray[np.float64]:
+    """Batched token-level KL divergence using the Schulman (2020) estimator.
+
+    Parameters
+    ----------
+    log_probs_policy : array of shape (batch * seq_len,)
+        Flat array of log probabilities under the current policy.
+    log_probs_ref : array of shape (batch * seq_len,)
+        Flat array of log probabilities under the reference model.
+    seq_len : int
+        Sequence length (tokens per sequence).
+
+    Returns
+    -------
+    kl : f64 array of shape (batch,)
+        Per-sequence KL divergence estimates.
+    """
+    ...
+
+def compute_token_kl_f32(
+    log_probs_policy: npt.NDArray[np.float32],
+    log_probs_ref: npt.NDArray[np.float32],
+) -> float:
+    """Token-level KL divergence (f32): sum(exp(log_p) * (log_p - log_q))."""
+    ...
+
+def compute_token_kl_schulman_f32(
+    log_probs_policy: npt.NDArray[np.float32],
+    log_probs_ref: npt.NDArray[np.float32],
+) -> float:
+    """Token-level KL divergence using the Schulman estimator (f32)."""
+    ...
+
+def compute_batch_token_kl_f32(
+    log_probs_policy: npt.NDArray[np.float32],
+    log_probs_ref: npt.NDArray[np.float32],
+    seq_len: int,
+) -> npt.NDArray[np.float32]:
+    """Batched token-level KL divergence (f32)."""
+    ...
+
+def compute_batch_token_kl_schulman_f32(
+    log_probs_policy: npt.NDArray[np.float32],
+    log_probs_ref: npt.NDArray[np.float32],
+    seq_len: int,
+) -> npt.NDArray[np.float32]:
+    """Batched token-level KL divergence using the Schulman estimator (f32)."""
+    ...
+
 class DPOPair:
     """Direct Preference Optimization (Rafailov et al., 2023) preference pair.
 

@@ -17,12 +17,20 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from conftest import BenchmarkResult, ComparisonResult, timed_run, write_report
 
+# ---------------------------------------------------------------------------
+# Benchmark repetition defaults
+# ---------------------------------------------------------------------------
+DEFAULT_N_WARMUP_PUSH = 2
+DEFAULT_N_REPS_PUSH = 10
+DEFAULT_N_WARMUP_SAMPLE = 10
+DEFAULT_N_REPS_SAMPLE = 100
+
 
 # ---------------------------------------------------------------------------
 # rlox buffer benchmarks
 # ---------------------------------------------------------------------------
 
-def bench_rlox_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResult:
+def bench_rlox_push(obs_dim: int, n_transitions: int = 10_000, *, n_warmup: int = DEFAULT_N_WARMUP_PUSH, n_reps: int = DEFAULT_N_REPS_PUSH) -> BenchmarkResult:
     from rlox import ExperienceTable
 
     table = ExperienceTable(obs_dim=obs_dim, act_dim=1)
@@ -33,7 +41,7 @@ def bench_rlox_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResul
             table.push(obs=obs, action=np.array([0.0], dtype=np.float32), reward=1.0,
                        terminated=False, truncated=False)
 
-    times = timed_run(push_batch, n_warmup=2, n_reps=10)
+    times = timed_run(push_batch, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"push_obs{obs_dim}", category="buffer_ops",
         framework="rlox", times_ns=times,
@@ -41,7 +49,7 @@ def bench_rlox_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResul
     )
 
 
-def bench_rlox_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkResult:
+def bench_rlox_sample(batch_size: int, buffer_size: int = 100_000, *, n_warmup: int = DEFAULT_N_WARMUP_SAMPLE, n_reps: int = DEFAULT_N_REPS_SAMPLE) -> BenchmarkResult:
     from rlox import ReplayBuffer
 
     buf = ReplayBuffer(capacity=buffer_size, obs_dim=4, act_dim=1)
@@ -56,7 +64,7 @@ def bench_rlox_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkR
         seed_counter[0] += 1
         buf.sample(batch_size=batch_size, seed=seed_counter[0])
 
-    times = timed_run(sample, n_warmup=10, n_reps=100)
+    times = timed_run(sample, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"sample_b{batch_size}", category="buffer_ops",
         framework="rlox", times_ns=times,
@@ -68,7 +76,7 @@ def bench_rlox_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkR
 # TorchRL buffer benchmarks
 # ---------------------------------------------------------------------------
 
-def bench_torchrl_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResult | None:
+def bench_torchrl_push(obs_dim: int, n_transitions: int = 10_000, *, n_warmup: int = DEFAULT_N_WARMUP_PUSH, n_reps: int = DEFAULT_N_REPS_PUSH) -> BenchmarkResult | None:
     try:
         import torch
         from tensordict import TensorDict
@@ -92,7 +100,7 @@ def bench_torchrl_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkRe
         for _ in range(n_transitions):
             rb.add(td)
 
-    times = timed_run(push_batch, n_warmup=2, n_reps=10)
+    times = timed_run(push_batch, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"push_obs{obs_dim}", category="buffer_ops",
         framework="torchrl", times_ns=times,
@@ -100,7 +108,7 @@ def bench_torchrl_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkRe
     )
 
 
-def bench_torchrl_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkResult | None:
+def bench_torchrl_sample(batch_size: int, buffer_size: int = 100_000, *, n_warmup: int = DEFAULT_N_WARMUP_SAMPLE, n_reps: int = DEFAULT_N_REPS_SAMPLE) -> BenchmarkResult | None:
     try:
         import torch
         from tensordict import TensorDict
@@ -124,7 +132,7 @@ def bench_torchrl_sample(batch_size: int, buffer_size: int = 100_000) -> Benchma
     def sample():
         rb.sample()
 
-    times = timed_run(sample, n_warmup=10, n_reps=100)
+    times = timed_run(sample, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"sample_b{batch_size}", category="buffer_ops",
         framework="torchrl", times_ns=times,
@@ -136,7 +144,7 @@ def bench_torchrl_sample(batch_size: int, buffer_size: int = 100_000) -> Benchma
 # SB3 buffer benchmarks
 # ---------------------------------------------------------------------------
 
-def bench_sb3_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResult | None:
+def bench_sb3_push(obs_dim: int, n_transitions: int = 10_000, *, n_warmup: int = DEFAULT_N_WARMUP_PUSH, n_reps: int = DEFAULT_N_REPS_PUSH) -> BenchmarkResult | None:
     try:
         from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
         import gymnasium as gym
@@ -163,7 +171,7 @@ def bench_sb3_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResult
         for _ in range(n_transitions):
             buf.add(obs, next_obs, action, reward, done, infos)
 
-    times = timed_run(push_batch, n_warmup=2, n_reps=10)
+    times = timed_run(push_batch, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"push_obs{obs_dim}", category="buffer_ops",
         framework="sb3", times_ns=times,
@@ -171,7 +179,7 @@ def bench_sb3_push(obs_dim: int, n_transitions: int = 10_000) -> BenchmarkResult
     )
 
 
-def bench_sb3_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkResult | None:
+def bench_sb3_sample(batch_size: int, buffer_size: int = 100_000, *, n_warmup: int = DEFAULT_N_WARMUP_SAMPLE, n_reps: int = DEFAULT_N_REPS_SAMPLE) -> BenchmarkResult | None:
     try:
         from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
         import gymnasium as gym
@@ -199,7 +207,7 @@ def bench_sb3_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkRe
     def sample():
         buf.sample(batch_size)
 
-    times = timed_run(sample, n_warmup=10, n_reps=100)
+    times = timed_run(sample, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"sample_b{batch_size}", category="buffer_ops",
         framework="sb3", times_ns=times,
@@ -211,7 +219,14 @@ def bench_sb3_sample(batch_size: int, buffer_size: int = 100_000) -> BenchmarkRe
 # Main runner
 # ---------------------------------------------------------------------------
 
-def run_all(output_dir: str = "benchmark_results"):
+def run_all(
+    output_dir: str = "benchmark_results",
+    *,
+    n_warmup_push: int = DEFAULT_N_WARMUP_PUSH,
+    n_reps_push: int = DEFAULT_N_REPS_PUSH,
+    n_warmup_sample: int = DEFAULT_N_WARMUP_SAMPLE,
+    n_reps_sample: int = DEFAULT_N_REPS_SAMPLE,
+):
     print("=" * 70)
     print("Benchmark: Buffer Operations (rlox vs TorchRL vs SB3)")
     print("=" * 70)
@@ -226,12 +241,12 @@ def run_all(output_dir: str = "benchmark_results"):
     for obs_dim in [4, 28224]:
         print(f"\n  obs_dim = {obs_dim}:")
 
-        rlox_push = bench_rlox_push(obs_dim)
+        rlox_push = bench_rlox_push(obs_dim, n_warmup=n_warmup_push, n_reps=n_reps_push)
         tp = rlox_push.throughput
         print(f"    rlox:     {rlox_push.median_ns/1e6:>8.2f} ms  ({tp:>12,.0f} trans/s)")
         all_results.append(rlox_push.summary())
 
-        torchrl_push = bench_torchrl_push(obs_dim)
+        torchrl_push = bench_torchrl_push(obs_dim, n_warmup=n_warmup_push, n_reps=n_reps_push)
         if torchrl_push:
             tp_t = torchrl_push.throughput
             print(f"    torchrl:  {torchrl_push.median_ns/1e6:>8.2f} ms  ({tp_t:>12,.0f} trans/s)")
@@ -241,7 +256,7 @@ def run_all(output_dir: str = "benchmark_results"):
             print(f"    -> vs torchrl: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
             all_comparisons.append(comp.summary())
 
-        sb3_push = bench_sb3_push(obs_dim)
+        sb3_push = bench_sb3_push(obs_dim, n_warmup=n_warmup_push, n_reps=n_reps_push)
         if sb3_push:
             tp_s = sb3_push.throughput
             print(f"    sb3:      {sb3_push.median_ns/1e6:>8.2f} ms  ({tp_s:>12,.0f} trans/s)")
@@ -258,11 +273,11 @@ def run_all(output_dir: str = "benchmark_results"):
     for batch_size in [32, 64, 256, 1024]:
         print(f"\n  batch_size = {batch_size}:")
 
-        rlox_samp = bench_rlox_sample(batch_size)
+        rlox_samp = bench_rlox_sample(batch_size, n_warmup=n_warmup_sample, n_reps=n_reps_sample)
         print(f"    rlox:     {rlox_samp.median_ns/1e3:>8.1f} us  (p99: {rlox_samp.p99_ns/1e3:.1f} us)")
         all_results.append(rlox_samp.summary())
 
-        torchrl_samp = bench_torchrl_sample(batch_size)
+        torchrl_samp = bench_torchrl_sample(batch_size, n_warmup=n_warmup_sample, n_reps=n_reps_sample)
         if torchrl_samp:
             print(f"    torchrl:  {torchrl_samp.median_ns/1e3:>8.1f} us  (p99: {torchrl_samp.p99_ns/1e3:.1f} us)")
             all_results.append(torchrl_samp.summary())
@@ -271,7 +286,7 @@ def run_all(output_dir: str = "benchmark_results"):
             print(f"    -> vs torchrl: {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
             all_comparisons.append(comp.summary())
 
-        sb3_samp = bench_sb3_sample(batch_size)
+        sb3_samp = bench_sb3_sample(batch_size, n_warmup=n_warmup_sample, n_reps=n_reps_sample)
         if sb3_samp:
             print(f"    sb3:      {sb3_samp.median_ns/1e3:>8.1f} us  (p99: {sb3_samp.p99_ns/1e3:.1f} us)")
             all_results.append(sb3_samp.summary())
@@ -301,5 +316,15 @@ def run_all(output_dir: str = "benchmark_results"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="rlox buffer operation benchmarks")
     parser.add_argument("--output-dir", default="benchmark_results")
+    parser.add_argument("--n-warmup-push", type=int, default=DEFAULT_N_WARMUP_PUSH)
+    parser.add_argument("--n-reps-push", type=int, default=DEFAULT_N_REPS_PUSH)
+    parser.add_argument("--n-warmup-sample", type=int, default=DEFAULT_N_WARMUP_SAMPLE)
+    parser.add_argument("--n-reps-sample", type=int, default=DEFAULT_N_REPS_SAMPLE)
     args = parser.parse_args()
-    run_all(args.output_dir)
+    run_all(
+        args.output_dir,
+        n_warmup_push=args.n_warmup_push,
+        n_reps_push=args.n_reps_push,
+        n_warmup_sample=args.n_warmup_sample,
+        n_reps_sample=args.n_reps_sample,
+    )

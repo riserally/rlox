@@ -12,6 +12,9 @@ from typing import Any
 import numpy as np
 import pytest
 
+DEFAULT_BOOTSTRAP_SEED = 42
+DEFAULT_N_BOOTSTRAP = 10_000
+
 
 # ---------------------------------------------------------------------------
 # Result collection
@@ -95,6 +98,8 @@ class ComparisonResult:
     rlox: BenchmarkResult
     baseline: BenchmarkResult
     baseline_name: str
+    bootstrap_seed: int = DEFAULT_BOOTSTRAP_SEED
+    n_bootstrap: int = DEFAULT_N_BOOTSTRAP
 
     @property
     def speedup(self) -> float:
@@ -107,12 +112,11 @@ class ComparisonResult:
         """Bootstrap 95% CI for speedup ratio."""
         if not self.rlox.times_ns or not self.baseline.times_ns:
             return (0.0, 0.0)
-        rng = np.random.default_rng(42)
-        n_bootstrap = 10_000
+        rng = np.random.default_rng(self.bootstrap_seed)
         rlox_arr = np.array(self.rlox.times_ns)
         base_arr = np.array(self.baseline.times_ns)
         ratios = []
-        for _ in range(n_bootstrap):
+        for _ in range(self.n_bootstrap):
             r_sample = rng.choice(rlox_arr, size=len(rlox_arr), replace=True)
             b_sample = rng.choice(base_arr, size=len(base_arr), replace=True)
             r_med = np.median(r_sample)

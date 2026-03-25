@@ -16,6 +16,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+DEFAULT_N_BOOTSTRAP: int = 10_000
+DEFAULT_BOOTSTRAP_SEED: int = 42
+
 
 def load_results(results_dir: str | Path) -> list[dict[str, Any]]:
     """Load all JSON result files from a directory."""
@@ -70,13 +73,13 @@ def interquartile_mean(values: list[float]) -> float:
 
 def bootstrap_ci(
     values: list[float],
-    n_bootstrap: int = 10_000,
+    n_bootstrap: int = DEFAULT_N_BOOTSTRAP,
     ci: float = 0.95,
     stat_fn=np.mean,
 ) -> tuple[float, float]:
     """Bootstrap confidence interval for a statistic."""
     arr = np.asarray(values)
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(DEFAULT_BOOTSTRAP_SEED)
     stats = np.empty(n_bootstrap)
     for i in range(n_bootstrap):
         sample = rng.choice(arr, size=len(arr), replace=True)
@@ -88,10 +91,10 @@ def bootstrap_ci(
 def probability_of_improvement(
     rlox_scores: list[float],
     sb3_scores: list[float],
-    n_bootstrap: int = 10_000,
+    n_bootstrap: int = DEFAULT_N_BOOTSTRAP,
 ) -> float:
     """P(rlox > sb3) via paired bootstrap."""
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(DEFAULT_BOOTSTRAP_SEED)
     rlox_arr = np.asarray(rlox_scores)
     sb3_arr = np.asarray(sb3_scores)
     n = min(len(rlox_arr), len(sb3_arr))

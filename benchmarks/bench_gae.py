@@ -5,7 +5,7 @@ Benchmark: GAE Computation
 Compares rlox Rust GAE vs TorchRL C++ GAE vs Python loop (SB3/CleanRL baseline).
 
 Usage:
-    python benchmarks/bench_gae.py [--output-dir benchmark_results]
+    python benchmarks/bench_gae.py [--output-dir benchmark_results] [--seed 42] [--n-warmup 10] [--n-reps 100]
 """
 
 import argparse
@@ -45,17 +45,17 @@ def reference_gae_numpy(rewards, values, dones, last_value, gamma=0.99, lam=0.95
 # rlox GAE
 # ---------------------------------------------------------------------------
 
-def bench_rlox_gae(n_steps: int) -> BenchmarkResult:
+def bench_rlox_gae(n_steps: int, *, seed: int, n_warmup: int, n_reps: int) -> BenchmarkResult:
     from rlox import compute_gae
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(seed)
     rewards = rng.standard_normal(n_steps)
     values = rng.standard_normal(n_steps)
     dones = (rng.random(n_steps) > 0.95).astype(float)
 
     times = timed_run(
         lambda: compute_gae(rewards, values, dones, 0.0, 0.99, 0.95),
-        n_warmup=10, n_reps=100,
+        n_warmup=n_warmup, n_reps=n_reps,
     )
     return BenchmarkResult(
         name=f"gae_{n_steps}", category="gae",
@@ -68,7 +68,7 @@ def bench_rlox_gae(n_steps: int) -> BenchmarkResult:
 # TorchRL GAE
 # ---------------------------------------------------------------------------
 
-def bench_torchrl_gae(n_steps: int) -> BenchmarkResult | None:
+def bench_torchrl_gae(n_steps: int, *, seed: int, n_warmup: int, n_reps: int) -> BenchmarkResult | None:
     try:
         import torch
         from torchrl.objectives.value.functional import generalized_advantage_estimate
@@ -76,7 +76,7 @@ def bench_torchrl_gae(n_steps: int) -> BenchmarkResult | None:
         print("  [skip] torchrl not installed")
         return None
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(seed)
     rewards_np = rng.standard_normal(n_steps)
     values_np = rng.standard_normal(n_steps)
     dones_np = (rng.random(n_steps) > 0.95).astype(float)
@@ -98,7 +98,7 @@ def bench_torchrl_gae(n_steps: int) -> BenchmarkResult | None:
             gamma, lam, values_t, next_values_t, rewards_t, dones_t, terminated_t,
         )
 
-    times = timed_run(run_gae, n_warmup=10, n_reps=100)
+    times = timed_run(run_gae, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"gae_{n_steps}", category="gae",
         framework="torchrl", times_ns=times,
@@ -110,15 +110,15 @@ def bench_torchrl_gae(n_steps: int) -> BenchmarkResult | None:
 # NumPy/Python loop GAE (SB3/CleanRL equivalent)
 # ---------------------------------------------------------------------------
 
-def bench_numpy_gae(n_steps: int) -> BenchmarkResult:
-    rng = np.random.default_rng(42)
+def bench_numpy_gae(n_steps: int, *, seed: int, n_warmup: int, n_reps: int) -> BenchmarkResult:
+    rng = np.random.default_rng(seed)
     rewards = rng.standard_normal(n_steps)
     values = rng.standard_normal(n_steps)
     dones = (rng.random(n_steps) > 0.95).astype(float)
 
     times = timed_run(
         lambda: reference_gae_numpy(rewards, values, dones, 0.0, 0.99, 0.95),
-        n_warmup=10, n_reps=100,
+        n_warmup=n_warmup, n_reps=n_reps,
     )
     return BenchmarkResult(
         name=f"gae_{n_steps}", category="gae",
@@ -131,7 +131,7 @@ def bench_numpy_gae(n_steps: int) -> BenchmarkResult:
 # Main runner
 # ---------------------------------------------------------------------------
 
-def run_all(output_dir: str = "benchmark_results"):
+def run_all(output_dir: str = "benchmark_results", *, seed: int, n_warmup: int, n_reps: int):
     print("=" * 70)
     print("Benchmark: GAE Computation (rlox vs TorchRL vs NumPy loop)")
     print("=" * 70)
@@ -141,14 +141,16 @@ def run_all(output_dir: str = "benchmark_results"):
 
     step_counts = [128, 512, 2048, 8192, 32768]
 
+    bench_kw = {"seed": seed, "n_warmup": n_warmup, "n_reps": n_reps}
+
     for n_steps in step_counts:
         print(f"\n  n_steps = {n_steps}:")
 
-        rlox_gae = bench_rlox_gae(n_steps)
+        rlox_gae = bench_rlox_gae(n_steps, **bench_kw)
         print(f"    rlox:       {rlox_gae.median_ns/1e3:>10.1f} us")
         all_results.append(rlox_gae.summary())
 
-        numpy_gae = bench_numpy_gae(n_steps)
+        numpy_gae = bench_numpy_gae(n_steps, **bench_kw)
         print(f"    numpy loop: {numpy_gae.median_ns/1e3:>10.1f} us")
         all_results.append(numpy_gae.summary())
 
@@ -157,7 +159,7 @@ def run_all(output_dir: str = "benchmark_results"):
         print(f"    -> vs numpy: {comp_np.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
         all_comparisons.append(comp_np.summary())
 
-        torchrl_gae = bench_torchrl_gae(n_steps)
+        torchrl_gae = bench_torchrl_gae(n_steps, **bench_kw)
         if torchrl_gae:
             print(f"    torchrl:    {torchrl_gae.median_ns/1e3:>10.1f} us")
             all_results.append(torchrl_gae.summary())
@@ -187,5 +189,8 @@ def run_all(output_dir: str = "benchmark_results"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="rlox GAE computation benchmarks")
     parser.add_argument("--output-dir", default="benchmark_results")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--n-warmup", type=int, default=10)
+    parser.add_argument("--n-reps", type=int, default=100)
     args = parser.parse_args()
-    run_all(args.output_dir)
+    run_all(args.output_dir, seed=args.seed, n_warmup=args.n_warmup, n_reps=args.n_reps)

@@ -7,6 +7,7 @@ Compares rlox vs SB3 vs TorchRL.
 
 Usage:
     python benchmarks/bench_e2e_rollout.py [--output-dir benchmark_results]
+                                           [--n-warmup 1] [--n-reps 10]
 """
 
 import argparse
@@ -23,7 +24,7 @@ from conftest import BenchmarkResult, ComparisonResult, timed_run, write_report
 # rlox end-to-end rollout
 # ---------------------------------------------------------------------------
 
-def bench_rlox_rollout(n_envs: int, n_steps: int) -> BenchmarkResult:
+def bench_rlox_rollout(n_envs: int, n_steps: int, *, n_warmup: int, n_reps: int) -> BenchmarkResult:
     from rlox import VecEnv, ExperienceTable, compute_gae
 
     vec_env = VecEnv(n=n_envs, seed=42)
@@ -63,7 +64,7 @@ def bench_rlox_rollout(n_envs: int, n_steps: int) -> BenchmarkResult:
         dones_arr = np.array(all_dones, dtype=np.float64)
         compute_gae(rewards_arr, values_arr, dones_arr, 0.0, 0.99, 0.95)
 
-    times = timed_run(rollout, n_warmup=1, n_reps=10)
+    times = timed_run(rollout, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"e2e_{n_envs}x{n_steps}", category="e2e_rollout",
         framework="rlox", times_ns=times,
@@ -75,7 +76,7 @@ def bench_rlox_rollout(n_envs: int, n_steps: int) -> BenchmarkResult:
 # SB3 end-to-end rollout
 # ---------------------------------------------------------------------------
 
-def bench_sb3_rollout(n_envs: int, n_steps: int) -> BenchmarkResult | None:
+def bench_sb3_rollout(n_envs: int, n_steps: int, *, n_warmup: int, n_reps: int) -> BenchmarkResult | None:
     try:
         from stable_baselines3.common.vec_env import DummyVecEnv
         import gymnasium as gym
@@ -121,7 +122,7 @@ def bench_sb3_rollout(n_envs: int, n_steps: int) -> BenchmarkResult | None:
 
         env.close()
 
-    times = timed_run(rollout, n_warmup=1, n_reps=10)
+    times = timed_run(rollout, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"e2e_{n_envs}x{n_steps}", category="e2e_rollout",
         framework="sb3", times_ns=times,
@@ -133,7 +134,7 @@ def bench_sb3_rollout(n_envs: int, n_steps: int) -> BenchmarkResult | None:
 # TorchRL end-to-end rollout
 # ---------------------------------------------------------------------------
 
-def bench_torchrl_rollout(n_envs: int, n_steps: int) -> BenchmarkResult | None:
+def bench_torchrl_rollout(n_envs: int, n_steps: int, *, n_warmup: int, n_reps: int) -> BenchmarkResult | None:
     try:
         import torch
         from torchrl.envs import GymEnv, SerialEnv
@@ -172,7 +173,7 @@ def bench_torchrl_rollout(n_envs: int, n_steps: int) -> BenchmarkResult | None:
         )
         env.close()
 
-    times = timed_run(rollout, n_warmup=1, n_reps=10)
+    times = timed_run(rollout, n_warmup=n_warmup, n_reps=n_reps)
     return BenchmarkResult(
         name=f"e2e_{n_envs}x{n_steps}", category="e2e_rollout",
         framework="torchrl", times_ns=times,
@@ -184,7 +185,7 @@ def bench_torchrl_rollout(n_envs: int, n_steps: int) -> BenchmarkResult | None:
 # Main runner
 # ---------------------------------------------------------------------------
 
-def run_all(output_dir: str = "benchmark_results"):
+def run_all(output_dir: str = "benchmark_results", *, n_warmup: int = 1, n_reps: int = 10):
     print("=" * 70)
     print("Benchmark: End-to-End Rollout Collection")
     print("=" * 70)
@@ -202,12 +203,12 @@ def run_all(output_dir: str = "benchmark_results"):
         total = n_envs * n_steps
         print(f"\n  {n_envs} envs × {n_steps} steps = {total:,} transitions:")
 
-        rlox_res = bench_rlox_rollout(n_envs, n_steps)
+        rlox_res = bench_rlox_rollout(n_envs, n_steps, n_warmup=n_warmup, n_reps=n_reps)
         tp = rlox_res.throughput
         print(f"    rlox:    {rlox_res.median_ns/1e6:>10.1f} ms  ({tp:>12,.0f} trans/s)")
         all_results.append(rlox_res.summary())
 
-        sb3_res = bench_sb3_rollout(n_envs, n_steps)
+        sb3_res = bench_sb3_rollout(n_envs, n_steps, n_warmup=n_warmup, n_reps=n_reps)
         if sb3_res:
             tp_s = sb3_res.throughput
             print(f"    sb3:     {sb3_res.median_ns/1e6:>10.1f} ms  ({tp_s:>12,.0f} trans/s)")
@@ -217,7 +218,7 @@ def run_all(output_dir: str = "benchmark_results"):
             print(f"    -> vs sb3:     {comp.speedup:.1f}x [{lo:.1f}, {hi:.1f}]")
             all_comparisons.append(comp.summary())
 
-        torchrl_res = bench_torchrl_rollout(n_envs, n_steps)
+        torchrl_res = bench_torchrl_rollout(n_envs, n_steps, n_warmup=n_warmup, n_reps=n_reps)
         if torchrl_res:
             tp_t = torchrl_res.throughput
             print(f"    torchrl: {torchrl_res.median_ns/1e6:>10.1f} ms  ({tp_t:>12,.0f} trans/s)")
@@ -248,5 +249,7 @@ def run_all(output_dir: str = "benchmark_results"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="rlox end-to-end rollout benchmarks")
     parser.add_argument("--output-dir", default="benchmark_results")
+    parser.add_argument("--n-warmup", type=int, default=1)
+    parser.add_argument("--n-reps", type=int, default=10)
     args = parser.parse_args()
-    run_all(args.output_dir)
+    run_all(args.output_dir, n_warmup=args.n_warmup, n_reps=args.n_reps)

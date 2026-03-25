@@ -3,6 +3,10 @@ use pyo3::prelude::*;
 
 use rlox_core::llm::ops;
 
+// ---------------------------------------------------------------------------
+// f64 functions (backward-compatible)
+// ---------------------------------------------------------------------------
+
 /// Compute GRPO group advantages: (reward - mean) / std.
 /// Returns zeros if std < 1e-8.
 #[pyfunction]
@@ -41,8 +45,7 @@ pub fn compute_batch_group_advantages<'py>(
     Ok(PyArray1::from_vec(py, result))
 }
 
-/// Compute token-level KL divergence using the Schulman (2020) estimator:
-/// sum(exp(log_p - log_q) - (log_p - log_q) - 1).
+/// Compute token-level KL divergence using Schulman (2020) estimator.
 #[pyfunction]
 pub fn compute_token_kl_schulman(
     log_probs_policy: PyReadonlyArray1<'_, f64>,
@@ -53,6 +56,104 @@ pub fn compute_token_kl_schulman(
     ops::compute_token_kl_schulman(policy_slice, ref_slice)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
+
+/// Batched token-level KL divergence: process all sequences in a single call.
+///
+/// `log_probs_policy` and `log_probs_ref` are flat arrays of shape (batch * seq_len,).
+/// Returns an array of shape (batch,) with per-sequence KL values.
+#[pyfunction]
+pub fn compute_batch_token_kl<'py>(
+    py: Python<'py>,
+    log_probs_policy: PyReadonlyArray1<'py, f64>,
+    log_probs_ref: PyReadonlyArray1<'py, f64>,
+    seq_len: usize,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    let result = ops::compute_batch_token_kl(policy_slice, ref_slice, seq_len)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+/// Batched token-level KL divergence using the Schulman (2020) estimator.
+///
+/// `log_probs_policy` and `log_probs_ref` are flat arrays of shape (batch * seq_len,).
+/// Returns an array of shape (batch,) with per-sequence KL values.
+#[pyfunction]
+pub fn compute_batch_token_kl_schulman<'py>(
+    py: Python<'py>,
+    log_probs_policy: PyReadonlyArray1<'py, f64>,
+    log_probs_ref: PyReadonlyArray1<'py, f64>,
+    seq_len: usize,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    let result = ops::compute_batch_token_kl_schulman(policy_slice, ref_slice, seq_len)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+// ---------------------------------------------------------------------------
+// f32 functions
+// ---------------------------------------------------------------------------
+
+/// Compute token-level KL divergence (f32): sum(exp(log_p) * (log_p - log_q)).
+#[pyfunction]
+pub fn compute_token_kl_f32(
+    log_probs_policy: PyReadonlyArray1<'_, f32>,
+    log_probs_ref: PyReadonlyArray1<'_, f32>,
+) -> PyResult<f32> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    ops::f32_ops::compute_token_kl(policy_slice, ref_slice)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Compute token-level KL divergence using Schulman estimator (f32).
+#[pyfunction]
+pub fn compute_token_kl_schulman_f32(
+    log_probs_policy: PyReadonlyArray1<'_, f32>,
+    log_probs_ref: PyReadonlyArray1<'_, f32>,
+) -> PyResult<f32> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    ops::f32_ops::compute_token_kl_schulman(policy_slice, ref_slice)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Batched token-level KL divergence (f32).
+#[pyfunction]
+pub fn compute_batch_token_kl_f32<'py>(
+    py: Python<'py>,
+    log_probs_policy: PyReadonlyArray1<'py, f32>,
+    log_probs_ref: PyReadonlyArray1<'py, f32>,
+    seq_len: usize,
+) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    let result = ops::f32_ops::compute_batch_token_kl(policy_slice, ref_slice, seq_len)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+/// Batched token-level KL divergence using Schulman estimator (f32).
+#[pyfunction]
+pub fn compute_batch_token_kl_schulman_f32<'py>(
+    py: Python<'py>,
+    log_probs_policy: PyReadonlyArray1<'py, f32>,
+    log_probs_ref: PyReadonlyArray1<'py, f32>,
+    seq_len: usize,
+) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    let policy_slice = log_probs_policy.as_slice()?;
+    let ref_slice = log_probs_ref.as_slice()?;
+    let result = ops::f32_ops::compute_batch_token_kl_schulman(policy_slice, ref_slice, seq_len)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+// ---------------------------------------------------------------------------
+// DPOPair
+// ---------------------------------------------------------------------------
 
 /// A DPO preference pair.
 #[pyclass(name = "DPOPair")]

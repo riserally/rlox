@@ -28,6 +28,7 @@ impl SumTree {
     /// Create a sum-tree with `capacity` leaves, all initialised to zero.
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "SumTree capacity must be > 0");
+        let capacity = capacity.next_power_of_two();
         Self {
             capacity,
             tree: vec![0.0; 2 * capacity],

@@ -27,6 +27,7 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRolloutBatch>()?;
     m.add_class::<PyPipeline>()?;
     m.add_function(wrap_pyfunction!(training::compute_gae, m)?)?;
+    m.add_function(wrap_pyfunction!(training::compute_gae_batched, m)?)?;
     m.add_function(wrap_pyfunction!(training::compute_vtrace, m)?)?;
     m.add_function(wrap_pyfunction!(training::pack_sequences, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_group_advantages, m)?)?;

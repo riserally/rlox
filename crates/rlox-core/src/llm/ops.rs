@@ -121,16 +121,25 @@ macro_rules! impl_kl_ops {
                     });
                 }
 
-                let out: Vec<$float> = log_probs_policy
-                    .chunks_exact(seq_len)
-                    .zip(log_probs_ref.chunks_exact(seq_len))
-                    .map(|(ps, qs)| {
-                        ps.iter()
-                            .zip(qs.iter())
-                            .map(|(&log_p, &log_q)| log_p.exp() * (log_p - log_q))
-                            .sum()
-                    })
-                    .collect();
+                const PAR_THRESHOLD: usize = 16;
+                let batch_size = log_probs_policy.len() / seq_len;
+
+                let kl_for_seq = |i: usize| -> $float {
+                    let off = i * seq_len;
+                    let ps = &log_probs_policy[off..off + seq_len];
+                    let qs = &log_probs_ref[off..off + seq_len];
+                    ps.iter()
+                        .zip(qs.iter())
+                        .map(|(&log_p, &log_q)| log_p.exp() * (log_p - log_q))
+                        .sum()
+                };
+
+                let out = if batch_size >= PAR_THRESHOLD {
+                    use rayon::prelude::*;
+                    (0..batch_size).into_par_iter().map(kl_for_seq).collect()
+                } else {
+                    (0..batch_size).map(kl_for_seq).collect()
+                };
                 Ok(out)
             }
 
@@ -162,19 +171,28 @@ macro_rules! impl_kl_ops {
                     });
                 }
 
-                let out: Vec<$float> = log_probs_policy
-                    .chunks_exact(seq_len)
-                    .zip(log_probs_ref.chunks_exact(seq_len))
-                    .map(|(ps, qs)| {
-                        ps.iter()
-                            .zip(qs.iter())
-                            .map(|(&log_p, &log_q)| {
-                                let r = log_p - log_q;
-                                r.exp() - r - 1.0 as $float
-                            })
-                            .sum()
-                    })
-                    .collect();
+                const PAR_THRESHOLD: usize = 16;
+                let batch_size = log_probs_policy.len() / seq_len;
+
+                let kl_for_seq = |i: usize| -> $float {
+                    let off = i * seq_len;
+                    let ps = &log_probs_policy[off..off + seq_len];
+                    let qs = &log_probs_ref[off..off + seq_len];
+                    ps.iter()
+                        .zip(qs.iter())
+                        .map(|(&log_p, &log_q)| {
+                            let r = log_p - log_q;
+                            r.exp() - r - 1.0 as $float
+                        })
+                        .sum()
+                };
+
+                let out = if batch_size >= PAR_THRESHOLD {
+                    use rayon::prelude::*;
+                    (0..batch_size).into_par_iter().map(kl_for_seq).collect()
+                } else {
+                    (0..batch_size).map(kl_for_seq).collect()
+                };
                 Ok(out)
             }
         }

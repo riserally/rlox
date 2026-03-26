@@ -44,6 +44,57 @@ pub fn compute_gae(
     (advantages, returns)
 }
 
+/// Batched GAE: compute GAE for multiple environments in a single call.
+///
+/// All inputs are flat slices of length `n_envs * n_steps`, laid out as
+/// `[env0_step0, env0_step1, ..., env1_step0, env1_step1, ...]`.
+/// `last_values` has length `n_envs`.
+///
+/// Returns `(advantages, returns)` each of length `n_envs * n_steps`.
+pub fn compute_gae_batched(
+    rewards: &[f64],
+    values: &[f64],
+    dones: &[f64],
+    last_values: &[f64],
+    n_steps: usize,
+    gamma: f64,
+    gae_lambda: f64,
+) -> (Vec<f64>, Vec<f64>) {
+    let n_envs = last_values.len();
+    if n_envs == 0 || n_steps == 0 {
+        return (Vec::new(), Vec::new());
+    }
+
+    use rayon::prelude::*;
+
+    let mut all_advantages = vec![0.0; n_envs * n_steps];
+    let mut all_returns = vec![0.0; n_envs * n_steps];
+
+    all_advantages
+        .par_chunks_mut(n_steps)
+        .zip(all_returns.par_chunks_mut(n_steps))
+        .enumerate()
+        .for_each(|(env_idx, (adv_chunk, ret_chunk))| {
+            let offset = env_idx * n_steps;
+            let r = &rewards[offset..offset + n_steps];
+            let v = &values[offset..offset + n_steps];
+            let d = &dones[offset..offset + n_steps];
+            let lv = last_values[env_idx];
+
+            let mut last_gae = 0.0;
+            for t in (0..n_steps).rev() {
+                let next_non_terminal = 1.0 - d[t];
+                let next_value = if t == n_steps - 1 { lv } else { v[t + 1] };
+                let delta = r[t] + gamma * next_value * next_non_terminal - v[t];
+                last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae;
+                adv_chunk[t] = last_gae;
+                ret_chunk[t] = last_gae + v[t];
+            }
+        });
+
+    (all_advantages, all_returns)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,6 +186,36 @@ mod tests {
         let (advantages, _) = compute_gae(rewards, values, &dones, 0.0, 0.99, 1.0);
         // Monte Carlo return from step 0: 1 + 0.99 + 0.99^2 = 2.9701
         assert!((advantages[0] - 2.9701).abs() < 1e-3);
+    }
+
+    #[test]
+    fn gae_batched_matches_unbatched() {
+        let gamma = 0.99;
+        let lam = 0.95;
+        // Two envs, 3 steps each
+        let rewards = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let values = vec![0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
+        let dones = vec![0.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+        let last_values = vec![0.0, 0.5];
+
+        let (adv_b, ret_b) = compute_gae_batched(&rewards, &values, &dones, &last_values, 3, gamma, lam);
+
+        let (adv0, ret0) = compute_gae(&rewards[..3], &values[..3], &dones[..3], last_values[0], gamma, lam);
+        let (adv1, ret1) = compute_gae(&rewards[3..], &values[3..], &dones[3..], last_values[1], gamma, lam);
+
+        for i in 0..3 {
+            assert!((adv_b[i] - adv0[i]).abs() < 1e-12, "env0 adv mismatch at {i}");
+            assert!((ret_b[i] - ret0[i]).abs() < 1e-12, "env0 ret mismatch at {i}");
+            assert!((adv_b[3 + i] - adv1[i]).abs() < 1e-12, "env1 adv mismatch at {i}");
+            assert!((ret_b[3 + i] - ret1[i]).abs() < 1e-12, "env1 ret mismatch at {i}");
+        }
+    }
+
+    #[test]
+    fn gae_batched_empty() {
+        let (adv, ret) = compute_gae_batched(&[], &[], &[], &[], 0, 0.99, 0.95);
+        assert!(adv.is_empty());
+        assert!(ret.is_empty());
     }
 
     mod proptests {

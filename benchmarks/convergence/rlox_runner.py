@@ -5,7 +5,7 @@ Run in a separate process to avoid import contamination with SB3.
 
 from __future__ import annotations
 
-import copy
+import inspect
 import resource
 import time
 from pathlib import Path
@@ -20,14 +20,8 @@ import gymnasium.vector
 
 import rlox
 from rlox.batch import RolloutBatch
+from rlox.callbacks import Callback
 from rlox.losses import PPOLoss
-from rlox.networks import (
-    DeterministicPolicy,
-    QNetwork,
-    SimpleQNetwork,
-    SquashedGaussianPolicy,
-    polyak_update,
-)
 from rlox.policies import DiscretePolicy
 
 from common import (
@@ -38,6 +32,44 @@ from common import (
     load_config,
     result_path,
 )
+
+
+# ---------------------------------------------------------------------------
+# Observation / reward normalization (matching SB3 VecNormalize)
+# ---------------------------------------------------------------------------
+
+
+class _RunningMeanStd:
+    """Welford's online mean/variance tracker for observation normalization."""
+
+    def __init__(self, shape: int):
+        self.mean = np.zeros(shape, dtype=np.float64)
+        self.var = np.ones(shape, dtype=np.float64)
+        self.count = 1e-4
+
+    def update(self, batch: np.ndarray):
+        batch = np.asarray(batch, dtype=np.float64)
+        if batch.ndim == 1:
+            batch = batch[np.newaxis]
+        batch_mean = batch.mean(axis=0)
+        batch_var = batch.var(axis=0)
+        batch_count = batch.shape[0]
+        self._update_from_moments(batch_mean, batch_var, batch_count)
+
+    def _update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta = batch_mean - self.mean
+        total = self.count + batch_count
+        new_mean = self.mean + delta * batch_count / total
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        m2 = m_a + m_b + delta ** 2 * self.count * batch_count / total
+        self.mean = new_mean
+        self.var = m2 / total
+        self.count = total
+
+    def normalize(self, obs: np.ndarray) -> np.ndarray:
+        self.update(obs)
+        return (obs - self.mean) / np.sqrt(self.var + 1e-8)
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +86,9 @@ def _collect_rollout_gym(
     gamma: float,
     gae_lambda: float,
     is_discrete: bool,
+    obs_rms: _RunningMeanStd | None = None,
+    ret_rms: _RunningMeanStd | None = None,
+    running_returns: np.ndarray | None = None,
 ) -> tuple[RolloutBatch, np.ndarray]:
     """Collect on-policy rollout using gymnasium VectorEnv + rlox GAE.
 
@@ -82,6 +117,13 @@ def _collect_rollout_gym(
         next_obs, rewards, terminated, truncated, infos = vec_env.step(actions_env)
         dones = terminated | truncated
 
+        # Reward normalization (matching SB3 VecNormalize)
+        if ret_rms is not None and running_returns is not None:
+            running_returns = running_returns * gamma + rewards
+            ret_rms.update(running_returns)
+            rewards = rewards / np.sqrt(ret_rms.var + 1e-8)
+            running_returns[dones] = 0.0
+
         all_obs.append(obs_tensor)
         all_actions.append(actions)
         all_log_probs.append(log_probs)
@@ -90,6 +132,8 @@ def _collect_rollout_gym(
         all_dones.append(torch.as_tensor(dones.astype(np.float32)))
 
         obs = next_obs
+        if obs_rms is not None:
+            obs = obs_rms.normalize(obs)
 
     # Bootstrap value for GAE
     with torch.no_grad():
@@ -162,6 +206,8 @@ def _run_ppo(
     ent_coef = hp.get("ent_coef", 0.0)
     vf_coef = hp.get("vf_coef", 0.5)
     max_grad_norm = hp.get("max_grad_norm", 0.5)
+    normalize_obs = hp.get("normalize_obs", False)
+    normalize_reward = hp.get("normalize_reward", False)
 
     hidden = policy_cfg.get("hidden_sizes", [64, 64])
 
@@ -193,6 +239,11 @@ def _run_ppo(
     )
     obs, _ = vec_env.reset(seed=seed)
 
+    # Observation and reward normalization (matching SB3 VecNormalize)
+    obs_rms = _RunningMeanStd(obs_dim) if normalize_obs else None
+    ret_rms = _RunningMeanStd(1) if normalize_reward else None
+    running_returns = np.zeros(n_envs)
+
     steps_per_rollout = n_envs * n_steps
     n_updates = max(1, max_steps // steps_per_rollout)
     total_steps = 0
@@ -205,8 +256,12 @@ def _run_ppo(
         for pg in optimizer.param_groups:
             pg["lr"] = lr * frac
 
+        if obs_rms is not None:
+            obs = obs_rms.normalize(obs)
+
         batch, obs = _collect_rollout_gym(
             vec_env, policy, obs, n_steps, n_envs, gamma, gae_lambda, is_discrete,
+            obs_rms=obs_rms, ret_rms=ret_rms, running_returns=running_returns,
         )
         total_steps += steps_per_rollout
 
@@ -228,7 +283,7 @@ def _run_ppo(
         if total_steps - last_eval_step >= eval_freq:
             last_eval_step = total_steps
             _do_eval(env_id, policy, is_discrete, total_steps, start_time,
-                     eval_episodes, seed, log)
+                     eval_episodes, seed, log, obs_rms=obs_rms)
 
     vec_env.close()
 
@@ -312,8 +367,61 @@ def _run_a2c(
 
 
 # ---------------------------------------------------------------------------
-# Off-policy trainers (SAC, TD3, DQN) with periodic evaluation
+# Off-policy trainers — delegate to standalone algorithm classes
 # ---------------------------------------------------------------------------
+
+
+class _BenchmarkEvalCallback(Callback):
+    """Callback that performs periodic evaluation and logs to ExperimentLog."""
+
+    def __init__(
+        self,
+        env_id: str,
+        log: ExperimentLog,
+        eval_freq: int,
+        eval_episodes: int,
+        eval_seed: int,
+        start_time: float,
+        get_action_fn,
+    ):
+        super().__init__()
+        self.env_id = env_id
+        self.log = log
+        self.eval_freq = eval_freq
+        self.eval_episodes = eval_episodes
+        self.eval_seed = eval_seed
+        self.start_time = start_time
+        self.get_action_fn = get_action_fn
+        self._last_eval_step = 0
+
+    def on_step(self, step=None, **kwargs) -> bool:
+        if step is None:
+            return True
+        if step - self._last_eval_step >= self.eval_freq:
+            self._last_eval_step = step
+            wall_clock = time.monotonic() - self.start_time
+            sps = step / max(wall_clock, 1e-9)
+            mean_ret, std_ret, mean_len = evaluate_policy_gym(
+                self.env_id, self.get_action_fn, self.eval_episodes, self.eval_seed,
+            )
+            self.log.evaluations.append(EvalRecord(
+                step=step, wall_clock_s=wall_clock,
+                mean_return=mean_ret, std_return=std_ret,
+                ep_length=mean_len, sps=sps,
+            ))
+            print(
+                f"  [rlox] step={step:>8d}  "
+                f"return={mean_ret:>8.1f} +/- {std_ret:>6.1f}  "
+                f"SPS={sps:>7.0f}  wall={wall_clock:>6.1f}s"
+            )
+        return True
+
+
+def _filter_hp(hp: dict[str, Any], algo_class: type) -> dict[str, Any]:
+    """Filter hyperparameters to only those accepted by the algorithm constructor."""
+    valid_params = set(inspect.signature(algo_class.__init__).parameters)
+    skip_keys = {"train_freq", "gradient_steps", "ent_coef"}
+    return {k: v for k, v in hp.items() if k in valid_params and k not in skip_keys}
 
 
 def _run_sac(
@@ -326,134 +434,29 @@ def _run_sac(
     eval_episodes: int,
     log: ExperimentLog,
 ) -> None:
-    """SAC training loop with periodic evaluation."""
-    env = gym.make(env_id)
-    env.reset(seed=seed)
-    obs_dim = int(np.prod(env.observation_space.shape))
-    act_dim = int(np.prod(env.action_space.shape))
-    act_high = float(env.action_space.high[0])
+    """SAC training loop using standalone SAC class."""
+    from rlox.algorithms.sac import SAC
 
     hidden = policy_cfg.get("hidden_sizes", [256, 256])[0]
-    lr = hp.get("learning_rate", 3e-4)
-    gamma = hp.get("gamma", 0.99)
-    tau = hp.get("tau", 0.005)
-    batch_size = hp.get("batch_size", 256)
-    buffer_size = hp.get("buffer_size", 1_000_000)
-    learning_starts = hp.get("learning_starts", 10_000)
+    filtered = _filter_hp(hp, SAC)
+    auto_entropy = hp.get("ent_coef", "auto") == "auto"
 
-    actor = SquashedGaussianPolicy(obs_dim, act_dim, hidden)
-    critic1 = QNetwork(obs_dim, act_dim, hidden)
-    critic2 = QNetwork(obs_dim, act_dim, hidden)
-    critic1_target = copy.deepcopy(critic1)
-    critic2_target = copy.deepcopy(critic2)
-
-    actor_opt = torch.optim.Adam(actor.parameters(), lr=lr)
-    critic1_opt = torch.optim.Adam(critic1.parameters(), lr=lr)
-    critic2_opt = torch.optim.Adam(critic2.parameters(), lr=lr)
-
-    # Automatic entropy tuning
-    target_entropy = -float(act_dim)
-    log_alpha = torch.zeros(1, requires_grad=True)
-    alpha_opt = torch.optim.Adam([log_alpha], lr=lr)
-    alpha = log_alpha.exp().item()
-
-    buffer = rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
-
-    obs, _ = env.reset()
+    sac = SAC(
+        env_id=env_id, hidden=hidden, seed=seed,
+        auto_entropy=auto_entropy, **filtered,
+    )
     start_time = time.monotonic()
-    last_eval_step = 0
 
-    for step in range(max_steps):
-        if step < learning_starts:
-            action = env.action_space.sample()
-        else:
-            with torch.no_grad():
-                obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
-                action_t, _ = actor.sample(obs_t)
-                action = action_t.squeeze(0).numpy()
-            action = action * act_high
+    def get_action(o: np.ndarray) -> np.ndarray:
+        with torch.no_grad():
+            ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
+            return sac.actor.deterministic(ot).squeeze(0).numpy() * sac.act_high
 
-        next_obs, reward, terminated, truncated, _ = env.step(action)
-        buffer.push(
-            np.asarray(obs, dtype=np.float32),
-            np.asarray(action, dtype=np.float32),
-            float(reward), bool(terminated), bool(truncated),
-            np.asarray(next_obs, dtype=np.float32),
-        )
-        obs = next_obs
-        if terminated or truncated:
-            obs, _ = env.reset()
-
-        # Update
-        if step >= learning_starts and len(buffer) >= batch_size:
-            batch = buffer.sample(batch_size, step)
-            obs_b = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
-            next_obs_b = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
-            act_b = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.float32)
-            if act_b.dim() == 1:
-                act_b = act_b.unsqueeze(-1)
-            rew_b = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
-            done_b = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
-
-            with torch.no_grad():
-                next_a, next_lp = actor.sample(next_obs_b)
-                next_a = next_a * act_high
-                q1_next = critic1_target(next_obs_b, next_a).squeeze(-1)
-                q2_next = critic2_target(next_obs_b, next_a).squeeze(-1)
-                q_next = torch.min(q1_next, q2_next) - alpha * next_lp
-                target_q = rew_b + gamma * (1.0 - done_b) * q_next
-
-            import torch.nn.functional as F
-
-            q1 = critic1(obs_b, act_b).squeeze(-1)
-            q2 = critic2(obs_b, act_b).squeeze(-1)
-            c1_loss = F.mse_loss(q1, target_q)
-            c2_loss = F.mse_loss(q2, target_q)
-
-            critic1_opt.zero_grad(); c1_loss.backward(); critic1_opt.step()
-            critic2_opt.zero_grad(); c2_loss.backward(); critic2_opt.step()
-
-            new_a, new_lp = actor.sample(obs_b)
-            new_a_scaled = new_a * act_high
-            q_new = torch.min(critic1(obs_b, new_a_scaled).squeeze(-1),
-                              critic2(obs_b, new_a_scaled).squeeze(-1))
-            actor_loss = (alpha * new_lp - q_new).mean()
-            actor_opt.zero_grad(); actor_loss.backward(); actor_opt.step()
-
-            # Alpha
-            alpha_loss = -(log_alpha * (new_lp.detach() + target_entropy)).mean()
-            alpha_opt.zero_grad(); alpha_loss.backward(); alpha_opt.step()
-            alpha = log_alpha.exp().item()
-
-            polyak_update(critic1, critic1_target, tau)
-            polyak_update(critic2, critic2_target, tau)
-
-        # Periodic evaluation
-        if (step + 1) - last_eval_step >= eval_freq:
-            last_eval_step = step + 1
-
-            def get_action(o: np.ndarray) -> np.ndarray:
-                with torch.no_grad():
-                    ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
-                    return actor.deterministic(ot).squeeze(0).numpy() * act_high
-
-            wall_clock = time.monotonic() - start_time
-            sps = (step + 1) / max(wall_clock, 1e-9)
-            mean_ret, std_ret, mean_len = evaluate_policy_gym(
-                env_id, get_action, eval_episodes, seed + 1000,
-            )
-            log.evaluations.append(EvalRecord(
-                step=step + 1, wall_clock_s=wall_clock,
-                mean_return=mean_ret, std_return=std_ret,
-                ep_length=mean_len, sps=sps,
-            ))
-            print(
-                f"  [rlox] step={step + 1:>8d}  "
-                f"return={mean_ret:>8.1f} +/- {std_ret:>6.1f}  "
-                f"SPS={sps:>7.0f}  wall={wall_clock:>6.1f}s"
-            )
-
-    env.close()
+    eval_cb = _BenchmarkEvalCallback(
+        env_id, log, eval_freq, eval_episodes, seed + 1000, start_time, get_action,
+    )
+    sac.callbacks.callbacks.append(eval_cb)
+    sac.train(total_timesteps=max_steps)
 
 
 def _run_td3(
@@ -466,133 +469,30 @@ def _run_td3(
     eval_episodes: int,
     log: ExperimentLog,
 ) -> None:
-    """TD3 training loop with periodic evaluation."""
-    env = gym.make(env_id)
-    env.reset(seed=seed)
-    obs_dim = int(np.prod(env.observation_space.shape))
-    act_dim = int(np.prod(env.action_space.shape))
-    act_high = float(env.action_space.high[0])
+    """TD3 training loop using standalone TD3 class."""
+    from rlox.algorithms.td3 import TD3
 
-    hidden = policy_cfg.get("hidden_sizes", [400, 300])
-    lr = hp.get("learning_rate", 1e-3)
-    gamma = hp.get("gamma", 0.99)
-    tau = hp.get("tau", 0.005)
-    batch_size = hp.get("batch_size", 256)
-    buffer_size = hp.get("buffer_size", 1_000_000)
-    learning_starts = hp.get("learning_starts", 10_000)
-    policy_delay = hp.get("policy_delay", 2)
-    target_noise = hp.get("target_policy_noise", 0.2)
-    noise_clip = hp.get("target_noise_clip", 0.5)
-    exploration_noise = hp.get("exploration_noise", 0.1)
+    hidden = policy_cfg.get("hidden_sizes", [256, 256])[0]
+    filtered = _filter_hp(hp, TD3)
+    # Map config key names to TD3 constructor names
+    if "target_policy_noise" in hp:
+        filtered["target_noise"] = hp["target_policy_noise"]
+    if "target_noise_clip" in hp:
+        filtered["noise_clip"] = hp["target_noise_clip"]
 
-    # TD3 uses two hidden layer sizes
-    h1 = hidden[0] if len(hidden) >= 1 else 400
-    h2 = hidden[1] if len(hidden) >= 2 else 300
-
-    actor = DeterministicPolicy(obs_dim, act_dim, h1, act_high)
-    actor_target = copy.deepcopy(actor)
-    critic1 = QNetwork(obs_dim, act_dim, h1)
-    critic2 = QNetwork(obs_dim, act_dim, h1)
-    critic1_target = copy.deepcopy(critic1)
-    critic2_target = copy.deepcopy(critic2)
-
-    actor_opt = torch.optim.Adam(actor.parameters(), lr=lr)
-    critic1_opt = torch.optim.Adam(critic1.parameters(), lr=lr)
-    critic2_opt = torch.optim.Adam(critic2.parameters(), lr=lr)
-
-    buffer = rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
-
-    obs, _ = env.reset()
+    td3 = TD3(env_id=env_id, hidden=hidden, seed=seed, **filtered)
     start_time = time.monotonic()
-    last_eval_step = 0
-    update_count = 0
 
-    for step in range(max_steps):
-        if step < learning_starts:
-            action = env.action_space.sample()
-        else:
-            with torch.no_grad():
-                obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
-                action = actor(obs_t).squeeze(0).numpy()
-                noise = np.random.randn(act_dim) * exploration_noise
-                action = np.clip(action + noise, -act_high, act_high)
+    def get_action(o: np.ndarray) -> np.ndarray:
+        with torch.no_grad():
+            ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
+            return td3.actor(ot).squeeze(0).numpy()
 
-        next_obs, reward, terminated, truncated, _ = env.step(action)
-        buffer.push(
-            np.asarray(obs, dtype=np.float32),
-            np.asarray(action, dtype=np.float32),
-            float(reward), bool(terminated), bool(truncated),
-            np.asarray(next_obs, dtype=np.float32),
-        )
-        obs = next_obs
-        if terminated or truncated:
-            obs, _ = env.reset()
-
-        # Update
-        if step >= learning_starts and len(buffer) >= batch_size:
-            update_count += 1
-            batch = buffer.sample(batch_size, step)
-            obs_b = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
-            next_obs_b = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
-            act_b = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.float32)
-            if act_b.dim() == 1:
-                act_b = act_b.unsqueeze(-1)
-            rew_b = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
-            done_b = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
-
-            import torch.nn.functional as F
-
-            with torch.no_grad():
-                noise = torch.randn_like(act_b) * target_noise
-                noise = noise.clamp(-noise_clip, noise_clip)
-                next_a = (actor_target(next_obs_b) + noise).clamp(-act_high, act_high)
-                q1_next = critic1_target(next_obs_b, next_a).squeeze(-1)
-                q2_next = critic2_target(next_obs_b, next_a).squeeze(-1)
-                tgt = rew_b + gamma * (1.0 - done_b) * torch.min(q1_next, q2_next)
-
-            q1 = critic1(obs_b, act_b).squeeze(-1)
-            q2 = critic2(obs_b, act_b).squeeze(-1)
-            c1_loss = F.mse_loss(q1, tgt)
-            c2_loss = F.mse_loss(q2, tgt)
-            critic1_opt.zero_grad(); c1_loss.backward(); critic1_opt.step()
-            critic2_opt.zero_grad(); c2_loss.backward(); critic2_opt.step()
-
-            # Critic target updates every step (per Fujimoto et al. 2018)
-            polyak_update(critic1, critic1_target, tau)
-            polyak_update(critic2, critic2_target, tau)
-
-            # Actor + actor target delayed
-            if update_count % policy_delay == 0:
-                a_loss = -critic1(obs_b, actor(obs_b)).mean()
-                actor_opt.zero_grad(); a_loss.backward(); actor_opt.step()
-                polyak_update(actor, actor_target, tau)
-
-        # Periodic evaluation
-        if (step + 1) - last_eval_step >= eval_freq:
-            last_eval_step = step + 1
-
-            def get_action(o: np.ndarray) -> np.ndarray:
-                with torch.no_grad():
-                    ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
-                    return actor(ot).squeeze(0).numpy()
-
-            wall_clock = time.monotonic() - start_time
-            sps = (step + 1) / max(wall_clock, 1e-9)
-            mean_ret, std_ret, mean_len = evaluate_policy_gym(
-                env_id, get_action, eval_episodes, seed + 1000,
-            )
-            log.evaluations.append(EvalRecord(
-                step=step + 1, wall_clock_s=wall_clock,
-                mean_return=mean_ret, std_return=std_ret,
-                ep_length=mean_len, sps=sps,
-            ))
-            print(
-                f"  [rlox] step={step + 1:>8d}  "
-                f"return={mean_ret:>8.1f} +/- {std_ret:>6.1f}  "
-                f"SPS={sps:>7.0f}  wall={wall_clock:>6.1f}s"
-            )
-
-    env.close()
+    eval_cb = _BenchmarkEvalCallback(
+        env_id, log, eval_freq, eval_episodes, seed + 1000, start_time, get_action,
+    )
+    td3.callbacks.callbacks.append(eval_cb)
+    td3.train(total_timesteps=max_steps)
 
 
 def _run_dqn(
@@ -605,112 +505,40 @@ def _run_dqn(
     eval_episodes: int,
     log: ExperimentLog,
 ) -> None:
-    """DQN training loop with periodic evaluation."""
-    env = gym.make(env_id)
-    env.reset(seed=seed)
-    obs_dim = int(np.prod(env.observation_space.shape))
-    n_actions = int(env.action_space.n)
+    """DQN training loop using standalone DQN class."""
+    from rlox.algorithms.dqn import DQN
 
     hidden = policy_cfg.get("hidden_sizes", [64, 64])[0]
-    lr = hp.get("learning_rate", 1e-4)
-    gamma = hp.get("gamma", 0.99)
-    batch_size = hp.get("batch_size", 64)
-    buffer_size = hp.get("buffer_size", 100_000)
-    learning_starts = hp.get("learning_starts", 1000)
-    target_update_freq = hp.get("target_update_interval", 10_000)
-    exploration_fraction = hp.get("exploration_fraction", 0.1)
-    exploration_final_eps = hp.get("exploration_final_eps", 0.05)
+    filtered = _filter_hp(hp, DQN)
+    # Map config key names to DQN constructor names
+    if "target_update_interval" in hp:
+        filtered["target_update_freq"] = hp["target_update_interval"]
 
-    q_net = SimpleQNetwork(obs_dim, n_actions, hidden)
-    target_net = copy.deepcopy(q_net)
-    optimizer = torch.optim.Adam(q_net.parameters(), lr=lr)
-
-    buffer = rlox.ReplayBuffer(buffer_size, obs_dim, 1)
-
-    obs, _ = env.reset()
+    dqn = DQN(env_id=env_id, hidden=hidden, seed=seed, **filtered)
     start_time = time.monotonic()
-    last_eval_step = 0
 
-    for step in range(max_steps):
-        # Epsilon schedule
-        frac = min(1.0, step / max(1, int(max_steps * exploration_fraction)))
-        eps = 1.0 + frac * (exploration_final_eps - 1.0)
+    def get_action(o: np.ndarray) -> int:
+        with torch.no_grad():
+            ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
+            return int(dqn.q_network(ot).argmax(dim=-1).item())
 
-        if np.random.random() < eps or step < learning_starts:
-            action = int(env.action_space.sample())
-        else:
-            with torch.no_grad():
-                obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
-                action = int(q_net(obs_t).argmax(dim=-1).item())
-
-        next_obs, reward, terminated, truncated, _ = env.step(action)
-        buffer.push(
-            np.asarray(obs, dtype=np.float32),
-            np.array([float(action)], dtype=np.float32),
-            float(reward), bool(terminated), bool(truncated),
-            np.asarray(next_obs, dtype=np.float32),
-        )
-        obs = next_obs
-        if terminated or truncated:
-            obs, _ = env.reset()
-
-        # Update
-        if step >= learning_starts and len(buffer) >= batch_size:
-            import torch.nn.functional as F
-
-            batch = buffer.sample(batch_size, step)
-            obs_b = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
-            next_obs_b = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
-            act_b = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.long).squeeze(-1)
-            rew_b = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
-            done_b = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
-
-            q = q_net(obs_b).gather(1, act_b.unsqueeze(1)).squeeze(1)
-            with torch.no_grad():
-                # Double DQN: select action with online net, evaluate with target
-                next_actions = q_net(next_obs_b).argmax(dim=-1)
-                next_q = target_net(next_obs_b).gather(1, next_actions.unsqueeze(1)).squeeze(1)
-                target_q = rew_b + gamma * (1.0 - done_b) * next_q
-
-            loss = F.mse_loss(q, target_q)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        if step % target_update_freq == 0:
-            target_net.load_state_dict(q_net.state_dict())
-
-        # Periodic evaluation
-        if (step + 1) - last_eval_step >= eval_freq:
-            last_eval_step = step + 1
-
-            def get_action(o: np.ndarray) -> int:
-                with torch.no_grad():
-                    ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
-                    return int(q_net(ot).argmax(dim=-1).item())
-
-            wall_clock = time.monotonic() - start_time
-            sps = (step + 1) / max(wall_clock, 1e-9)
-            mean_ret, std_ret, mean_len = evaluate_policy_gym(
-                env_id, get_action, eval_episodes, seed + 1000,
-            )
-            log.evaluations.append(EvalRecord(
-                step=step + 1, wall_clock_s=wall_clock,
-                mean_return=mean_ret, std_return=std_ret,
-                ep_length=mean_len, sps=sps,
-            ))
-            print(
-                f"  [rlox] step={step + 1:>8d}  "
-                f"return={mean_ret:>8.1f} +/- {std_ret:>6.1f}  "
-                f"SPS={sps:>7.0f}  wall={wall_clock:>6.1f}s"
-            )
-
-    env.close()
+    eval_cb = _BenchmarkEvalCallback(
+        env_id, log, eval_freq, eval_episodes, seed + 1000, start_time, get_action,
+    )
+    dqn.callbacks.callbacks.append(eval_cb)
+    dqn.train(total_timesteps=max_steps)
 
 
 # ---------------------------------------------------------------------------
 # Continuous-action PPO actor-critic
 # ---------------------------------------------------------------------------
+
+
+def _ortho_init(module: nn.Module, gain: float = np.sqrt(2)):
+    """Orthogonal weight initialization (matching SB3)."""
+    if isinstance(module, nn.Linear):
+        nn.init.orthogonal_(module.weight, gain=gain)
+        nn.init.zeros_(module.bias)
 
 
 class _ContinuousActorCritic(nn.Module):
@@ -725,13 +553,21 @@ class _ContinuousActorCritic(nn.Module):
             nn.Linear(h, h), nn.Tanh(),
             nn.Linear(h, act_dim),
         )
-        self.actor_logstd = nn.Parameter(torch.zeros(act_dim))
+        self.actor_logstd = nn.Parameter(torch.full((act_dim,), -0.5))
 
         self.critic = nn.Sequential(
             nn.Linear(obs_dim, h), nn.Tanh(),
             nn.Linear(h, h), nn.Tanh(),
             nn.Linear(h, 1),
         )
+
+        # Orthogonal initialization (matching SB3 defaults)
+        self.actor_mean.apply(_ortho_init)
+        nn.init.orthogonal_(self.actor_mean[-1].weight, gain=0.01)
+        nn.init.zeros_(self.actor_mean[-1].bias)
+        self.critic.apply(_ortho_init)
+        nn.init.orthogonal_(self.critic[-1].weight, gain=1.0)
+        nn.init.zeros_(self.critic[-1].bias)
 
     def get_action_and_logprob(self, obs: torch.Tensor):
         mean = self.actor_mean(obs)
@@ -767,6 +603,7 @@ def _do_eval(
     eval_episodes: int,
     seed: int,
     log: ExperimentLog,
+    obs_rms: _RunningMeanStd | None = None,
 ) -> None:
     """Run evaluation and append to log."""
     wall_clock = time.monotonic() - start_time
@@ -774,12 +611,16 @@ def _do_eval(
 
     if is_discrete:
         def get_action(obs: np.ndarray) -> int:
+            if obs_rms is not None:
+                obs = (obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8)
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
                 logits = policy.actor(obs_t)
                 return int(logits.argmax(dim=-1).item())
     else:
         def get_action(obs: np.ndarray) -> np.ndarray:
+            if obs_rms is not None:
+                obs = (obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8)
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
                 mean = policy.actor_mean(obs_t)

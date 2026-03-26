@@ -59,6 +59,40 @@ pub fn compute_gae<'py>(
     ))
 }
 
+/// Batched GAE: compute GAE for multiple environments in a single call.
+///
+/// All inputs are flat 1-D arrays of length `n_envs * n_steps`, laid out as
+/// `[env0_step0, env0_step1, ..., env1_step0, ...]`.
+/// `last_values` has length `n_envs`.
+///
+/// Returns `(advantages, returns)` each of length `n_envs * n_steps`.
+#[pyfunction]
+#[pyo3(signature = (rewards, values, dones, last_values, n_steps, gamma, lam))]
+pub fn compute_gae_batched<'py>(
+    py: Python<'py>,
+    rewards: PyReadonlyArray1<'py, f64>,
+    values: PyReadonlyArray1<'py, f64>,
+    dones: PyReadonlyArray1<'py, f64>,
+    last_values: PyReadonlyArray1<'py, f64>,
+    n_steps: usize,
+    gamma: f64,
+    lam: f64,
+) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
+    let (advantages, returns) = gae::compute_gae_batched(
+        rewards.as_slice()?,
+        values.as_slice()?,
+        dones.as_slice()?,
+        last_values.as_slice()?,
+        n_steps,
+        gamma,
+        lam,
+    );
+    Ok((
+        PyArray1::from_vec(py, advantages),
+        PyArray1::from_vec(py, returns),
+    ))
+}
+
 /// Python-facing RunningStats (Welford's algorithm).
 #[pyclass(name = "RunningStats")]
 pub struct PyRunningStats {

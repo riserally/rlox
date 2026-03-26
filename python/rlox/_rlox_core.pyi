@@ -358,6 +358,36 @@ def compute_gae(
     """
     ...
 
+def compute_gae_batched(
+    rewards: npt.NDArray[np.float64],
+    values: npt.NDArray[np.float64],
+    dones: npt.NDArray[np.float64],
+    last_values: npt.NDArray[np.float64],
+    n_steps: int,
+    gamma: float,
+    lam: float,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Batched GAE: compute GAE for multiple environments in a single call.
+
+    All inputs are flat 1-D arrays of length ``n_envs * n_steps``, laid out as
+    ``[env0_step0, env0_step1, ..., env1_step0, ...]``.
+
+    Parameters
+    ----------
+    rewards : array of shape (n_envs * n_steps,)
+    values : array of shape (n_envs * n_steps,)
+    dones : array of shape (n_envs * n_steps,)
+    last_values : array of shape (n_envs,)
+    n_steps : int
+    gamma : float
+    lam : float
+
+    Returns
+    -------
+    (advantages, returns) : tuple of f64 arrays, each of shape (n_envs * n_steps,)
+    """
+    ...
+
 def compute_vtrace(
     log_rhos: npt.NDArray[np.float32],
     rewards: npt.NDArray[np.float32],

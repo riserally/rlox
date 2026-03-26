@@ -172,6 +172,7 @@ class SAC:
 
         with torch.no_grad():
             next_actions, next_log_prob = self.actor.sample(next_obs)
+            next_actions = next_actions * self.act_high
             q1_next = self.critic1_target(next_obs, next_actions).squeeze(-1)
             q2_next = self.critic2_target(next_obs, next_actions).squeeze(-1)
             q_next = torch.min(q1_next, q2_next) - self.alpha * next_log_prob

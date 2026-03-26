@@ -109,21 +109,17 @@ impl PyVecEnv {
         actions: Vec<u32>,
     ) -> PyResult<Bound<'py, PyDict>> {
         let actions: Vec<Action> = actions.into_iter().map(Action::Discrete).collect();
-        let batch = self.inner.step_all(&actions).map_err(rlox_err_to_py)?;
+        let batch = self.inner.step_all_flat(&actions).map_err(rlox_err_to_py)?;
 
-        let n = batch.obs.len();
-        let obs_dim = if n > 0 { batch.obs[0].len() } else { 0 };
-
-        // Build a flat vec for the 2D obs array
-        let mut obs_flat = Vec::with_capacity(n * obs_dim);
-        for row in &batch.obs {
-            obs_flat.extend_from_slice(row);
-        }
+        let n = self.inner.num_envs();
+        let obs_dim = batch.obs_dim;
 
         let dict = PyDict::new(py);
-        let obs_array = PyArray2::from_vec2(py, &batch.obs).map_err(|e| {
-            PyRuntimeError::new_err(format!("Failed to create obs array: {}", e))
-        })?;
+        // Use flat obs directly — single copy, no per-env Vec overhead
+        let obs_flat = PyArray1::from_vec(py, batch.obs_flat);
+        let obs_array = obs_flat
+            .call_method1("reshape", ((n, obs_dim),))
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to reshape obs: {}", e)))?;
         dict.set_item("obs", obs_array)?;
 
         let rewards = PyArray1::from_slice(py, &batch.rewards);

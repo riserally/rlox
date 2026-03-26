@@ -171,43 +171,50 @@ class RolloutCollector:
         last_obs_input = self._maybe_normalize_obs(last_obs_tensor)
         last_values = policy.get_value(last_obs_input)
 
-        # Compute GAE per environment, then concatenate
-        all_advantages = []
-        all_returns = []
-        for env_idx in range(self.n_envs):
-            rewards_env = torch.stack([r[env_idx] for r in all_rewards])
-            values_env = torch.stack([v[env_idx] for v in all_values])
-            dones_env = torch.stack([d[env_idx] for d in all_dones])
+        # Compute GAE in a single batched call (env-major flat layout)
+        rewards_stacked = torch.stack(all_rewards)   # (n_steps, n_envs)
+        values_stacked = torch.stack(all_values)     # (n_steps, n_envs)
+        dones_stacked = torch.stack(all_dones)       # (n_steps, n_envs)
 
-            if self.normalize_rewards:
-                r_np = rewards_env.cpu().numpy().astype(np.float64)
-                self._reward_stats.batch_update(r_np)
-                std = self._reward_stats.std()
-                if std < 1e-8:
-                    std = 1.0
-                rewards_env = rewards_env / std
+        if self.normalize_rewards:
+            r_np = rewards_stacked.cpu().numpy().astype(np.float64)
+            self._reward_stats.batch_update(r_np.ravel())
+            std = self._reward_stats.std()
+            if std < 1e-8:
+                std = 1.0
+            rewards_stacked = rewards_stacked / std
 
-            adv, ret = rlox.compute_gae(
-                rewards=rewards_env.cpu().numpy().astype(np.float64),
-                values=values_env.cpu().numpy().astype(np.float64),
-                dones=dones_env.cpu().numpy().astype(np.float64),
-                last_value=float(last_values[env_idx].cpu()),
-                gamma=self.gamma,
-                lam=self.gae_lambda,
-            )
-            all_advantages.append(torch.as_tensor(adv, dtype=torch.float32, device=self.device))
-            all_returns.append(torch.as_tensor(ret, dtype=torch.float32, device=self.device))
+        # Transpose to (n_envs, n_steps) env-major, flatten contiguously
+        rewards_flat = rewards_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        values_flat = values_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        dones_flat = dones_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        last_vals = last_values.cpu().numpy().astype(np.float64)
+
+        adv_flat, ret_flat = rlox.compute_gae_batched(
+            rewards=rewards_flat,
+            values=values_flat,
+            dones=dones_flat,
+            last_values=last_vals,
+            n_steps=n_steps,
+            gamma=self.gamma,
+            lam=self.gae_lambda,
+        )
+
+        # Reshape from env-major (n_envs, n_steps) back to (n_steps, n_envs)
+        advantages_t = torch.as_tensor(
+            adv_flat, dtype=torch.float32, device=self.device,
+        ).reshape(self.n_envs, n_steps).T
+        returns_t = torch.as_tensor(
+            ret_flat, dtype=torch.float32, device=self.device,
+        ).reshape(self.n_envs, n_steps).T
 
         # Stack: (n_steps, n_envs, ...) then flatten to (n_steps * n_envs, ...)
         obs_t = torch.stack(all_obs)           # (n_steps, n_envs, obs_dim)
         actions_t = torch.stack(all_actions)    # (n_steps, n_envs) or (n_steps, n_envs, act_dim)
-        rewards_t = torch.stack(all_rewards)    # (n_steps, n_envs)
-        dones_t = torch.stack(all_dones)        # (n_steps, n_envs)
+        rewards_t = rewards_stacked            # already (n_steps, n_envs)
+        dones_t = dones_stacked                # already (n_steps, n_envs)
         log_probs_t = torch.stack(all_log_probs)  # (n_steps, n_envs)
-        values_t = torch.stack(all_values)      # (n_steps, n_envs)
-        # advantages/returns: each is (n_steps,) per env -> stack to (n_envs, n_steps) then transpose
-        advantages_t = torch.stack(all_advantages).T  # (n_steps, n_envs)
-        returns_t = torch.stack(all_returns).T         # (n_steps, n_envs)
+        values_t = values_stacked              # already (n_steps, n_envs)
 
         # Flatten (n_steps, n_envs, ...) -> (n_steps * n_envs, ...)
         total = n_steps * self.n_envs

@@ -22,6 +22,7 @@ use super::ExperienceRecord;
 pub struct SumTree {
     capacity: usize,
     tree: Vec<f64>,
+    min_tree: Vec<f64>,
 }
 
 impl SumTree {
@@ -32,6 +33,7 @@ impl SumTree {
         Self {
             capacity,
             tree: vec![0.0; 2 * capacity],
+            min_tree: vec![f64::INFINITY; 2 * capacity],
         }
     }
 
@@ -45,14 +47,21 @@ impl SumTree {
         self.tree[1]
     }
 
+    /// Minimum leaf priority (O(1) via the min-tree).
+    pub fn min(&self) -> f64 {
+        self.min_tree[1]
+    }
+
     /// Set the priority of leaf `index`.
     pub fn set(&mut self, index: usize, priority: f64) {
         assert!(index < self.capacity, "SumTree index out of bounds");
         let mut pos = index + self.capacity;
         self.tree[pos] = priority;
+        self.min_tree[pos] = priority;
         while pos > 1 {
             pos /= 2;
             self.tree[pos] = self.tree[2 * pos] + self.tree[2 * pos + 1];
+            self.min_tree[pos] = self.min_tree[2 * pos].min(self.min_tree[2 * pos + 1]);
         }
     }
 
@@ -160,43 +169,49 @@ impl PrioritizedReplayBuffer {
     }
 
     /// Push a transition with the given TD-error priority.
-    pub fn push(&mut self, record: ExperienceRecord, priority: f64) -> Result<(), RloxError> {
+    pub fn push_slices(
+        &mut self,
+        obs: &[f32],
+        next_obs: &[f32],
+        action: &[f32],
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+        priority: f64,
+    ) -> Result<(), RloxError> {
         if priority < 0.0 {
             return Err(RloxError::BufferError(
                 "priority must be non-negative".into(),
             ));
         }
-        if record.obs.len() != self.obs_dim {
+        if obs.len() != self.obs_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
-                got: format!("obs.len()={}", record.obs.len()),
+                got: format!("obs.len()={}", obs.len()),
             });
         }
-        if record.next_obs.len() != self.obs_dim {
+        if next_obs.len() != self.obs_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
-                got: format!("next_obs.len()={}", record.next_obs.len()),
+                got: format!("next_obs.len()={}", next_obs.len()),
             });
         }
-        if record.action.len() != self.act_dim {
+        if action.len() != self.act_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("act_dim={}", self.act_dim),
-                got: format!("action.len()={}", record.action.len()),
+                got: format!("action.len()={}", action.len()),
             });
         }
 
         let idx = self.write_pos;
         let obs_start = idx * self.obs_dim;
-        self.observations[obs_start..obs_start + self.obs_dim]
-            .copy_from_slice(&record.obs);
-        self.next_observations[obs_start..obs_start + self.obs_dim]
-            .copy_from_slice(&record.next_obs);
+        self.observations[obs_start..obs_start + self.obs_dim].copy_from_slice(obs);
+        self.next_observations[obs_start..obs_start + self.obs_dim].copy_from_slice(next_obs);
         let act_start = idx * self.act_dim;
-        self.actions[act_start..act_start + self.act_dim]
-            .copy_from_slice(&record.action);
-        self.rewards[idx] = record.reward;
-        self.terminated[idx] = record.terminated;
-        self.truncated[idx] = record.truncated;
+        self.actions[act_start..act_start + self.act_dim].copy_from_slice(action);
+        self.rewards[idx] = reward;
+        self.terminated[idx] = terminated;
+        self.truncated[idx] = truncated;
 
         let p_alpha = priority.powf(self.alpha);
         self.tree.set(idx, p_alpha);
@@ -209,6 +224,13 @@ impl PrioritizedReplayBuffer {
             self.count += 1;
         }
         Ok(())
+    }
+
+    pub fn push(&mut self, record: ExperienceRecord, priority: f64) -> Result<(), RloxError> {
+        self.push_slices(
+            &record.obs, &record.next_obs, &record.action,
+            record.reward, record.terminated, record.truncated, priority,
+        )
     }
 
     /// Set the importance-sampling beta parameter.
@@ -316,20 +338,14 @@ impl PrioritizedReplayBuffer {
         Ok(())
     }
 
-    /// Find the minimum non-zero probability among valid leaves.
+    /// Find the minimum non-zero probability among valid leaves (O(1) via min-tree).
     fn tree_min_prob(&self) -> f64 {
         let total = self.tree.total();
         if total == 0.0 {
             return 1.0;
         }
-        let mut min_p = f64::MAX;
-        for i in 0..self.count {
-            let p = self.tree.get(i);
-            if p > 0.0 && p < min_p {
-                min_p = p;
-            }
-        }
-        if min_p == f64::MAX {
+        let min_p = self.tree.min();
+        if min_p <= 0.0 || min_p == f64::INFINITY {
             1.0 / self.count as f64
         } else {
             min_p / total
@@ -404,6 +420,30 @@ mod tests {
         assert_eq!(tree.total(), 5.0);
         assert_eq!(tree.sample(0.0), 0);
         assert_eq!(tree.sample(4.9), 0);
+    }
+
+    #[test]
+    fn sum_tree_min_tracks_minimum() {
+        let mut tree = SumTree::new(4);
+        tree.set(0, 3.0);
+        tree.set(1, 1.0);
+        tree.set(2, 5.0);
+        tree.set(3, 2.0);
+        assert!((tree.min() - 1.0).abs() < 1e-12);
+
+        // Update minimum
+        tree.set(1, 10.0);
+        assert!((tree.min() - 2.0).abs() < 1e-12);
+
+        // Set new minimum
+        tree.set(3, 0.5);
+        assert!((tree.min() - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn sum_tree_min_empty_is_infinity() {
+        let tree = SumTree::new(4);
+        assert!(tree.min().is_infinite());
     }
 
     // ---- PrioritizedReplayBuffer tests ----

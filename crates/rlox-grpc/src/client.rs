@@ -51,6 +51,8 @@ impl RemoteEnvClient {
 
         Ok(BatchTransition {
             obs,
+            obs_flat: Vec::new(),
+            obs_dim: 0,
             rewards: response.rewards,
             terminated: response.terminated,
             truncated: response.truncated,

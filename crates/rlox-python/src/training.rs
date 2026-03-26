@@ -32,8 +32,8 @@ pub fn compute_gae<'py>(
     gamma: f64,
     lam: f64,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
-    let rewards_slice = rewards.as_slice()?;
-    let values_slice = values.as_slice()?;
+    let rewards_owned = rewards.as_slice()?.to_vec();
+    let values_owned = values.as_slice()?.to_vec();
 
     // Accept dones as either f64 array or bool array
     let dones_vec: Vec<f64> = if let Ok(arr) = dones.extract::<PyReadonlyArray1<'py, f64>>() {
@@ -41,7 +41,6 @@ pub fn compute_gae<'py>(
     } else if let Ok(arr) = dones.extract::<PyReadonlyArray1<'py, bool>>() {
         arr.as_slice()?.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect()
     } else {
-        // Try casting via numpy .astype(float)
         let np_arr: &Bound<'py, pyo3::types::PyAny> = dones;
         let float_arr = np_arr
             .call_method1("astype", ("float64",))
@@ -50,8 +49,9 @@ pub fn compute_gae<'py>(
         readonly.as_slice()?.to_vec()
     };
 
-    let (advantages, returns) =
-        gae::compute_gae(rewards_slice, values_slice, &dones_vec, last_value, gamma, lam);
+    let (advantages, returns) = py.allow_threads(|| {
+        gae::compute_gae(&rewards_owned, &values_owned, &dones_vec, last_value, gamma, lam)
+    });
 
     Ok((
         PyArray1::from_vec(py, advantages),
@@ -78,15 +78,49 @@ pub fn compute_gae_batched<'py>(
     gamma: f64,
     lam: f64,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
-    let (advantages, returns) = gae::compute_gae_batched(
-        rewards.as_slice()?,
-        values.as_slice()?,
-        dones.as_slice()?,
-        last_values.as_slice()?,
-        n_steps,
-        gamma,
-        lam,
-    );
+    let rewards_owned = rewards.as_slice()?.to_vec();
+    let values_owned = values.as_slice()?.to_vec();
+    let dones_owned = dones.as_slice()?.to_vec();
+    let last_values_owned = last_values.as_slice()?.to_vec();
+
+    let (advantages, returns) = py.allow_threads(|| {
+        gae::compute_gae_batched(
+            &rewards_owned, &values_owned, &dones_owned, &last_values_owned,
+            n_steps, gamma, lam,
+        )
+    });
+    Ok((
+        PyArray1::from_vec(py, advantages),
+        PyArray1::from_vec(py, returns),
+    ))
+}
+
+/// Batched GAE in f32 — avoids f64 conversion overhead.
+///
+/// Same layout as `compute_gae_batched` but operates on f32.
+#[pyfunction]
+#[pyo3(signature = (rewards, values, dones, last_values, n_steps, gamma, lam))]
+pub fn compute_gae_batched_f32<'py>(
+    py: Python<'py>,
+    rewards: PyReadonlyArray1<'py, f32>,
+    values: PyReadonlyArray1<'py, f32>,
+    dones: PyReadonlyArray1<'py, f32>,
+    last_values: PyReadonlyArray1<'py, f32>,
+    n_steps: usize,
+    gamma: f32,
+    lam: f32,
+) -> PyResult<(Bound<'py, PyArray1<f32>>, Bound<'py, PyArray1<f32>>)> {
+    let rewards_owned = rewards.as_slice()?.to_vec();
+    let values_owned = values.as_slice()?.to_vec();
+    let dones_owned = dones.as_slice()?.to_vec();
+    let last_values_owned = last_values.as_slice()?.to_vec();
+
+    let (advantages, returns) = py.allow_threads(|| {
+        gae::compute_gae_batched_f32(
+            &rewards_owned, &values_owned, &dones_owned, &last_values_owned,
+            n_steps, gamma, lam,
+        )
+    });
     Ok((
         PyArray1::from_vec(py, advantages),
         PyArray1::from_vec(py, returns),

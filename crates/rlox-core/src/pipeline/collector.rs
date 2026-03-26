@@ -139,12 +139,12 @@ impl AsyncCollector {
                                 };
                                 all_dones.push(done);
                             }
-                            // Update current observations
-                            current_obs = transition
-                                .obs
-                                .into_iter()
-                                .flat_map(|o| o.into_iter())
-                                .collect();
+                            // Update current observations (reuse allocation)
+                            let mut offset = 0;
+                            for obs_vec in transition.obs {
+                                current_obs[offset..offset + obs_vec.len()].copy_from_slice(&obs_vec);
+                                offset += obs_vec.len();
+                            }
                         }
                         Err(_) => {
                             ok = false;
@@ -160,35 +160,35 @@ impl AsyncCollector {
                 // Bootstrap value for GAE
                 let last_values = value_fn(&current_obs);
 
-                // Compute GAE per-environment then interleave
+                // Transpose step-major -> env-major for batched GAE
+                let mut env_major_rewards = vec![0.0; total];
+                let mut env_major_values = vec![0.0; total];
+                let mut env_major_dones = vec![0.0; total];
+                for t in 0..n_steps {
+                    for e in 0..n_envs {
+                        env_major_rewards[e * n_steps + t] = all_rewards[t * n_envs + e];
+                        env_major_values[e * n_steps + t] = all_values[t * n_envs + e];
+                        env_major_dones[e * n_steps + t] = all_dones[t * n_envs + e];
+                    }
+                }
+
+                let (env_major_adv, env_major_ret) = gae::compute_gae_batched(
+                    &env_major_rewards,
+                    &env_major_values,
+                    &env_major_dones,
+                    &last_values,
+                    n_steps,
+                    gamma,
+                    gae_lambda,
+                );
+
+                // Transpose back env-major -> step-major
                 let mut advantages = vec![0.0; total];
                 let mut returns = vec![0.0; total];
-
-                for env_idx in 0..n_envs {
-                    // Extract per-env slices (strided)
-                    let env_rewards: Vec<f64> = (0..n_steps)
-                        .map(|t| all_rewards[t * n_envs + env_idx])
-                        .collect();
-                    let env_values: Vec<f64> = (0..n_steps)
-                        .map(|t| all_values[t * n_envs + env_idx])
-                        .collect();
-                    let env_dones: Vec<f64> = (0..n_steps)
-                        .map(|t| all_dones[t * n_envs + env_idx])
-                        .collect();
-
-                    let (env_adv, env_ret) = gae::compute_gae(
-                        &env_rewards,
-                        &env_values,
-                        &env_dones,
-                        last_values[env_idx],
-                        gamma,
-                        gae_lambda,
-                    );
-
-                    // Write back interleaved
+                for e in 0..n_envs {
                     for t in 0..n_steps {
-                        advantages[t * n_envs + env_idx] = env_adv[t];
-                        returns[t * n_envs + env_idx] = env_ret[t];
+                        advantages[t * n_envs + e] = env_major_adv[e * n_steps + t];
+                        returns[t * n_envs + e] = env_major_ret[e * n_steps + t];
                     }
                 }
 

@@ -12,6 +12,7 @@ Example
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 
@@ -29,6 +30,32 @@ class LoggerCallback:
 
     def on_eval(self, step: int, metrics: dict[str, Any]) -> None:
         pass
+
+
+class ConsoleLogger(LoggerCallback):
+    """Lightweight logger that prints training progress to stdout."""
+
+    def __init__(self, log_interval: int = 1000) -> None:
+        self.log_interval = log_interval
+        self._start_time: float | None = None
+
+    def on_train_step(self, step: int, metrics: dict[str, Any]) -> None:
+        if self._start_time is None:
+            self._start_time = time.monotonic()
+
+        if step % self.log_interval != 0:
+            return
+
+        elapsed = time.monotonic() - self._start_time
+        sps = step / elapsed if elapsed > 0 else 0.0
+
+        reward_str = ""
+        for key in ("episode_reward", "mean_reward", "reward"):
+            if key in metrics:
+                reward_str = f" | reward={metrics[key]:.2f}"
+                break
+
+        print(f"step={step} | SPS={sps:.0f}{reward_str}")
 
 
 class WandbLogger(LoggerCallback):

@@ -11,6 +11,11 @@ use crate::seed::derive_seed;
 pub struct BatchTransition {
     /// Observations: `[num_envs][obs_dim]` — post-reset obs when done
     pub obs: Vec<Vec<f32>>,
+    /// Flat observations: `[num_envs * obs_dim]` contiguous layout.
+    /// Populated by `step_all_flat`. Empty when using `step_all`.
+    pub obs_flat: Vec<f32>,
+    /// Observation dimensionality (set by step_all_flat).
+    pub obs_dim: usize,
     /// Rewards: `[num_envs]`
     pub rewards: Vec<f64>,
     /// Terminated flags: `[num_envs]`
@@ -93,6 +98,74 @@ impl VecEnv {
 
         Ok(BatchTransition {
             obs,
+            obs_flat: Vec::new(),
+            obs_dim: 0,
+            rewards,
+            terminated,
+            truncated,
+            terminal_obs,
+        })
+    }
+
+    /// Step all environments in parallel, returning observations as a flat contiguous buffer.
+    ///
+    /// Unlike `step_all`, this avoids per-env Vec allocations by collecting
+    /// observations directly into `obs_flat: Vec<f32>` of shape `[n_envs * obs_dim]`.
+    /// The `obs` field is left empty.
+    pub fn step_all_flat(&mut self, actions: &[Action]) -> Result<BatchTransition, RloxError> {
+        if actions.len() != self.envs.len() {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("{}", self.envs.len()),
+                got: format!("{}", actions.len()),
+            });
+        }
+
+        let obs_dim = match &self.obs_space {
+            ObsSpace::Discrete(_) => 1,
+            ObsSpace::Box { shape, .. } => shape.iter().product(),
+            ObsSpace::MultiDiscrete(v) => v.len(),
+            ObsSpace::Dict(entries) => entries.iter().map(|(_, d)| d).sum(),
+        };
+        let n = self.envs.len();
+
+        // Step all envs in parallel, collecting (reward, terminated, truncated, term_obs)
+        // and the raw obs data
+        let results: Vec<Result<(Vec<f32>, f64, bool, bool, Option<Vec<f32>>), RloxError>> = self
+            .envs
+            .par_iter_mut()
+            .zip(actions.par_iter())
+            .map(|(env, action)| {
+                let mut transition = env.step(action)?;
+                let mut term_obs = None;
+                if transition.terminated || transition.truncated {
+                    term_obs = Some(transition.obs.clone().into_inner());
+                    let new_obs = env.reset(None)?;
+                    transition.obs = new_obs;
+                }
+                let obs_data = transition.obs.into_inner();
+                Ok((obs_data, transition.reward, transition.terminated, transition.truncated, term_obs))
+            })
+            .collect();
+
+        let mut obs_flat = vec![0.0f32; n * obs_dim];
+        let mut rewards = Vec::with_capacity(n);
+        let mut terminated = Vec::with_capacity(n);
+        let mut truncated = Vec::with_capacity(n);
+        let mut terminal_obs = Vec::with_capacity(n);
+
+        for (i, result) in results.into_iter().enumerate() {
+            let (obs_data, reward, term, trunc, tobs) = result?;
+            obs_flat[i * obs_dim..(i + 1) * obs_dim].copy_from_slice(&obs_data);
+            rewards.push(reward);
+            terminated.push(term);
+            truncated.push(trunc);
+            terminal_obs.push(tobs);
+        }
+
+        Ok(BatchTransition {
+            obs: Vec::new(),
+            obs_flat,
+            obs_dim,
             rewards,
             terminated,
             truncated,
@@ -170,6 +243,36 @@ mod tests {
         for obs in &batch.obs {
             assert_eq!(obs.len(), 4);
         }
+    }
+
+    #[test]
+    fn vec_env_step_all_flat_returns_contiguous_obs() {
+        let mut venv = make_vec_env(4, 42);
+        let actions: Vec<Action> = (0..4).map(|i| Action::Discrete((i % 2) as u32)).collect();
+
+        let batch_flat = venv.step_all_flat(&actions).unwrap();
+        assert!(batch_flat.obs.is_empty(), "obs Vec should be empty in flat mode");
+        assert_eq!(batch_flat.obs_flat.len(), 4 * 4); // 4 envs * 4 obs_dim (CartPole)
+        assert_eq!(batch_flat.obs_dim, 4);
+        assert_eq!(batch_flat.rewards.len(), 4);
+    }
+
+    #[test]
+    fn vec_env_step_all_flat_matches_step_all() {
+        let mut venv1 = make_vec_env(4, 42);
+        let mut venv2 = make_vec_env(4, 42);
+        let actions: Vec<Action> = (0..4).map(|i| Action::Discrete((i % 2) as u32)).collect();
+
+        let batch_vec = venv1.step_all(&actions).unwrap();
+        let batch_flat = venv2.step_all_flat(&actions).unwrap();
+
+        // Compare flat obs against per-env obs
+        for (i, obs_vec) in batch_vec.obs.iter().enumerate() {
+            let flat_slice = &batch_flat.obs_flat[i * 4..(i + 1) * 4];
+            assert_eq!(obs_vec, flat_slice, "env {i} obs mismatch");
+        }
+        assert_eq!(batch_vec.rewards, batch_flat.rewards);
+        assert_eq!(batch_vec.terminated, batch_flat.terminated);
     }
 
     #[test]

@@ -122,21 +122,18 @@ impl PyExperienceTable {
         truncated: bool,
         next_obs: Option<PyReadonlyArray1<f32>>,
     ) -> PyResult<()> {
-        let obs_vec = obs.as_slice()?.to_vec();
-        let next_obs_vec = match next_obs {
-            Some(n) => n.as_slice()?.to_vec(),
-            None => vec![0.0; obs_vec.len()],
-        };
-        let record = ExperienceRecord {
-            obs: obs_vec,
-            next_obs: next_obs_vec,
-            action: action.as_slice()?.to_vec(),
-            reward,
-            terminated,
-            truncated,
+        let obs_slice = obs.as_slice()?;
+        let action_slice = action.as_slice()?;
+        let zeros;
+        let next_obs_slice = match &next_obs {
+            Some(n) => n.as_slice()?,
+            None => {
+                zeros = vec![0.0f32; obs_slice.len()];
+                &zeros
+            }
         };
         self.inner
-            .push(record)
+            .push_slices(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -220,21 +217,18 @@ impl PyReplayBuffer {
         truncated: bool,
         next_obs: Option<PyReadonlyArray1<f32>>,
     ) -> PyResult<()> {
-        let obs_vec = obs.as_slice()?.to_vec();
-        let next_obs_vec = match next_obs {
-            Some(n) => n.as_slice()?.to_vec(),
-            None => vec![0.0; obs_vec.len()],
-        };
-        let record = ExperienceRecord {
-            obs: obs_vec,
-            next_obs: next_obs_vec,
-            action: action.as_slice()?.to_vec(),
-            reward,
-            terminated,
-            truncated,
+        let obs_slice = obs.as_slice()?;
+        let action_slice = action.as_slice()?;
+        let zeros;
+        let next_obs_slice = match &next_obs {
+            Some(n) => n.as_slice()?,
+            None => {
+                zeros = vec![0.0f32; obs_slice.len()];
+                &zeros
+            }
         };
         self.inner
-            .push(record)
+            .push_slices(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -248,10 +242,10 @@ impl PyReplayBuffer {
         batch_size: usize,
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let batch = self
-            .inner
-            .sample(batch_size, seed)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let batch = py.allow_threads(|| {
+            self.inner.sample(batch_size, seed)
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);
         builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
@@ -299,21 +293,18 @@ impl PyPrioritizedReplayBuffer {
         next_obs: Option<PyReadonlyArray1<f32>>,
         priority: f64,
     ) -> PyResult<()> {
-        let obs_vec = obs.as_slice()?.to_vec();
-        let next_obs_vec = match next_obs {
-            Some(n) => n.as_slice()?.to_vec(),
-            None => vec![0.0; obs_vec.len()],
-        };
-        let record = ExperienceRecord {
-            obs: obs_vec,
-            next_obs: next_obs_vec,
-            action: action.as_slice()?.to_vec(),
-            reward,
-            terminated,
-            truncated,
+        let obs_slice = obs.as_slice()?;
+        let action_slice = action.as_slice()?;
+        let zeros;
+        let next_obs_slice = match &next_obs {
+            Some(n) => n.as_slice()?,
+            None => {
+                zeros = vec![0.0f32; obs_slice.len()];
+                &zeros
+            }
         };
         self.inner
-            .push(record, priority)
+            .push_slices(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated, priority)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -325,10 +316,10 @@ impl PyPrioritizedReplayBuffer {
         batch_size: usize,
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let batch = self
-            .inner
-            .sample(batch_size, seed)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let batch = py.allow_threads(|| {
+            self.inner.sample(batch_size, seed)
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);
         builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;

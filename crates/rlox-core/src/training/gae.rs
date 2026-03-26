@@ -21,16 +21,16 @@ pub fn compute_gae(
     }
 
     let mut advantages = vec![0.0; n];
-    let mut last_gae = 0.0;
 
-    for t in (0..n).rev() {
+    // Peel last step to remove branch from inner loop
+    let last_nt = 1.0 - dones[n - 1];
+    let last_delta = rewards[n - 1] + gamma * last_value * last_nt - values[n - 1];
+    let mut last_gae = last_delta;
+    advantages[n - 1] = last_gae;
+
+    for t in (0..n - 1).rev() {
         let next_non_terminal = 1.0 - dones[t];
-        let next_value = if t == n - 1 {
-            last_value
-        } else {
-            values[t + 1]
-        };
-        let delta = rewards[t] + gamma * next_value * next_non_terminal - values[t];
+        let delta = rewards[t] + gamma * values[t + 1] * next_non_terminal - values[t];
         last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae;
         advantages[t] = last_gae;
     }
@@ -86,6 +86,58 @@ pub fn compute_gae_batched(
                 let next_non_terminal = 1.0 - d[t];
                 let next_value = if t == n_steps - 1 { lv } else { v[t + 1] };
                 let delta = r[t] + gamma * next_value * next_non_terminal - v[t];
+                last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae;
+                adv_chunk[t] = last_gae;
+                ret_chunk[t] = last_gae + v[t];
+            }
+        });
+
+    (all_advantages, all_returns)
+}
+
+/// Batched GAE in f32 — avoids f64 conversion overhead from Python.
+///
+/// Same layout as `compute_gae_batched` but operates on f32.
+pub fn compute_gae_batched_f32(
+    rewards: &[f32],
+    values: &[f32],
+    dones: &[f32],
+    last_values: &[f32],
+    n_steps: usize,
+    gamma: f32,
+    gae_lambda: f32,
+) -> (Vec<f32>, Vec<f32>) {
+    let n_envs = last_values.len();
+    if n_envs == 0 || n_steps == 0 {
+        return (Vec::new(), Vec::new());
+    }
+
+    use rayon::prelude::*;
+
+    let mut all_advantages = vec![0.0f32; n_envs * n_steps];
+    let mut all_returns = vec![0.0f32; n_envs * n_steps];
+
+    all_advantages
+        .par_chunks_mut(n_steps)
+        .zip(all_returns.par_chunks_mut(n_steps))
+        .enumerate()
+        .for_each(|(env_idx, (adv_chunk, ret_chunk))| {
+            let offset = env_idx * n_steps;
+            let r = &rewards[offset..offset + n_steps];
+            let v = &values[offset..offset + n_steps];
+            let d = &dones[offset..offset + n_steps];
+            let lv = last_values[env_idx];
+
+            // Peel last step
+            let last_nt = 1.0 - d[n_steps - 1];
+            let last_delta = r[n_steps - 1] + gamma * lv * last_nt - v[n_steps - 1];
+            let mut last_gae = last_delta;
+            adv_chunk[n_steps - 1] = last_gae;
+            ret_chunk[n_steps - 1] = last_gae + v[n_steps - 1];
+
+            for t in (0..n_steps - 1).rev() {
+                let next_non_terminal = 1.0 - d[t];
+                let delta = r[t] + gamma * v[t + 1] * next_non_terminal - v[t];
                 last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae;
                 adv_chunk[t] = last_gae;
                 ret_chunk[t] = last_gae + v[t];
@@ -216,6 +268,34 @@ mod tests {
         let (adv, ret) = compute_gae_batched(&[], &[], &[], &[], 0, 0.99, 0.95);
         assert!(adv.is_empty());
         assert!(ret.is_empty());
+    }
+
+    #[test]
+    fn gae_batched_f32_matches_f64() {
+        let gamma = 0.99f32;
+        let lam = 0.95f32;
+        let rewards_f32: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let values_f32: Vec<f32> = vec![0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
+        let dones_f32: Vec<f32> = vec![0.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+        let last_values_f32: Vec<f32> = vec![0.0, 0.5];
+
+        let (adv_f32, ret_f32) = compute_gae_batched_f32(
+            &rewards_f32, &values_f32, &dones_f32, &last_values_f32, 3, gamma, lam,
+        );
+
+        let rewards_f64: Vec<f64> = rewards_f32.iter().map(|&x| x as f64).collect();
+        let values_f64: Vec<f64> = values_f32.iter().map(|&x| x as f64).collect();
+        let dones_f64: Vec<f64> = dones_f32.iter().map(|&x| x as f64).collect();
+        let last_values_f64: Vec<f64> = last_values_f32.iter().map(|&x| x as f64).collect();
+
+        let (adv_f64, ret_f64) = compute_gae_batched(
+            &rewards_f64, &values_f64, &dones_f64, &last_values_f64, 3, 0.99, 0.95,
+        );
+
+        for i in 0..6 {
+            assert!((adv_f32[i] as f64 - adv_f64[i]).abs() < 1e-5, "adv mismatch at {i}");
+            assert!((ret_f32[i] as f64 - ret_f64[i]).abs() < 1e-5, "ret mismatch at {i}");
+        }
     }
 
     mod proptests {

@@ -55,34 +55,50 @@ impl ExperienceTable {
         self.count == 0
     }
 
-    /// Append a single transition. Returns error on dimension mismatch.
-    pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
-        if record.obs.len() != self.obs_dim {
+    /// Append a transition from borrowed slices, avoiding intermediate allocation.
+    pub fn push_slices(
+        &mut self,
+        obs: &[f32],
+        next_obs: &[f32],
+        action: &[f32],
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+    ) -> Result<(), RloxError> {
+        if obs.len() != self.obs_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
-                got: format!("obs.len()={}", record.obs.len()),
+                got: format!("obs.len()={}", obs.len()),
             });
         }
-        if record.next_obs.len() != self.obs_dim {
+        if next_obs.len() != self.obs_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
-                got: format!("next_obs.len()={}", record.next_obs.len()),
+                got: format!("next_obs.len()={}", next_obs.len()),
             });
         }
-        if record.action.len() != self.act_dim {
+        if action.len() != self.act_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("act_dim={}", self.act_dim),
-                got: format!("action.len()={}", record.action.len()),
+                got: format!("action.len()={}", action.len()),
             });
         }
-        self.observations.extend_from_slice(&record.obs);
-        self.next_observations.extend_from_slice(&record.next_obs);
-        self.actions.extend_from_slice(&record.action);
-        self.rewards.push(record.reward);
-        self.terminated.push(record.terminated);
-        self.truncated.push(record.truncated);
+        self.observations.extend_from_slice(obs);
+        self.next_observations.extend_from_slice(next_obs);
+        self.actions.extend_from_slice(action);
+        self.rewards.push(reward);
+        self.terminated.push(terminated);
+        self.truncated.push(truncated);
         self.count += 1;
         Ok(())
+    }
+
+    /// Append a single transition. Returns error on dimension mismatch.
+    pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
+        self.push_slices(
+            &record.obs, &record.next_obs, &record.action,
+            record.reward, record.terminated, record.truncated,
+        )
     }
 
     /// Raw slice of all observation data. Shape: [count * obs_dim].

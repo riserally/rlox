@@ -388,6 +388,18 @@ def compute_gae_batched(
     """
     ...
 
+def compute_gae_batched_f32(
+    rewards: npt.NDArray[np.float32],
+    values: npt.NDArray[np.float32],
+    dones: npt.NDArray[np.float32],
+    last_values: npt.NDArray[np.float32],
+    n_steps: int,
+    gamma: float,
+    lam: float,
+) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Batched GAE in f32 — avoids f64 conversion overhead."""
+    ...
+
 def compute_vtrace(
     log_rhos: npt.NDArray[np.float32],
     rewards: npt.NDArray[np.float32],

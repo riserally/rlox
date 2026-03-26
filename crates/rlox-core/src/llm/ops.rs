@@ -60,11 +60,21 @@ macro_rules! impl_kl_ops {
                     });
                 }
 
-                let mut out = Vec::with_capacity(rewards.len());
-                for group in rewards.chunks_exact(group_size) {
-                    out.extend_from_slice(&compute_group_advantages(group));
+                const PAR_ELEMENT_THRESHOLD: usize = 4096;
+                if rewards.len() >= PAR_ELEMENT_THRESHOLD {
+                    use rayon::prelude::*;
+                    let out: Vec<$float> = rewards
+                        .par_chunks_exact(group_size)
+                        .flat_map_iter(|group| compute_group_advantages(group))
+                        .collect();
+                    Ok(out)
+                } else {
+                    let mut out = Vec::with_capacity(rewards.len());
+                    for group in rewards.chunks_exact(group_size) {
+                        out.extend_from_slice(&compute_group_advantages(group));
+                    }
+                    Ok(out)
                 }
-                Ok(out)
             }
 
             /// Token-level KL divergence using the Schulman (2020) estimator:
@@ -121,7 +131,7 @@ macro_rules! impl_kl_ops {
                     });
                 }
 
-                const PAR_THRESHOLD: usize = 16;
+                const PAR_ELEMENT_THRESHOLD: usize = 4096;
                 let batch_size = log_probs_policy.len() / seq_len;
 
                 let kl_for_seq = |i: usize| -> $float {
@@ -134,7 +144,7 @@ macro_rules! impl_kl_ops {
                         .sum()
                 };
 
-                let out = if batch_size >= PAR_THRESHOLD {
+                let out = if log_probs_policy.len() >= PAR_ELEMENT_THRESHOLD {
                     use rayon::prelude::*;
                     (0..batch_size).into_par_iter().map(kl_for_seq).collect()
                 } else {
@@ -171,7 +181,7 @@ macro_rules! impl_kl_ops {
                     });
                 }
 
-                const PAR_THRESHOLD: usize = 16;
+                const PAR_ELEMENT_THRESHOLD: usize = 4096;
                 let batch_size = log_probs_policy.len() / seq_len;
 
                 let kl_for_seq = |i: usize| -> $float {
@@ -187,7 +197,7 @@ macro_rules! impl_kl_ops {
                         .sum()
                 };
 
-                let out = if batch_size >= PAR_THRESHOLD {
+                let out = if log_probs_policy.len() >= PAR_ELEMENT_THRESHOLD {
                     use rayon::prelude::*;
                     (0..batch_size).into_par_iter().map(kl_for_seq).collect()
                 } else {

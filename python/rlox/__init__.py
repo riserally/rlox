@@ -46,6 +46,7 @@ from rlox._rlox_core import (
     VarLenStore,
     compute_gae,
     compute_gae_batched,
+    compute_gae_batched_f32,
     compute_vtrace,
     compute_group_advantages,
     compute_batch_group_advantages,
@@ -83,7 +84,7 @@ from rlox.callbacks import (
 )
 
 # -- Logging -------------------------------------------------------------------
-from rlox.logging import LoggerCallback, WandbLogger, TensorBoardLogger
+from rlox.logging import LoggerCallback, WandbLogger, TensorBoardLogger, ConsoleLogger
 
 # -- Evaluation ----------------------------------------------------------------
 from rlox.evaluation import (
@@ -119,6 +120,7 @@ __all__ = [
     "VarLenStore",
     "compute_gae",
     "compute_gae_batched",
+    "compute_gae_batched_f32",
     "compute_vtrace",
     "compute_group_advantages",
     "compute_batch_group_advantages",
@@ -155,6 +157,7 @@ __all__ = [
     "LoggerCallback",
     "WandbLogger",
     "TensorBoardLogger",
+    "ConsoleLogger",
     # Evaluation
     "interquartile_mean",
     "performance_profiles",

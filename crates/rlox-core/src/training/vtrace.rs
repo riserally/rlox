@@ -46,8 +46,9 @@ pub fn compute_vtrace(
     let mut vs_next = bootstrap_value;
 
     for t in (0..n).rev() {
-        let rho_t = rho_bar.min(log_rhos[t].exp());
-        let c_t = c_bar.min(log_rhos[t].exp());
+        let ratio = log_rhos[t].exp();
+        let rho_t = rho_bar.min(ratio);
+        let c_t = c_bar.min(ratio);
 
         let next_value = if t == n - 1 {
             bootstrap_value

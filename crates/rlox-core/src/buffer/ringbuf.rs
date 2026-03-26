@@ -48,7 +48,7 @@ pub struct SampledBatch {
 }
 
 impl SampledBatch {
-    pub(crate) fn with_capacity(batch_size: usize, obs_dim: usize, act_dim: usize) -> Self {
+    pub fn with_capacity(batch_size: usize, obs_dim: usize, act_dim: usize) -> Self {
         Self {
             observations: Vec::with_capacity(batch_size * obs_dim),
             next_observations: Vec::with_capacity(batch_size * obs_dim),
@@ -61,6 +61,18 @@ impl SampledBatch {
             batch_size: 0,
             extra: Vec::new(),
         }
+    }
+
+    /// Clear all data but retain allocated capacity for reuse.
+    pub fn clear(&mut self) {
+        self.observations.clear();
+        self.next_observations.clear();
+        self.actions.clear();
+        self.rewards.clear();
+        self.terminated.clear();
+        self.truncated.clear();
+        self.extra.clear();
+        self.batch_size = 0;
     }
 }
 
@@ -149,44 +161,57 @@ impl ReplayBuffer {
         )
     }
 
-    /// Push a transition, overwriting the oldest if at capacity.
-    pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
-        if record.obs.len() != self.obs_dim {
+    /// Push a transition from borrowed slices, avoiding intermediate allocation.
+    pub fn push_slices(
+        &mut self,
+        obs: &[f32],
+        next_obs: &[f32],
+        action: &[f32],
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+    ) -> Result<(), RloxError> {
+        if obs.len() != self.obs_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
-                got: format!("obs.len()={}", record.obs.len()),
+                got: format!("obs.len()={}", obs.len()),
             });
         }
-        if record.next_obs.len() != self.obs_dim {
+        if next_obs.len() != self.obs_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("obs_dim={}", self.obs_dim),
-                got: format!("next_obs.len()={}", record.next_obs.len()),
+                got: format!("next_obs.len()={}", next_obs.len()),
             });
         }
-        if record.action.len() != self.act_dim {
+        if action.len() != self.act_dim {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("act_dim={}", self.act_dim),
-                got: format!("action.len()={}", record.action.len()),
+                got: format!("action.len()={}", action.len()),
             });
         }
         let idx = self.write_pos;
         let obs_start = idx * self.obs_dim;
-        self.observations[obs_start..obs_start + self.obs_dim]
-            .copy_from_slice(&record.obs);
-        self.next_observations[obs_start..obs_start + self.obs_dim]
-            .copy_from_slice(&record.next_obs);
+        self.observations[obs_start..obs_start + self.obs_dim].copy_from_slice(obs);
+        self.next_observations[obs_start..obs_start + self.obs_dim].copy_from_slice(next_obs);
         let act_start = idx * self.act_dim;
-        self.actions[act_start..act_start + self.act_dim]
-            .copy_from_slice(&record.action);
-        self.rewards[idx] = record.reward;
-        self.terminated[idx] = record.terminated;
-        self.truncated[idx] = record.truncated;
+        self.actions[act_start..act_start + self.act_dim].copy_from_slice(action);
+        self.rewards[idx] = reward;
+        self.terminated[idx] = terminated;
+        self.truncated[idx] = truncated;
 
         self.write_pos = (self.write_pos + 1) % self.capacity;
         if self.count < self.capacity {
             self.count += 1;
         }
         Ok(())
+    }
+
+    /// Push a transition, overwriting the oldest if at capacity.
+    pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
+        self.push_slices(
+            &record.obs, &record.next_obs, &record.action,
+            record.reward, record.terminated, record.truncated,
+        )
     }
 
     /// Sample a batch of transitions uniformly at random.
@@ -241,6 +266,49 @@ impl ReplayBuffer {
         }
 
         Ok(batch)
+    }
+
+    /// Sample into a pre-allocated batch, reusing its capacity.
+    ///
+    /// Same as `sample()` but avoids allocation by reusing `batch`.
+    pub fn sample_into(&self, batch: &mut SampledBatch, batch_size: usize, seed: u64) -> Result<(), RloxError> {
+        if batch_size > self.count {
+            return Err(RloxError::BufferError(format!(
+                "batch_size {} > buffer len {}",
+                batch_size, self.count
+            )));
+        }
+        batch.clear();
+        batch.obs_dim = self.obs_dim;
+        batch.act_dim = self.act_dim;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let has_extra = self.extra.num_columns() > 0;
+        let mut indices = if has_extra {
+            Vec::with_capacity(batch_size)
+        } else {
+            Vec::new()
+        };
+
+        for _ in 0..batch_size {
+            let idx = rng.random_range(0..self.count);
+            let obs_start = idx * self.obs_dim;
+            batch.observations.extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
+            batch.next_observations.extend_from_slice(&self.next_observations[obs_start..obs_start + self.obs_dim]);
+            let act_start = idx * self.act_dim;
+            batch.actions.extend_from_slice(&self.actions[act_start..act_start + self.act_dim]);
+            batch.rewards.push(self.rewards[idx]);
+            batch.terminated.push(self.terminated[idx]);
+            batch.truncated.push(self.truncated[idx]);
+            if has_extra {
+                indices.push(idx);
+            }
+        }
+        batch.batch_size = batch_size;
+        if has_extra {
+            batch.extra = self.extra.sample_all(&indices);
+        }
+        Ok(())
     }
 
     /// Access the extra columns storage (for advanced use / testing).
@@ -417,6 +485,41 @@ mod tests {
         assert_eq!(batch.extra.len(), 1);
         assert_eq!(batch.extra[0].0, "action_mean");
         assert_eq!(batch.extra[0].1.len(), 9); // 3 * 3
+    }
+
+    #[test]
+    fn test_sample_into_matches_sample() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        for _ in 0..50 {
+            buf.push(sample_record(4)).unwrap();
+        }
+
+        let batch1 = buf.sample(16, 42).unwrap();
+        let mut reusable = SampledBatch::with_capacity(16, 4, 1);
+        buf.sample_into(&mut reusable, 16, 42).unwrap();
+
+        assert_eq!(batch1.observations, reusable.observations);
+        assert_eq!(batch1.next_observations, reusable.next_observations);
+        assert_eq!(batch1.actions, reusable.actions);
+        assert_eq!(batch1.rewards, reusable.rewards);
+        assert_eq!(batch1.terminated, reusable.terminated);
+        assert_eq!(batch1.batch_size, reusable.batch_size);
+    }
+
+    #[test]
+    fn test_sample_into_reuses_capacity() {
+        let mut buf = ReplayBuffer::new(100, 4, 1);
+        for _ in 0..50 {
+            buf.push(sample_record(4)).unwrap();
+        }
+
+        let mut batch = SampledBatch::with_capacity(16, 4, 1);
+        buf.sample_into(&mut batch, 16, 1).unwrap();
+        let obs_cap = batch.observations.capacity();
+
+        // Second sample_into should reuse capacity, not shrink
+        buf.sample_into(&mut batch, 16, 2).unwrap();
+        assert!(batch.observations.capacity() >= obs_cap);
     }
 
     mod proptests {

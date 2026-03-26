@@ -371,13 +371,14 @@ def _run_sac(
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
                 action_t, _ = actor.sample(obs_t)
                 action = action_t.squeeze(0).numpy()
-            action = np.clip(action, -act_high, act_high)
+            action = action * act_high
 
         next_obs, reward, terminated, truncated, _ = env.step(action)
         buffer.push(
             np.asarray(obs, dtype=np.float32),
             np.asarray(action, dtype=np.float32),
             float(reward), bool(terminated), bool(truncated),
+            np.asarray(next_obs, dtype=np.float32),
         )
         obs = next_obs
         if terminated or truncated:
@@ -387,6 +388,7 @@ def _run_sac(
         if step >= learning_starts and len(buffer) >= batch_size:
             batch = buffer.sample(batch_size, step)
             obs_b = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
+            next_obs_b = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
             act_b = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.float32)
             if act_b.dim() == 1:
                 act_b = act_b.unsqueeze(-1)
@@ -394,9 +396,10 @@ def _run_sac(
             done_b = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
 
             with torch.no_grad():
-                next_a, next_lp = actor.sample(obs_b)
-                q1_next = critic1_target(obs_b, next_a).squeeze(-1)
-                q2_next = critic2_target(obs_b, next_a).squeeze(-1)
+                next_a, next_lp = actor.sample(next_obs_b)
+                next_a = next_a * act_high
+                q1_next = critic1_target(next_obs_b, next_a).squeeze(-1)
+                q2_next = critic2_target(next_obs_b, next_a).squeeze(-1)
                 q_next = torch.min(q1_next, q2_next) - alpha * next_lp
                 target_q = rew_b + gamma * (1.0 - done_b) * q_next
 
@@ -411,8 +414,9 @@ def _run_sac(
             critic2_opt.zero_grad(); c2_loss.backward(); critic2_opt.step()
 
             new_a, new_lp = actor.sample(obs_b)
-            q_new = torch.min(critic1(obs_b, new_a).squeeze(-1),
-                              critic2(obs_b, new_a).squeeze(-1))
+            new_a_scaled = new_a * act_high
+            q_new = torch.min(critic1(obs_b, new_a_scaled).squeeze(-1),
+                              critic2(obs_b, new_a_scaled).squeeze(-1))
             actor_loss = (alpha * new_lp - q_new).mean()
             actor_opt.zero_grad(); actor_loss.backward(); actor_opt.step()
 
@@ -431,7 +435,7 @@ def _run_sac(
             def get_action(o: np.ndarray) -> np.ndarray:
                 with torch.no_grad():
                     ot = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
-                    return actor.deterministic(ot).squeeze(0).numpy()
+                    return actor.deterministic(ot).squeeze(0).numpy() * act_high
 
             wall_clock = time.monotonic() - start_time
             sps = (step + 1) / max(wall_clock, 1e-9)
@@ -518,6 +522,7 @@ def _run_td3(
             np.asarray(obs, dtype=np.float32),
             np.asarray(action, dtype=np.float32),
             float(reward), bool(terminated), bool(truncated),
+            np.asarray(next_obs, dtype=np.float32),
         )
         obs = next_obs
         if terminated or truncated:
@@ -528,6 +533,7 @@ def _run_td3(
             update_count += 1
             batch = buffer.sample(batch_size, step)
             obs_b = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
+            next_obs_b = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
             act_b = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.float32)
             if act_b.dim() == 1:
                 act_b = act_b.unsqueeze(-1)
@@ -539,9 +545,9 @@ def _run_td3(
             with torch.no_grad():
                 noise = torch.randn_like(act_b) * target_noise
                 noise = noise.clamp(-noise_clip, noise_clip)
-                next_a = (actor_target(obs_b) + noise).clamp(-act_high, act_high)
-                q1_next = critic1_target(obs_b, next_a).squeeze(-1)
-                q2_next = critic2_target(obs_b, next_a).squeeze(-1)
+                next_a = (actor_target(next_obs_b) + noise).clamp(-act_high, act_high)
+                q1_next = critic1_target(next_obs_b, next_a).squeeze(-1)
+                q2_next = critic2_target(next_obs_b, next_a).squeeze(-1)
                 tgt = rew_b + gamma * (1.0 - done_b) * torch.min(q1_next, q2_next)
 
             q1 = critic1(obs_b, act_b).squeeze(-1)
@@ -551,12 +557,15 @@ def _run_td3(
             critic1_opt.zero_grad(); c1_loss.backward(); critic1_opt.step()
             critic2_opt.zero_grad(); c2_loss.backward(); critic2_opt.step()
 
+            # Critic target updates every step (per Fujimoto et al. 2018)
+            polyak_update(critic1, critic1_target, tau)
+            polyak_update(critic2, critic2_target, tau)
+
+            # Actor + actor target delayed
             if update_count % policy_delay == 0:
                 a_loss = -critic1(obs_b, actor(obs_b)).mean()
                 actor_opt.zero_grad(); a_loss.backward(); actor_opt.step()
                 polyak_update(actor, actor_target, tau)
-                polyak_update(critic1, critic1_target, tau)
-                polyak_update(critic2, critic2_target, tau)
 
         # Periodic evaluation
         if (step + 1) - last_eval_step >= eval_freq:
@@ -639,6 +648,7 @@ def _run_dqn(
             np.asarray(obs, dtype=np.float32),
             np.array([float(action)], dtype=np.float32),
             float(reward), bool(terminated), bool(truncated),
+            np.asarray(next_obs, dtype=np.float32),
         )
         obs = next_obs
         if terminated or truncated:
@@ -650,15 +660,16 @@ def _run_dqn(
 
             batch = buffer.sample(batch_size, step)
             obs_b = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
+            next_obs_b = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
             act_b = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.long).squeeze(-1)
             rew_b = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
             done_b = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
 
             q = q_net(obs_b).gather(1, act_b.unsqueeze(1)).squeeze(1)
             with torch.no_grad():
-                # Double DQN
-                next_actions = q_net(obs_b).argmax(dim=-1)
-                next_q = target_net(obs_b).gather(1, next_actions.unsqueeze(1)).squeeze(1)
+                # Double DQN: select action with online net, evaluate with target
+                next_actions = q_net(next_obs_b).argmax(dim=-1)
+                next_q = target_net(next_obs_b).gather(1, next_actions.unsqueeze(1)).squeeze(1)
                 target_q = rew_b + gamma * (1.0 - done_b) * next_q
 
             loss = F.mse_loss(q, target_q)

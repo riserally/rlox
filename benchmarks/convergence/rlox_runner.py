@@ -424,6 +424,71 @@ def _filter_hp(hp: dict[str, Any], algo_class: type) -> dict[str, Any]:
     return {k: v for k, v in hp.items() if k in valid_params and k not in skip_keys}
 
 
+# ---------------------------------------------------------------------------
+# Off-policy trainers — delegate to standalone algorithm classes
+# ---------------------------------------------------------------------------
+
+
+class _BenchmarkEvalCallback(Callback):
+    """Callback that performs periodic evaluation and logs to ExperimentLog."""
+
+    def __init__(
+        self,
+        env_id: str,
+        log: ExperimentLog,
+        eval_freq: int,
+        eval_episodes: int,
+        eval_seed: int,
+        start_time: float,
+        get_action_fn,
+    ):
+        super().__init__()
+        self.env_id = env_id
+        self.log = log
+        self.eval_freq = eval_freq
+        self.eval_episodes = eval_episodes
+        self.eval_seed = eval_seed
+        self.start_time = start_time
+        self.get_action_fn = get_action_fn
+        self._last_eval_step = 0
+        self._total_eval_time = 0.0
+
+    def on_step(self, step=None, **kwargs) -> bool:
+        if step is None:
+            return True
+        if step - self._last_eval_step >= self.eval_freq:
+            self._last_eval_step = step
+            eval_start = time.monotonic()
+            wall_clock = eval_start - self.start_time
+            sps = step / max(wall_clock, 1e-9)
+            mean_ret, std_ret, mean_len = evaluate_policy_gym(
+                self.env_id, self.get_action_fn, self.eval_episodes, self.eval_seed,
+            )
+            self._total_eval_time += time.monotonic() - eval_start
+            training_wall = wall_clock - self._total_eval_time
+            training_sps = step / max(training_wall, 1e-9)
+            self.log.evaluations.append(EvalRecord(
+                step=step, wall_clock_s=wall_clock,
+                mean_return=mean_ret, std_return=std_ret,
+                ep_length=mean_len, sps=sps,
+                training_sps=training_sps,
+            ))
+            print(
+                f"  [rlox] step={step:>8d}  "
+                f"return={mean_ret:>8.1f} +/- {std_ret:>6.1f}  "
+                f"SPS={sps:>7.0f}  wall={wall_clock:>6.1f}s"
+            )
+        return True
+
+
+def _filter_hp(hp: dict[str, Any], algo_class: type) -> dict[str, Any]:
+    """Filter hyperparameters to only those accepted by the algorithm constructor."""
+    import inspect
+    valid_params = set(inspect.signature(algo_class.__init__).parameters)
+    skip_keys = {"train_freq", "gradient_steps", "ent_coef"}
+    return {k: v for k, v in hp.items() if k in valid_params and k not in skip_keys}
+
+
 def _run_sac(
     env_id: str,
     hp: dict[str, Any],

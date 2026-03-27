@@ -15,7 +15,9 @@ echo "=== Building Docker image ==="
 docker compose build
 
 echo "=== Running convergence benchmarks ==="
-docker compose run --rm benchmark-convergence
+SEEDS="${SEEDS:-0}"
+echo "Seeds: ${SEEDS}"
+docker compose run --rm benchmark-convergence python benchmarks/convergence/run_experiment.py --phase all --seeds "${SEEDS}"
 
 echo "=== Verifying results ==="
 find ./results -type f -ls

@@ -4,7 +4,7 @@ action_space: continuous
 threshold: 2500.0
 max_steps: 1_000_000
 eval_freq: 10_000
-eval_episodes: 10
+eval_episodes: 30
 
 hyperparameters:
   buffer_size: 1_000_000

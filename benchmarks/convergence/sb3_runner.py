@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO, A2C, DQN, SAC, TD3
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 from stable_baselines3.common.noise import NormalActionNoise
 
 from common import (
@@ -48,6 +48,7 @@ class EvalCallback(BaseCallback):
         eval_episodes: int,
         eval_seed: int,
         start_time: float,
+        vec_normalize: VecNormalize | None = None,
     ):
         super().__init__(verbose=0)
         self.env_id = env_id
@@ -56,18 +57,24 @@ class EvalCallback(BaseCallback):
         self.eval_episodes = eval_episodes
         self.eval_seed = eval_seed
         self.start_time = start_time
+        self.vec_normalize = vec_normalize
         self._last_eval_step = 0
+        self._total_eval_time = 0.0
 
     def _on_step(self) -> bool:
         if self.num_timesteps - self._last_eval_step >= self.eval_freq:
             self._last_eval_step = self.num_timesteps
-            wall_clock = time.monotonic() - self.start_time
+            eval_start = time.monotonic()
+            wall_clock = eval_start - self.start_time
             sps = self.num_timesteps / max(wall_clock, 1e-9)
 
             # Build deterministic action function from SB3 model
             model = self.model
+            vn = self.vec_normalize
 
             def get_action(obs: np.ndarray) -> np.ndarray:
+                if vn is not None:
+                    obs = vn.normalize_obs(obs)
                 action, _ = model.predict(obs, deterministic=True)
                 return action
 
@@ -78,6 +85,10 @@ class EvalCallback(BaseCallback):
                 seed=self.eval_seed,
             )
 
+            self._total_eval_time += time.monotonic() - eval_start
+            training_wall = wall_clock - self._total_eval_time
+            training_sps = self.num_timesteps / max(training_wall, 1e-9)
+
             self.log.evaluations.append(
                 EvalRecord(
                     step=self.num_timesteps,
@@ -86,6 +97,7 @@ class EvalCallback(BaseCallback):
                     std_return=std_ret,
                     ep_length=mean_len,
                     sps=sps,
+                    training_sps=training_sps,
                 )
             )
             print(
@@ -113,10 +125,19 @@ def _make_sb3_on_policy(
             return env
         return _init
 
-    if n_envs > 1:
-        vec_env = SubprocVecEnv([make_env(i) for i in range(n_envs)])
-    else:
-        vec_env = DummyVecEnv([make_env(0)])
+    # Use DummyVecEnv (sequential) to match rlox's SyncVectorEnv for fair SPS comparison
+    vec_env = DummyVecEnv([make_env(i) for i in range(n_envs)])
+
+    # Apply observation/reward normalization when config specifies it
+    normalize_obs = hp.get("normalize_obs", False)
+    normalize_reward = hp.get("normalize_reward", False)
+    if normalize_obs or normalize_reward:
+        vec_env = VecNormalize(
+            vec_env,
+            norm_obs=normalize_obs,
+            norm_reward=normalize_reward,
+            gamma=hp.get("gamma", 0.99),
+        )
 
     hidden = policy_cfg.get("hidden_sizes", [64, 64])
     policy_kwargs = {"net_arch": hidden}
@@ -229,6 +250,12 @@ def run_sb3(config_path: str, seed: int, results_dir: str) -> Path:
         hardware=get_hardware_info(),
     )
 
+    # Check if the model's env is wrapped in VecNormalize
+    vec_normalize = None
+    env_wrapper = model.get_env()
+    if isinstance(env_wrapper, VecNormalize):
+        vec_normalize = env_wrapper
+
     start_time = time.monotonic()
     eval_cb = EvalCallback(
         env_id=env_id,
@@ -237,6 +264,7 @@ def run_sb3(config_path: str, seed: int, results_dir: str) -> Path:
         eval_episodes=eval_episodes,
         eval_seed=seed + 1000,
         start_time=start_time,
+        vec_normalize=vec_normalize,
     )
 
     # Train

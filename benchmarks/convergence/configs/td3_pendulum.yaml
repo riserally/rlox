@@ -21,4 +21,4 @@ hyperparameters:
 
 policy:
   type: MlpPolicy
-  hidden_sizes: [400, 300]
+  hidden_sizes: [256, 256]

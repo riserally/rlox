@@ -25,6 +25,7 @@ class EvalRecord:
     std_return: float
     ep_length: float
     sps: float
+    training_sps: float = 0.0  # SPS excluding eval time
 
 
 @dataclass

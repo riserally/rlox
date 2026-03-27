@@ -4,9 +4,9 @@ This tutorial walks you through installing rlox, training your first agent, and 
 
 ## Prerequisites
 
-- Python 3.12 (PyO3 requires a specific Python version)
+- Python 3.10+ (tested on 3.10, 3.11, 3.12, 3.13)
 - Rust toolchain (`rustup` — install from https://rustup.rs)
-- macOS or Linux (Windows may work but is untested)
+- macOS (ARM/Intel), Linux, or Windows
 
 ## Installation
 

@@ -226,7 +226,20 @@ metrics = trainer.train(total_timesteps=50_000)
 
 ## Step 6: Custom Environments
 
-rlox's native `VecEnv` currently only supports CartPole. For other environments,
+All off-policy algorithms (SAC, TD3, DQN) accept either a string env ID or a pre-constructed Gymnasium environment:
+
+```python
+import gymnasium as gym
+from rlox.algorithms.sac import SAC
+
+# Pass a custom env with modified parameters
+env = gym.make("Pendulum-v1", g=5.0)
+sac = SAC(env_id=env, learning_starts=1000)
+sac.train(total_timesteps=50_000)
+action = sac.predict(obs, deterministic=True)
+```
+
+For on-policy algorithms (PPO, A2C), rlox's native `VecEnv` supports CartPole. For other environments,
 use Gymnasium directly with rlox's Rust primitives for the heavy lifting:
 
 ```python
@@ -332,19 +345,25 @@ cargo test --package rlox-core
 | `SACTrainer` | `rlox.trainers` | High-level SAC trainer |
 | `DQNTrainer` | `rlox.trainers` | High-level DQN trainer |
 | `PPO`, `A2C` | `rlox.algorithms` | On-policy algorithms |
-| `SAC`, `TD3`, `DQN` | `rlox.algorithms` | Off-policy algorithms |
-| `GRPO`, `DPO` | `rlox.algorithms` | LLM post-training |
+| `SAC`, `TD3`, `DQN` | `rlox.algorithms` | Off-policy algorithms (with `predict()`) |
+| `GRPO`, `DPO`, `OnlineDPO` | `rlox.algorithms` | LLM post-training |
+| `IMPALA`, `MAPPO`, `DreamerV3` | `rlox.algorithms` | Advanced algorithms |
+| `BestOfN` | `rlox.algorithms` | Inference-time rejection sampling |
 | `DiscretePolicy` | `rlox.policies` | Actor-critic for discrete actions |
 | `RolloutBatch` | `rlox.batch` | Flat tensor container |
-| `RolloutCollector` | `rlox.collectors` | VecEnv + GAE collection |
+| `RolloutCollector` | `rlox.collectors` | VecEnv + batched GAE collection |
 | `PPOLoss` | `rlox.losses` | Clipped surrogate objective |
 | `PPOConfig`, `SACConfig`, `DQNConfig` | `rlox.config` | Validated configs |
-| `WandbLogger`, `TensorBoardLogger` | `rlox.logging` | Training loggers |
+| `ConsoleLogger`, `WandbLogger`, `TensorBoardLogger` | `rlox.logging` | Training loggers |
+| `ProgressBarCallback`, `TimingCallback` | `rlox.callbacks` | Progress & profiling |
 | `Callback`, `EvalCallback` | `rlox.callbacks` | Training hooks |
+| `compile_policy` | `rlox.compile` | torch.compile integration |
+| `MmapReplayBuffer` | `rlox` | Disk-spilling replay for large obs |
 
 ## Next Steps
 
-- **Benchmarks**: Run `./scripts/test.sh --bench` to see rlox vs Gymnasium performance
-- **Three-framework comparison**: See `benchmarks/` for rlox vs TorchRL vs SB3
-- **Convergence benchmarks**: See `benchmarks/convergence/` for training comparisons
-- **Architecture deep-dive**: See `docs/plans/` for phase-by-phase design documents
+- **[Python User Guide](python-guide.md)** — comprehensive API documentation
+- **[Examples](examples.md)** — code examples for all algorithms and primitives
+- **[LLM Post-Training](llm-post-training.md)** — DPO, GRPO, OnlineDPO guide
+- **[Benchmark Results](benchmark/README.md)** — performance comparison vs SB3 and TRL
+- **CLI**: Run `python -m rlox train --algo ppo --env CartPole-v1 --timesteps 100000`

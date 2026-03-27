@@ -13,8 +13,8 @@ rlox provides three levels of API for reinforcement learning in Python. Each lev
 ## Installation
 
 ```bash
-# Prerequisites: Python 3.12, Rust toolchain
-python3.12 -m venv .venv
+# Prerequisites: Python 3.10+, Rust toolchain
+python3 -m venv .venv
 source .venv/bin/activate
 
 pip install maturin numpy gymnasium torch
@@ -27,6 +27,15 @@ python -c "from rlox import CartPole; print('rlox ready')"
 ```
 
 > Always use `--release` with maturin. Debug builds are 10-50x slower.
+
+### CLI Quick Start
+
+```bash
+# Train from the command line (no Python script needed)
+python -m rlox train --algo ppo --env CartPole-v1 --timesteps 100000
+python -m rlox train --algo sac --env Pendulum-v1 --timesteps 50000 --save model.pt
+python -m rlox eval --algo ppo --checkpoint model.pt --env CartPole-v1 --episodes 10
+```
 
 ---
 
@@ -81,20 +90,33 @@ trainer = DQNTrainer(
 ### Callbacks
 
 ```python
-from rlox.callbacks import EarlyStoppingCallback, EvalCallback, CheckpointCallback
+from rlox.callbacks import (
+    EarlyStoppingCallback,
+    ProgressBarCallback,
+    TimingCallback,
+)
 
 trainer = PPOTrainer(
     env="CartPole-v1",
     callbacks=[
         EarlyStoppingCallback(patience=20, min_delta=1.0),
-        CheckpointCallback(save_freq=10_000, save_path="checkpoints/"),
+        ProgressBarCallback(),   # tqdm progress bar
+        TimingCallback(),         # phase-level profiling
     ],
 )
+metrics = trainer.train(total_timesteps=100_000)
+
+# After training, see where time was spent
+timing = trainer.callbacks[2]  # TimingCallback
+print(timing.summary())
+# {'env_step': 42.1, 'gae_compute': 8.3, 'gradient_update': 49.6}
 ```
 
 | Callback | Purpose |
 |----------|---------|
 | `EarlyStoppingCallback` | Stop when reward plateaus for `patience` steps |
+| `ProgressBarCallback` | tqdm progress bar with live reward display |
+| `TimingCallback` | Wall-clock profiling of each training phase |
 | `EvalCallback` | Periodic evaluation on a separate environment |
 | `CheckpointCallback` | Save model weights at regular intervals |
 | `Callback` | Base class for custom callbacks |
@@ -102,7 +124,11 @@ trainer = PPOTrainer(
 ### Logging
 
 ```python
-from rlox.logging import WandbLogger, TensorBoardLogger
+from rlox.logging import ConsoleLogger, WandbLogger, TensorBoardLogger
+
+# Simple console output (no dependencies)
+logger = ConsoleLogger(log_interval=500)
+# Prints: step=500 | SPS=1234 | reward=45.20
 
 # Weights & Biases
 logger = WandbLogger(project="rlox-experiments", name="ppo-cartpole")
@@ -211,6 +237,30 @@ metrics = dqn.train(total_timesteps=50_000)
 
 Off-policy algorithms use `rlox.ReplayBuffer` (or `PrioritizedReplayBuffer`) for storage, with Gymnasium for environment stepping.
 
+### Inference with `predict()`
+
+All algorithms provide a `predict()` method for evaluation:
+
+```python
+# SAC/TD3: returns numpy action array (scaled to env range)
+action = sac.predict(obs, deterministic=True)
+
+# DQN: returns int action
+action = dqn.predict(obs)
+```
+
+### Custom Environments
+
+Pass a pre-constructed Gymnasium env instead of an ID string:
+
+```python
+import gymnasium as gym
+
+env = gym.make("Pendulum-v1", g=5.0)  # custom gravity
+sac = SAC(env_id=env, learning_starts=1000)
+sac.train(total_timesteps=50_000)
+```
+
 ### LLM Post-Training (GRPO, DPO)
 
 ```python
@@ -292,6 +342,24 @@ advantages, returns = rlox.compute_gae(
 )
 # advantages.shape == (5,), returns.shape == (5,)
 # Invariant: returns == advantages + values
+
+# Batched GAE: all environments in one call (Rayon-parallel)
+rewards_flat = np.random.randn(8 * 2048)  # env-major: [env0_step0, env0_step1, ...]
+values_flat = np.random.randn(8 * 2048)
+dones_flat = np.zeros(8 * 2048)
+last_vals = np.random.randn(8)
+
+adv, ret = rlox.compute_gae_batched(
+    rewards_flat, values_flat, dones_flat, last_vals,
+    n_steps=2048, gamma=0.99, lam=0.95,
+)
+
+# f32 variant (1.5x faster at 64+ envs, avoids f64 conversion)
+adv_f32, ret_f32 = rlox.compute_gae_batched_f32(
+    rewards_flat.astype(np.float32), values_flat.astype(np.float32),
+    dones_flat.astype(np.float32), last_vals.astype(np.float32),
+    n_steps=2048, gamma=0.99, lam=0.95,
+)
 ```
 
 ### V-trace
@@ -300,11 +368,13 @@ advantages, returns = rlox.compute_gae(
 log_rhos = np.array([0.2, -0.3, 0.8], dtype=np.float32)
 rewards  = np.array([1.0, 2.0, 3.0], dtype=np.float32)
 values   = np.array([0.5, 1.0, 1.5], dtype=np.float32)
+dones    = np.array([0.0, 0.0, 0.0], dtype=np.float32)  # episode boundaries
 
 vs, pg_advantages = rlox.compute_vtrace(
     log_rhos=log_rhos,
     rewards=rewards,
     values=values,
+    dones=dones,            # zeroes discount at episode boundaries
     bootstrap_value=2.0,
     gamma=0.99,
     rho_bar=1.0,
@@ -315,37 +385,58 @@ vs, pg_advantages = rlox.compute_vtrace(
 ### Replay Buffers
 
 ```python
-# Uniform replay buffer
+# Uniform replay buffer (zero-copy push via Rust push_slices)
 buf = rlox.ReplayBuffer(capacity=100_000, obs_dim=4, act_dim=1)
-buf.push(obs=np.zeros(4, dtype=np.float32), action=0.5, reward=1.0,
-         terminated=False, truncated=False)
+obs = np.zeros(4, dtype=np.float32)
+next_obs = np.ones(4, dtype=np.float32)
+buf.push(obs, action=np.array([0.5], dtype=np.float32), reward=1.0,
+         terminated=False, truncated=False, next_obs=next_obs)
 batch = buf.sample(batch_size=32, seed=0)
-# batch keys: "obs", "actions", "rewards", "terminated", "truncated"
+# batch keys: "obs", "next_obs", "actions", "rewards", "terminated", "truncated"
 
-# Prioritized replay buffer
+# Prioritized replay buffer (O(1) min via augmented min-tree)
 pbuf = rlox.PrioritizedReplayBuffer(
     capacity=100_000, obs_dim=4, act_dim=1, alpha=0.6, beta=0.4
 )
-pbuf.push(obs, action=0.5, reward=1.0, terminated=False, truncated=False,
-          priority=1.0)
+pbuf.push(obs, action=np.array([0.5], dtype=np.float32), reward=1.0,
+          terminated=False, truncated=False, next_obs=next_obs, priority=1.0)
 batch = pbuf.sample(batch_size=32, seed=0)
 # Additional keys: "weights" (IS weights), "indices" (for priority update)
 pbuf.update_priorities(batch["indices"], new_td_errors)
 pbuf.set_beta(0.7)  # anneal toward 1.0
+
+# Memory-mapped buffer (for Atari-scale observations)
+mmap_buf = rlox.MmapReplayBuffer(
+    hot_capacity=10_000,       # kept in memory
+    total_capacity=1_000_000,  # overflow spills to disk
+    obs_dim=84*84*4,
+    act_dim=1,
+    cold_path="/tmp/replay_cold.bin",
+)
+# Same push/sample API as ReplayBuffer
 ```
 
 ### LLM Operations
 
 ```python
-# GRPO group-relative advantages
+# GRPO group-relative advantages (single group)
 rewards = np.random.randn(16).astype(np.float64)
 advantages = rlox.compute_group_advantages(rewards)
-# advantages = (rewards - mean) / std
 
-# Token-level KL divergence
+# Batched GRPO (Rayon-parallel for large batches)
+all_rewards = np.random.randn(1024 * 8).astype(np.float64)  # 1024 prompts x 8 completions
+all_advantages = rlox.compute_batch_group_advantages(all_rewards, group_size=8)
+
+# Token-level KL divergence (single sequence)
 log_p = np.random.randn(128).astype(np.float64)
 log_q = np.random.randn(128).astype(np.float64)
 kl = rlox.compute_token_kl(log_p, log_q)
+
+# Batched KL (single Rust call for all sequences, Rayon-parallel)
+log_p_flat = np.random.randn(32 * 2048).astype(np.float32)
+log_q_flat = np.random.randn(32 * 2048).astype(np.float32)
+kl_per_seq = rlox.compute_batch_token_kl_schulman_f32(log_p_flat, log_q_flat, seq_len=2048)
+# kl_per_seq: (32,) array — 2-9x faster than TRL
 
 # DPO preference pair
 pair = rlox.DPOPair(
@@ -508,9 +599,9 @@ batch.returns.shape    # (1024,)
 ```
 
 The collection pipeline:
-1. Steps `n_envs` environments for `n_steps` using `rlox.VecEnv`
+1. Steps `n_envs` environments for `n_steps` using `rlox.VecEnv` or `GymVecEnv`
 2. Evaluates the policy at each step (forward pass only)
-3. Computes GAE per environment using `rlox.compute_gae`
+3. Computes GAE using `rlox.compute_gae_batched` (single Rust call, Rayon-parallel)
 4. Flattens and returns a `RolloutBatch`
 
 ### Minibatch Iteration
@@ -620,8 +711,29 @@ cargo test --package rlox-core
 
 ---
 
+## torch.compile
+
+Accelerate neural network inference with `torch.compile`:
+
+```python
+from rlox.compile import compile_policy
+
+sac = SAC(env_id="Pendulum-v1")
+compile_policy(sac)  # compiles actor, critic1, critic2
+sac.train(total_timesteps=50_000)
+
+# For on-policy policies (PPO/A2C), individual methods are compiled:
+# get_action_and_logprob, get_value, get_logprob_and_entropy
+ppo = PPO(env_id="CartPole-v1")
+compile_policy(ppo)
+```
+
+---
+
 ## Cross-References
 
+- [Examples](examples.md) -- comprehensive code examples
+- [LLM Post-Training Guide](llm-post-training.md) -- DPO, GRPO, OnlineDPO
 - [Rust User Guide](rust-guide.md) -- using `rlox-core` directly from Rust
 - [Mathematical Reference](math-reference.md) -- algorithm derivations
 - [References](references.md) -- academic papers

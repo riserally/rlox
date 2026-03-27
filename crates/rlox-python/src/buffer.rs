@@ -5,6 +5,7 @@ use pyo3::types::PyDict;
 
 use rlox_core::buffer::columnar::ExperienceTable;
 use rlox_core::buffer::extra_columns::ColumnHandle;
+use rlox_core::buffer::mmap::MmapReplayBuffer;
 use rlox_core::buffer::priority::PrioritizedReplayBuffer;
 use rlox_core::buffer::ringbuf::ReplayBuffer;
 use rlox_core::buffer::varlen::VarLenStore;
@@ -355,6 +356,97 @@ impl PyPrioritizedReplayBuffer {
 
     fn set_beta(&mut self, beta: f64) {
         self.inner.set_beta(beta);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MmapReplayBuffer — spills to disk for Atari-scale observations
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "MmapReplayBuffer")]
+pub struct PyMmapReplayBuffer {
+    inner: MmapReplayBuffer,
+}
+
+#[pymethods]
+impl PyMmapReplayBuffer {
+    #[new]
+    #[pyo3(signature = (hot_capacity, total_capacity, obs_dim, act_dim, cold_path))]
+    fn new(
+        hot_capacity: usize,
+        total_capacity: usize,
+        obs_dim: usize,
+        act_dim: usize,
+        cold_path: &str,
+    ) -> PyResult<Self> {
+        let inner = MmapReplayBuffer::new(
+            hot_capacity,
+            total_capacity,
+            obs_dim,
+            act_dim,
+            std::path::PathBuf::from(cold_path),
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[pyo3(signature = (obs, action, reward, terminated, truncated, next_obs=None))]
+    fn push(
+        &mut self,
+        obs: PyReadonlyArray1<f32>,
+        action: PyReadonlyArray1<f32>,
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+        next_obs: Option<PyReadonlyArray1<f32>>,
+    ) -> PyResult<()> {
+        let obs_vec = obs.as_slice()?.to_vec();
+        let next_obs_vec = match next_obs {
+            Some(n) => n.as_slice()?.to_vec(),
+            None => vec![0.0; obs_vec.len()],
+        };
+        let record = ExperienceRecord {
+            obs: obs_vec,
+            next_obs: next_obs_vec,
+            action: action.as_slice()?.to_vec(),
+            reward,
+            terminated,
+            truncated,
+        };
+        self.inner
+            .push(record)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py.allow_threads(|| {
+            self.inner.sample(batch_size, seed)
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d("next_obs", batch.next_observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_bool("terminated", &batch.terminated)?;
+        builder.add_bool("truncated", &batch.truncated)?;
+        Ok(builder.build())
+    }
+
+    fn close(&mut self) -> PyResult<()> {
+        self.inner
+            .close()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }
 

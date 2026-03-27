@@ -6,7 +6,7 @@ mod training;
 
 use pyo3::prelude::*;
 
-use buffer::{PyExperienceTable, PyPrioritizedReplayBuffer, PyReplayBuffer, PyVarLenStore};
+use buffer::{PyExperienceTable, PyMmapReplayBuffer, PyPrioritizedReplayBuffer, PyReplayBuffer, PyVarLenStore};
 use env::{PyCartPole, PyGymEnv, PyVecEnv};
 use llm::PyDPOPair;
 use nn::PyActorCritic;
@@ -20,6 +20,7 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyExperienceTable>()?;
     m.add_class::<PyReplayBuffer>()?;
     m.add_class::<PyPrioritizedReplayBuffer>()?;
+    m.add_class::<PyMmapReplayBuffer>()?;
     m.add_class::<PyVarLenStore>()?;
     m.add_class::<PyDPOPair>()?;
     m.add_class::<PyRunningStats>()?;

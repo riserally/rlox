@@ -30,6 +30,7 @@ class OnlineDPO:
         self.preference_fn = preference_fn
         self.beta = beta
         self.max_new_tokens = max_new_tokens
+        self.max_grad_norm = 1.0
         self.optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     def _sequence_logprobs(
@@ -62,7 +63,7 @@ class OnlineDPO:
         # Get preferences (index 0 or 1)
         preferences = self.preference_fn(pairs)
 
-        total_loss = torch.tensor(0.0)
+        losses = []
         for i in range(n_prompts):
             c1, c2 = pairs[i]
             pref = preferences[i]
@@ -85,12 +86,14 @@ class OnlineDPO:
             loss = -F.logsigmoid(
                 self.beta * (log_ratio_chosen - log_ratio_rejected)
             ).mean()
-            total_loss = total_loss + loss
+            losses.append(loss)
 
-        total_loss = total_loss / n_prompts
+        total_loss = torch.stack(losses).mean()
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         total_loss.backward()
+        if self.max_grad_norm > 0:
+            nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         self.optimizer.step()
 
         return {"loss": total_loss.item()}

@@ -404,6 +404,7 @@ def compute_vtrace(
     log_rhos: npt.NDArray[np.float32],
     rewards: npt.NDArray[np.float32],
     values: npt.NDArray[np.float32],
+    dones: npt.NDArray[np.float32],
     bootstrap_value: float,
     gamma: float,
     rho_bar: float = 1.0,
@@ -422,6 +423,8 @@ def compute_vtrace(
         Per-step rewards.
     values : array of shape (T,)
         Value function estimates V(s_t).
+    dones : array of shape (T,)
+        Episode termination flags (1.0 = done, 0.0 = not done).
     bootstrap_value : float
         V(s_{T+1}) for the state after the final step.
     gamma : float

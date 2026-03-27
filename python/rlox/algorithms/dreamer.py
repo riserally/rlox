@@ -173,7 +173,7 @@ class DreamerV3:
         reward_loss = F.mse_loss(pred_rewards, rewards)
 
         loss = recon_loss + reward_loss
-        self.wm_optimizer.zero_grad()
+        self.wm_optimizer.zero_grad(set_to_none=True)
         loss.backward()
         self.wm_optimizer.step()
 
@@ -189,47 +189,50 @@ class DreamerV3:
 
         h = self.world_model.encode(obs).detach()
 
-        # Imagination rollout
+        # Imagination rollout — gradients flow through world model to actor
         imagined_h = [h]
         imagined_rewards = []
+        imagined_log_probs = []
 
         for _ in range(self.imagination_horizon):
             dist = self.actor_critic.policy(h)
             actions = dist.sample()
+            log_prob = dist.log_prob(actions)
             action_onehot = F.one_hot(actions, self.n_actions).float()
 
-            with torch.no_grad():
-                h, _, pred_r = self.world_model.step(h, action_onehot)
+            # Let gradients flow through world model for actor learning
+            h, _, pred_r = self.world_model.step(h, action_onehot)
             imagined_h.append(h)
             imagined_rewards.append(pred_r)
+            imagined_log_probs.append(log_prob)
 
-        # Compute returns via discounting
-        values = [self.actor_critic.value(ih) for ih in imagined_h]
-        returns = values[-1].detach()
+        # Compute returns via discounting (detached for value targets)
+        with torch.no_grad():
+            bootstrap_value = self.actor_critic.value(imagined_h[-1])
+        returns = bootstrap_value
         all_returns = []
         for t in reversed(range(self.imagination_horizon)):
             returns = imagined_rewards[t] + self.gamma * returns
             all_returns.insert(0, returns)
 
-        # Actor loss (REINFORCE-style)
-        actor_loss = 0.0
+        # Values for all imagined states
+        values = [self.actor_critic.value(ih) for ih in imagined_h[:-1]]
+
+        # Actor loss — use log_probs from the trajectory (not re-sampled)
+        actor_losses = []
         for t in range(self.imagination_horizon):
-            h_t = imagined_h[t]
-            dist = self.actor_critic.policy(h_t)
             advantage = (all_returns[t] - values[t]).detach()
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-            actor_loss = actor_loss - (log_prob * advantage).mean()
-        actor_loss = actor_loss / self.imagination_horizon
+            actor_losses.append(-(imagined_log_probs[t] * advantage).mean())
+        actor_loss = torch.stack(actor_losses).mean()
 
         # Critic loss
-        critic_loss = 0.0
+        critic_losses = []
         for t in range(self.imagination_horizon):
-            critic_loss = critic_loss + F.mse_loss(values[t], all_returns[t].detach())
-        critic_loss = critic_loss / self.imagination_horizon
+            critic_losses.append(F.mse_loss(values[t], all_returns[t].detach()))
+        critic_loss = torch.stack(critic_losses).mean()
 
         loss = actor_loss + 0.5 * critic_loss
-        self.ac_optimizer.zero_grad()
+        self.ac_optimizer.zero_grad(set_to_none=True)
         loss.backward()
         self.ac_optimizer.step()
 

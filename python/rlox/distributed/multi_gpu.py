@@ -58,15 +58,27 @@ class MultiGPUTrainer:
         seed = cfg.pop("seed", 42) + self.rank * 1000
         self.trainer = trainer_cls(env=env, config=cfg, seed=seed, **kwargs)
 
-        # Wrap the policy with DDP
-        if hasattr(self.trainer, "algo") and hasattr(self.trainer.algo, "policy"):
-            policy = self.trainer.algo.policy.to(self.device)
-            from torch.nn.parallel import DistributedDataParallel as DDP
-            self.trainer.algo.policy = DDP(policy, device_ids=[self.rank])
-        elif hasattr(self.trainer, "policy"):
-            policy = self.trainer.policy.to(self.device)
-            from torch.nn.parallel import DistributedDataParallel as DDP
-            self.trainer.policy = DDP(policy, device_ids=[self.rank])
+        # Wrap trainable networks with DDP
+        from torch.nn.parallel import DistributedDataParallel as DDP
+        inner = getattr(self.trainer, "algo", self.trainer)
+
+        # On-policy: single policy network
+        if hasattr(inner, "policy"):
+            inner.policy = DDP(inner.policy.to(self.device), device_ids=[self.rank])
+
+        # Off-policy (SAC/TD3): actor + twin critics
+        for attr in ("actor", "critic1", "critic2", "q_network"):
+            net = getattr(inner, attr, None)
+            if net is not None:
+                import torch.nn as nn
+                if isinstance(net, nn.Module):
+                    setattr(inner, attr, DDP(net.to(self.device), device_ids=[self.rank]))
+
+        # Move target networks to device WITHOUT DDP wrapping
+        for attr in ("critic1_target", "critic2_target", "actor_target", "target_network"):
+            net = getattr(inner, attr, None)
+            if net is not None:
+                setattr(inner, attr, net.to(self.device))
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run distributed training."""

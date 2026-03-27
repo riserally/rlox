@@ -41,8 +41,12 @@ class SAC:
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
     ):
-        self.env = gym.make(env_id)
-        self.env_id = env_id
+        if isinstance(env_id, str):
+            self.env = gym.make(env_id)
+            self.env_id = env_id
+        else:
+            self.env = env_id
+            self.env_id = getattr(env_id.spec, "id", "custom") if hasattr(env_id, "spec") and env_id.spec else "custom"
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
@@ -161,14 +165,14 @@ class SAC:
 
     def _update(self, step: int) -> dict[str, float]:
         batch = self.buffer.sample(self.batch_size, step)
-        obs = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
-        actions = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.float32)
+        obs = torch.as_tensor(batch["obs"], dtype=torch.float32)
+        actions = torch.as_tensor(batch["actions"], dtype=torch.float32)
         if actions.dim() == 1:
             actions = actions.unsqueeze(-1)
-        rewards = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
-        terminated = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
+        rewards = torch.as_tensor(batch["rewards"], dtype=torch.float32)
+        terminated = torch.as_tensor(batch["terminated"], dtype=torch.float32)
 
-        next_obs = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
+        next_obs = torch.as_tensor(batch["next_obs"], dtype=torch.float32)
 
         with torch.no_grad():
             next_actions, next_log_prob = self.actor.sample(next_obs)
@@ -184,12 +188,11 @@ class SAC:
         critic1_loss = F.mse_loss(q1, target_q)
         critic2_loss = F.mse_loss(q2, target_q)
 
-        self.critic1_optimizer.zero_grad()
-        critic1_loss.backward()
+        critic_loss = critic1_loss + critic2_loss
+        self.critic1_optimizer.zero_grad(set_to_none=True)
+        self.critic2_optimizer.zero_grad(set_to_none=True)
+        critic_loss.backward()
         self.critic1_optimizer.step()
-
-        self.critic2_optimizer.zero_grad()
-        critic2_loss.backward()
         self.critic2_optimizer.step()
 
         # Actor loss
@@ -200,7 +203,7 @@ class SAC:
         q_new = torch.min(q1_new, q2_new)
         actor_loss = (self.alpha * log_prob - q_new).mean()
 
-        self.actor_optimizer.zero_grad()
+        self.actor_optimizer.zero_grad(set_to_none=True)
         actor_loss.backward()
         self.actor_optimizer.step()
 
@@ -208,7 +211,7 @@ class SAC:
         alpha_loss_val = 0.0
         if self.auto_entropy:
             alpha_loss = -(self.log_alpha * (log_prob.detach() + self.target_entropy)).mean()
-            self.alpha_optimizer.zero_grad()
+            self.alpha_optimizer.zero_grad(set_to_none=True)
             alpha_loss.backward()
             self.alpha_optimizer.step()
             self.alpha = self.log_alpha.exp().item()
@@ -224,6 +227,17 @@ class SAC:
             "alpha": self.alpha,
             "alpha_loss": alpha_loss_val,
         }
+
+    def predict(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
+        """Get action from the policy."""
+        with torch.no_grad():
+            obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+            if deterministic:
+                action = self.actor.deterministic(obs_t).squeeze(0).numpy()
+            else:
+                action, _ = self.actor.sample(obs_t)
+                action = action.squeeze(0).numpy()
+            return action * self.act_high
 
     def save(self, path: str) -> None:
         """Save training checkpoint."""

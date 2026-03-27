@@ -59,6 +59,7 @@ class GRPO:
         self.group_size = group_size
         self.kl_coef = kl_coef
         self.max_new_tokens = max_new_tokens
+        self.max_grad_norm = 1.0
 
         self.optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         self.callbacks = CallbackList(callbacks)
@@ -114,13 +115,12 @@ class GRPO:
         with torch.no_grad():
             ref_logprobs = self._get_per_token_logprobs(self.ref_model, completions)
 
-        # Token-level KL via Rust (batched)
-        total_kl = 0.0
-        for j in range(completions.shape[0]):
-            p = policy_logprobs[j].detach().cpu().numpy().astype(np.float64)
-            r = ref_logprobs[j].cpu().numpy().astype(np.float64)
-            total_kl += rlox.compute_token_kl(p, r)
-        mean_kl = total_kl / completions.shape[0]
+        # Token-level KL via Rust (single batched call)
+        p_flat = policy_logprobs.detach().cpu().numpy().astype(np.float64).ravel()
+        r_flat = ref_logprobs.cpu().numpy().astype(np.float64).ravel()
+        seq_len = policy_logprobs.shape[-1]
+        kl_vals = rlox.compute_batch_token_kl(p_flat, r_flat, seq_len)
+        mean_kl = float(kl_vals.mean())
 
         # GRPO loss: -advantage * sum(token_logprobs) + kl_coef * kl
         seq_logprobs = policy_logprobs.sum(dim=-1)  # (n_prompts * group_size,)
@@ -129,8 +129,10 @@ class GRPO:
         kl_diff = (policy_logprobs - ref_logprobs).sum(dim=-1).mean()
         loss = loss + self.kl_coef * kl_diff
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        if self.max_grad_norm > 0:
+            nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         self.optimizer.step()
 
         self._global_step += 1

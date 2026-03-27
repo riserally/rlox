@@ -44,6 +44,7 @@ class DPO:
         self.model = model
         self.ref_model = ref_model
         self.beta = beta
+        self.max_grad_norm = 1.0
         self.optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         self.callbacks = CallbackList(callbacks)
         self.logger = logger
@@ -112,12 +113,14 @@ class DPO:
         """One DPO gradient step."""
         loss, metrics = self.compute_loss(prompt, chosen, rejected)
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        if self.max_grad_norm > 0:
+            nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         self.optimizer.step()
 
         self._global_step += 1
-        self.callbacks.on_train_batch(loss=loss.item(), **metrics)
+        self.callbacks.on_train_batch(**metrics)
         if self.logger is not None:
             self.logger.on_train_step(self._global_step, metrics)
 

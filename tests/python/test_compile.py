@@ -27,18 +27,13 @@ requires_compile = pytest.mark.skipif(
 @requires_compile
 class TestCompilePolicyPPO:
     def test_compile_policy_ppo_warns_no_forward(self) -> None:
-        """PPO's DiscretePolicy has no forward() — compile_policy should warn."""
+        """PPO's DiscretePolicy has no forward() — compile_policy should compile individual methods."""
         from rlox.algorithms.ppo import PPO
 
         ppo = PPO(env_id="CartPole-v1", n_envs=1)
+        compile_policy(ppo)
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            compile_policy(ppo)
-            # Should warn about no forward()
-            assert any("no forward()" in str(warning.message) for warning in w)
-
-        # Policy should still work
+        # Policy should still work after compilation
         obs = torch.randn(2, 4)
         actions, log_probs = ppo.policy.get_action_and_logprob(obs)
         assert actions.shape == (2,)
@@ -130,16 +125,14 @@ class TestCompilePolicyMock:
         assert result.shape == (1, 2)
 
     def test_skip_net_without_forward(self) -> None:
-        """Module without forward() should be skipped with warning."""
+        """Module without forward() or hot methods should be skipped gracefully."""
 
         class MockAlgo:
             policy = _NoForwardNet()
 
         algo = MockAlgo()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            compile_policy(algo)
-            assert any("no forward()" in str(warning.message) for warning in w)
+        # Should not raise — gracefully skips modules without compilable methods
+        compile_policy(algo)
 
     def test_compile_returns_algo(self) -> None:
         """compile_policy should return the algo for chaining."""

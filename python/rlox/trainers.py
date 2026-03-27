@@ -112,7 +112,7 @@ class SACTrainer:
         from rlox.algorithms.sac import SAC
 
         cfg = config or {}
-        self.algo = SAC(env_id=env, seed=seed, **cfg)
+        self.algo = SAC(env_id=env, seed=seed, callbacks=callbacks, **cfg)
         self.callbacks = CallbackList(callbacks)
         self.env = env
 

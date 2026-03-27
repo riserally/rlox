@@ -72,11 +72,11 @@ class GymVecEnv:
             for i in range(self._n_envs):
                 if mask[i] and infos["final_obs"][i] is not None:
                     terminal_obs[i] = np.asarray(
-                        infos["final_obs"][i], dtype=np.float64
+                        infos["final_obs"][i], dtype=np.float32
                     )
 
         return {
-            "obs": np.asarray(obs, dtype=np.float64),
+            "obs": np.asarray(obs, dtype=np.float32),
             "rewards": np.asarray(rewards, dtype=np.float64),
             "terminated": np.asarray(terminated, dtype=np.uint8),
             "truncated": np.asarray(truncated, dtype=np.uint8),
@@ -88,13 +88,13 @@ class GymVecEnv:
 
         Returns
         -------
-        np.ndarray of shape ``(n_envs, obs_dim)`` with dtype float64.
+        np.ndarray of shape ``(n_envs, obs_dim)`` with dtype float32.
         """
         kwargs: dict[str, Any] = {}
         if seed is not None:
             kwargs["seed"] = seed
         obs, _info = self._env.reset(**kwargs)
-        return np.asarray(obs, dtype=np.float64)
+        return np.asarray(obs, dtype=np.float32)
 
     def num_envs(self) -> int:
         """Return the number of parallel sub-environments."""

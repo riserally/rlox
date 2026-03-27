@@ -24,6 +24,10 @@ jobs:
             manylinux: auto
           - os: macos-14
             target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +40,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --strip --out dist -i python3.12
+          args: --release --strip --out dist -i python3.10 -i python3.11 -i python3.12 -i python3.13
           manylinux: ${{ matrix.manylinux || 'auto' }}
 
       - uses: actions/upload-artifact@v4

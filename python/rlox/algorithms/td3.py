@@ -42,8 +42,12 @@ class TD3:
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
     ):
-        self.env = gym.make(env_id)
-        self.env_id = env_id
+        if isinstance(env_id, str):
+            self.env = gym.make(env_id)
+            self.env_id = env_id
+        else:
+            self.env = env_id
+            self.env_id = getattr(env_id.spec, "id", "custom") if hasattr(env_id, "spec") and env_id.spec else "custom"
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
@@ -162,14 +166,14 @@ class TD3:
 
     def _update(self, step: int, update_count: int) -> dict[str, float]:
         batch = self.buffer.sample(self.batch_size, step)
-        obs = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
-        actions = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.float32)
+        obs = torch.as_tensor(batch["obs"], dtype=torch.float32)
+        actions = torch.as_tensor(batch["actions"], dtype=torch.float32)
         if actions.dim() == 1:
             actions = actions.unsqueeze(-1)
-        rewards = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
-        terminated = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
+        rewards = torch.as_tensor(batch["rewards"], dtype=torch.float32)
+        terminated = torch.as_tensor(batch["terminated"], dtype=torch.float32)
 
-        next_obs = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
+        next_obs = torch.as_tensor(batch["next_obs"], dtype=torch.float32)
 
         with torch.no_grad():
             # Target policy smoothing
@@ -187,12 +191,11 @@ class TD3:
         critic1_loss = F.mse_loss(q1, target_q)
         critic2_loss = F.mse_loss(q2, target_q)
 
-        self.critic1_optimizer.zero_grad()
-        critic1_loss.backward()
+        critic_loss = critic1_loss + critic2_loss
+        self.critic1_optimizer.zero_grad(set_to_none=True)
+        self.critic2_optimizer.zero_grad(set_to_none=True)
+        critic_loss.backward()
         self.critic1_optimizer.step()
-
-        self.critic2_optimizer.zero_grad()
-        critic2_loss.backward()
         self.critic2_optimizer.step()
 
         # Every step: update critic targets
@@ -204,7 +207,7 @@ class TD3:
         # Delayed policy update
         if update_count % self.policy_delay == 0:
             actor_loss = -self.critic1(obs, self.actor(obs)).mean()
-            self.actor_optimizer.zero_grad()
+            self.actor_optimizer.zero_grad(set_to_none=True)
             actor_loss.backward()
             self.actor_optimizer.step()
             actor_loss_val = actor_loss.item()
@@ -215,6 +218,12 @@ class TD3:
             "critic_loss": (critic1_loss.item() + critic2_loss.item()) / 2,
             "actor_loss": actor_loss_val,
         }
+
+    def predict(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
+        """Get action from the policy (always deterministic for TD3)."""
+        with torch.no_grad():
+            obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+            return self.actor(obs_t).squeeze(0).numpy()
 
     def save(self, path: str) -> None:
         """Save training checkpoint."""

@@ -29,7 +29,8 @@ class TestVtrace:
         log_rhos = np.zeros(3, dtype=np.float32)
         rewards = np.ones(3, dtype=np.float32)
         values = np.zeros(3, dtype=np.float32)
-        vs, adv = rlox.compute_vtrace(log_rhos, rewards, values, 0.0, 0.99)
+        dones = np.zeros(3, dtype=np.float32)
+        vs, adv = rlox.compute_vtrace(log_rhos, rewards, values, dones, 0.0, 0.99)
         assert vs.shape == (3,)
         assert adv.shape == (3,)
         # vs should be positive (rewards > values)
@@ -39,7 +40,8 @@ class TestVtrace:
         log_rhos = np.array([], dtype=np.float32)
         rewards = np.array([], dtype=np.float32)
         values = np.array([], dtype=np.float32)
-        vs, adv = rlox.compute_vtrace(log_rhos, rewards, values, 0.0, 0.99)
+        dones = np.array([], dtype=np.float32)
+        vs, adv = rlox.compute_vtrace(log_rhos, rewards, values, dones, 0.0, 0.99)
         assert vs.shape == (0,)
         assert adv.shape == (0,)
 
@@ -49,6 +51,7 @@ class TestVtrace:
                 np.zeros(3, dtype=np.float32),
                 np.zeros(2, dtype=np.float32),
                 np.zeros(3, dtype=np.float32),
+                np.zeros(3, dtype=np.float32),
                 0.0,
                 0.99,
             )
@@ -57,11 +60,12 @@ class TestVtrace:
         log_rhos = np.array([5.0], dtype=np.float32)  # exp(5) ~ 148
         rewards = np.array([1.0], dtype=np.float32)
         values = np.array([0.0], dtype=np.float32)
+        dones = np.array([0.0], dtype=np.float32)
         vs_clipped, _ = rlox.compute_vtrace(
-            log_rhos, rewards, values, 0.0, 0.99, rho_bar=1.0, c_bar=1.0
+            log_rhos, rewards, values, dones, 0.0, 0.99, rho_bar=1.0, c_bar=1.0
         )
         vs_unclipped, _ = rlox.compute_vtrace(
-            log_rhos, rewards, values, 0.0, 0.99, rho_bar=200.0, c_bar=200.0
+            log_rhos, rewards, values, dones, 0.0, 0.99, rho_bar=200.0, c_bar=200.0
         )
         assert vs_clipped[0] < vs_unclipped[0]
 
@@ -70,8 +74,9 @@ class TestVtrace:
         log_rhos = np.zeros(5, dtype=np.float32)
         rewards = np.ones(5, dtype=np.float32)
         values = np.ones(5, dtype=np.float32) * 0.5
+        dones = np.zeros(5, dtype=np.float32)
         # Should work without specifying rho_bar/c_bar
-        vs, adv = rlox.compute_vtrace(log_rhos, rewards, values, 0.0, 0.99)
+        vs, adv = rlox.compute_vtrace(log_rhos, rewards, values, dones, 0.0, 0.99)
         assert vs.dtype == np.float32
         assert adv.dtype == np.float32
 
@@ -99,8 +104,9 @@ class TestVtrace:
             adv_ref[t] = rho_t * (rewards[t] + gamma * vs_next - values[t])
             vs_next = vs_ref[t]
 
+        dones = np.zeros(n, dtype=np.float32)
         vs, adv = rlox.compute_vtrace(
-            log_rhos, rewards, values, bootstrap, gamma, rho_bar=rho_bar, c_bar=c_bar
+            log_rhos, rewards, values, dones, bootstrap, gamma, rho_bar=rho_bar, c_bar=c_bar
         )
         np.testing.assert_allclose(vs, vs_ref, rtol=1e-4)
         np.testing.assert_allclose(adv, adv_ref, rtol=1e-4)

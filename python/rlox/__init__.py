@@ -81,6 +81,8 @@ from rlox.callbacks import (
     EvalCallback,
     EarlyStoppingCallback,
     CheckpointCallback,
+    ProgressBarCallback,
+    TimingCallback,
 )
 
 # -- Logging -------------------------------------------------------------------
@@ -153,6 +155,8 @@ __all__ = [
     "EvalCallback",
     "EarlyStoppingCallback",
     "CheckpointCallback",
+    "ProgressBarCallback",
+    "TimingCallback",
     # Logging
     "LoggerCallback",
     "WandbLogger",

@@ -181,8 +181,16 @@ class MAPPO:
                     new_log_probs, entropy = policy.get_logprob_and_entropy(
                         mb.obs, mb.actions
                     )
-                    # Centralized critic
-                    values = self.critic(mb.obs).squeeze(-1)
+                    # Centralized critic — for n_agents=1, obs is already the
+                    # full state. For n_agents>1, would need joint obs from all
+                    # agents (not yet supported by the single-agent collector).
+                    if self.n_agents == 1:
+                        critic_input = mb.obs
+                    else:
+                        # Reshape to (batch/n_agents, n_agents*obs_dim) for joint obs
+                        batch_per_agent = mb.obs.shape[0] // self.n_agents
+                        critic_input = mb.obs.reshape(batch_per_agent, -1)
+                    values = self.critic(critic_input).squeeze(-1)
 
                     log_ratio = new_log_probs - mb.log_probs
                     ratio = log_ratio.exp()
@@ -201,7 +209,7 @@ class MAPPO:
                         - self.ent_coef * entropy_loss
                     )
 
-                    self.optimizer.zero_grad()
+                    self.optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     nn.utils.clip_grad_norm_(
                         list(self.actors.parameters()) + list(self.critic.parameters()),

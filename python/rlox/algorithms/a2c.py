@@ -114,7 +114,7 @@ class A2C:
 
             loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss
 
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
             nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
             self.optimizer.step()

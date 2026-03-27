@@ -84,9 +84,25 @@ def compile_policy(
     # Unwrap trainer to get the underlying algorithm
     inner = getattr(algo, "algo", algo)
 
-    # PPO / A2C: single policy network
+    # PPO / A2C: compile individual policy methods if forward() is not overridden
     if hasattr(inner, "policy"):
-        inner.policy = _try_compile(inner.policy, "policy", **compile_kwargs)
+        policy = inner.policy
+        if _has_forward(policy):
+            inner.policy = _try_compile(policy, "policy", **compile_kwargs)
+        else:
+            # Compile the hot methods used during training
+            import torch
+            for method_name in ("get_action_and_logprob", "get_value", "get_logprob_and_entropy"):
+                if hasattr(policy, method_name):
+                    try:
+                        original = getattr(policy, method_name)
+                        compiled = torch.compile(original, **compile_kwargs)
+                        setattr(policy, method_name, compiled)
+                    except Exception as e:
+                        warnings.warn(
+                            f"torch.compile failed for policy.{method_name}: {e}",
+                            stacklevel=2,
+                        )
 
     # SAC / TD3: actor + twin critics
     if hasattr(inner, "actor"):

@@ -28,7 +28,7 @@ class TestGymVecEnv:
         result = env.step_all(actions)
 
         assert result["obs"].shape == (4, 4)
-        assert result["obs"].dtype == np.float64
+        assert result["obs"].dtype == np.float32
 
     def test_auto_reset(self, env: GymVecEnv) -> None:
         """After enough random steps, at least one env should auto-reset."""
@@ -73,7 +73,7 @@ class TestGymVecEnv:
     def test_reset_returns_correct_shape(self, env: GymVecEnv) -> None:
         obs = env.reset_all()
         assert obs.shape == (4, 4)
-        assert obs.dtype == np.float64
+        assert obs.dtype == np.float32
 
     def test_reset_with_seed(self) -> None:
         env1 = GymVecEnv("CartPole-v1", n_envs=2, seed=0)

@@ -48,8 +48,12 @@ class DQN:
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
     ):
-        self.env = gym.make(env_id)
-        self.env_id = env_id
+        if isinstance(env_id, str):
+            self.env = gym.make(env_id)
+            self.env_id = env_id
+        else:
+            self.env = env_id
+            self.env_id = getattr(env_id.spec, "id", "custom") if hasattr(env_id, "spec") and env_id.spec else "custom"
         self.gamma = gamma
         self.batch_size = batch_size
         self.learning_starts = learning_starts
@@ -239,18 +243,18 @@ class DQN:
     def _update(self, step: int, total_timesteps: int) -> dict[str, float]:
         if self.prioritized:
             batch = self.buffer.sample(self.batch_size, step)
-            weights = torch.as_tensor(np.asarray(batch["weights"]), dtype=torch.float32)
+            weights = torch.as_tensor(batch["weights"], dtype=torch.float32)
             indices = np.asarray(batch["indices"])
         else:
             batch = self.buffer.sample(self.batch_size, step)
             weights = torch.ones(self.batch_size)
             indices = None
 
-        obs = torch.as_tensor(np.asarray(batch["obs"]), dtype=torch.float32)
-        actions = torch.as_tensor(np.asarray(batch["actions"]), dtype=torch.long).squeeze(-1)
-        rewards = torch.as_tensor(np.asarray(batch["rewards"]), dtype=torch.float32)
-        terminated = torch.as_tensor(np.asarray(batch["terminated"]), dtype=torch.float32)
-        next_obs = torch.as_tensor(np.asarray(batch["next_obs"]), dtype=torch.float32)
+        obs = torch.as_tensor(batch["obs"], dtype=torch.float32)
+        actions = torch.as_tensor(batch["actions"], dtype=torch.long).squeeze(-1)
+        rewards = torch.as_tensor(batch["rewards"], dtype=torch.float32)
+        terminated = torch.as_tensor(batch["terminated"], dtype=torch.float32)
+        next_obs = torch.as_tensor(batch["next_obs"], dtype=torch.float32)
 
         # Current Q
         q_values = self.q_network(obs)
@@ -269,7 +273,7 @@ class DQN:
         td_error = q - target_q
         loss = (weights * td_error.pow(2)).mean()
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         self.optimizer.step()
 
@@ -285,6 +289,12 @@ class DQN:
             self.buffer.set_beta(0.4 + frac * (1.0 - 0.4))
 
         return {"loss": loss.item()}
+
+    def predict(self, obs: np.ndarray, deterministic: bool = True) -> int:
+        """Get action from the policy."""
+        with torch.no_grad():
+            obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+            return int(self.q_network(obs_t).argmax(dim=-1).item())
 
     def save(self, path: str) -> None:
         """Save training checkpoint."""

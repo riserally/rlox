@@ -233,14 +233,15 @@ class IMPALA:
         for env_idx in range(n_envs):
             log_rhos = (pi_log_probs[:, env_idx] - mu_log_probs[:, env_idx]).detach()
 
-            # Mask dones by zeroing rewards after terminal
             env_rewards = rewards[:, env_idx].numpy().astype(np.float32)
             env_values = values[:, env_idx].detach().numpy().astype(np.float32)
+            env_dones = dones[:, env_idx].numpy().astype(np.float32)
 
             vs, pg_advantages = rlox.compute_vtrace(
                 log_rhos.numpy().astype(np.float32),
                 env_rewards,
                 env_values,
+                env_dones,
                 bootstrap_value=0.0,
                 gamma=self.gamma,
                 rho_bar=self.rho_bar,
@@ -266,7 +267,7 @@ class IMPALA:
 
         loss = total_policy_loss + self.vf_coef * total_value_loss - self.ent_coef * entropy_loss
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
         with self._policy_lock:

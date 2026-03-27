@@ -167,7 +167,7 @@ class PPO:
                         mb.values,
                     )
 
-                    self.optimizer.zero_grad()
+                    self.optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     nn.utils.clip_grad_norm_(
                         self.policy.parameters(), cfg.max_grad_norm

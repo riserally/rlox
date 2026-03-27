@@ -224,6 +224,7 @@ pub fn pack_sequences<'py>(
 ///     log_rhos: 1-D f32 array of log importance ratios log(pi/mu)
 ///     rewards: 1-D f32 array of rewards
 ///     values: 1-D f32 array of value estimates
+///     dones: 1-D f32 array of episode termination flags (1.0 = done)
 ///     bootstrap_value: bootstrap value for the last step
 ///     gamma: discount factor
 ///     rho_bar: clipping threshold for importance weights (default 1.0)
@@ -232,26 +233,35 @@ pub fn pack_sequences<'py>(
 /// Returns:
 ///     (vs, pg_advantages) as a tuple of two numpy f32 arrays
 #[pyfunction]
-#[pyo3(signature = (log_rhos, rewards, values, bootstrap_value, gamma, rho_bar=1.0, c_bar=1.0))]
+#[pyo3(signature = (log_rhos, rewards, values, dones, bootstrap_value, gamma, rho_bar=1.0, c_bar=1.0))]
 pub fn compute_vtrace<'py>(
     py: Python<'py>,
     log_rhos: PyReadonlyArray1<'py, f32>,
     rewards: PyReadonlyArray1<'py, f32>,
     values: PyReadonlyArray1<'py, f32>,
+    dones: PyReadonlyArray1<'py, f32>,
     bootstrap_value: f32,
     gamma: f32,
     rho_bar: f32,
     c_bar: f32,
 ) -> PyResult<(Bound<'py, PyArray1<f32>>, Bound<'py, PyArray1<f32>>)> {
-    let (vs, pg_advantages) = vtrace::compute_vtrace(
-        log_rhos.as_slice()?,
-        rewards.as_slice()?,
-        values.as_slice()?,
-        bootstrap_value,
-        gamma,
-        rho_bar,
-        c_bar,
-    )
+    let log_rhos_owned = log_rhos.as_slice()?.to_vec();
+    let rewards_owned = rewards.as_slice()?.to_vec();
+    let values_owned = values.as_slice()?.to_vec();
+    let dones_owned = dones.as_slice()?.to_vec();
+
+    let (vs, pg_advantages) = py.allow_threads(|| {
+        vtrace::compute_vtrace(
+            &log_rhos_owned,
+            &rewards_owned,
+            &values_owned,
+            &dones_owned,
+            bootstrap_value,
+            gamma,
+            rho_bar,
+            c_bar,
+        )
+    })
     .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((

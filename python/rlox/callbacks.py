@@ -138,6 +138,80 @@ class CheckpointCallback(Callback):
         return True
 
 
+class ProgressBarCallback(Callback):
+    """Display a tqdm progress bar during training."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._pbar: Any = None
+
+    def on_training_start(self, **kwargs: Any) -> None:
+        total = kwargs.get("total_timesteps", 0)
+        try:
+            from tqdm.auto import tqdm
+            self._pbar = tqdm(total=total, unit="step", desc="Training")
+        except ImportError:
+            self._pbar = None
+
+    def on_step(self, **kwargs: Any) -> bool:
+        if self._pbar is not None:
+            self._pbar.update(1)
+            reward = kwargs.get("reward")
+            if reward is not None:
+                self._pbar.set_postfix(reward=f"{reward:.1f}")
+        return True
+
+    def on_training_end(self, **kwargs: Any) -> None:
+        if self._pbar is not None:
+            self._pbar.close()
+
+
+class TimingCallback(Callback):
+    """Measure wall-clock time of each training phase."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._phase_times: dict[str, float] = {}
+        self._phase_start: float = 0.0
+        self._current_phase: str | None = None
+
+    def _switch_phase(self, name: str) -> None:
+        import time
+        now = time.perf_counter()
+        if self._current_phase is not None:
+            elapsed = now - self._phase_start
+            self._phase_times[self._current_phase] = (
+                self._phase_times.get(self._current_phase, 0.0) + elapsed
+            )
+        self._current_phase = name
+        self._phase_start = now
+
+    def on_training_start(self, **kwargs: Any) -> None:
+        import time
+        self._phase_start = time.perf_counter()
+        self._current_phase = "env_step"
+
+    def on_step(self, **kwargs: Any) -> bool:
+        self._switch_phase("env_step")
+        return True
+
+    def on_rollout_end(self, **kwargs: Any) -> None:
+        self._switch_phase("gae_compute")
+
+    def on_train_batch(self, **kwargs: Any) -> None:
+        self._switch_phase("gradient_update")
+
+    def on_training_end(self, **kwargs: Any) -> None:
+        self._switch_phase("done")
+
+    def summary(self) -> dict[str, float]:
+        """Return percentage of time spent in each phase."""
+        total = sum(self._phase_times.values())
+        if total == 0:
+            return {}
+        return {k: v / total * 100 for k, v in self._phase_times.items()}
+
+
 class CallbackList:
     """Run multiple callbacks in sequence."""
 

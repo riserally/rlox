@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 def polyak_update(source: nn.Module, target: nn.Module, tau: float = 0.005) -> None:

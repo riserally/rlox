@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Callable
 
 import numpy as np
 import torch
@@ -100,8 +100,6 @@ class GRPO:
         """
         completions, rewards_list = self._generate_and_score(prompts)
         rewards_np = np.array(rewards_list, dtype=np.float64)
-
-        n_prompts = prompts.shape[0]
 
         # Batched group advantages via Rust — all groups at once
         advantages_np = np.array(

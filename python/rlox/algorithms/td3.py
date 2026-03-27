@@ -12,7 +12,6 @@ import torch.nn.functional as F
 
 import rlox
 from rlox.callbacks import Callback, CallbackList
-from rlox.checkpoint import Checkpoint
 from rlox.logging import LoggerCallback
 from rlox.networks import QNetwork, DeterministicPolicy, polyak_update
 

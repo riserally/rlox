@@ -11,7 +11,7 @@ for invalid parameters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict, fields
+from dataclasses import dataclass, asdict, fields
 from pathlib import Path
 from typing import Any
 

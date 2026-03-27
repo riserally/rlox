@@ -7,7 +7,6 @@ operates in the latent space using imagination rollouts.
 
 from __future__ import annotations
 
-from typing import Any
 
 import numpy as np
 import torch

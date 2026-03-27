@@ -141,6 +141,7 @@ pub trait ActorCritic {
     fn evaluate(&self, obs: &TensorData, actions: &TensorData) -> Result<EvalOutput, NNError>;
 
     /// Perform one PPO gradient step. Bundles forward→loss→backward→clip→step.
+    #[allow(clippy::too_many_arguments)]
     fn ppo_step(
         &mut self,
         obs: &TensorData,

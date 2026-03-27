@@ -8,11 +8,9 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 import rlox
 from rlox.callbacks import Callback, CallbackList
-from rlox.checkpoint import Checkpoint
 from rlox.config import DQNConfig
 from rlox.logging import LoggerCallback
 from rlox.networks import SimpleQNetwork, DuelingQNetwork

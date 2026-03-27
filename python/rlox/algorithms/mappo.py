@@ -13,7 +13,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import rlox
 from rlox.callbacks import Callback, CallbackList
 from rlox.collectors import RolloutCollector
 from rlox.logging import LoggerCallback

@@ -169,6 +169,7 @@ impl PrioritizedReplayBuffer {
     }
 
     /// Push a transition with the given TD-error priority.
+    #[allow(clippy::too_many_arguments)]
     pub fn push_slices(
         &mut self,
         obs: &[f32],

@@ -10,7 +10,7 @@ up once the Rust gRPC worker server is ready.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np

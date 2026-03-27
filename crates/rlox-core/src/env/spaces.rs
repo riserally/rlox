@@ -65,9 +65,9 @@ impl Observation {
     pub fn as_slice(&self) -> &[f32] {
         match self {
             Observation::Flat(v) => v,
-            Observation::Dict(_) => panic!(
-                "Observation::as_slice() called on Dict variant; use flatten() instead"
-            ),
+            Observation::Dict(_) => {
+                panic!("Observation::as_slice() called on Dict variant; use flatten() instead")
+            }
         }
     }
 
@@ -120,9 +120,10 @@ impl Observation {
     pub fn get(&self, key: &str) -> Option<&[f32]> {
         match self {
             Observation::Flat(_) => None,
-            Observation::Dict(pairs) => {
-                pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_slice())
-            }
+            Observation::Dict(pairs) => pairs
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.as_slice()),
         }
     }
 }
@@ -257,10 +258,7 @@ mod tests {
 
     #[test]
     fn test_dict_observation_flatten() {
-        let obs = Observation::Dict(vec![
-            ("a".into(), vec![1.0, 2.0]),
-            ("b".into(), vec![3.0]),
-        ]);
+        let obs = Observation::Dict(vec![("a".into(), vec![1.0, 2.0]), ("b".into(), vec![3.0])]);
         assert_eq!(obs.flatten(), vec![1.0, 2.0, 3.0]);
     }
 
@@ -277,10 +275,7 @@ mod tests {
 
     #[test]
     fn test_dict_obs_space_contains() {
-        let space = ObsSpace::Dict(vec![
-            ("image".into(), 784),
-            ("proprio".into(), 7),
-        ]);
+        let space = ObsSpace::Dict(vec![("image".into(), 784), ("proprio".into(), 7)]);
 
         let valid = Observation::Dict(vec![
             ("image".into(), vec![0.0; 784]),
@@ -303,9 +298,7 @@ mod tests {
         assert!(!space.contains(&bad_key));
 
         // Wrong number of entries
-        let bad_count = Observation::Dict(vec![
-            ("image".into(), vec![0.0; 784]),
-        ]);
+        let bad_count = Observation::Dict(vec![("image".into(), vec![0.0; 784])]);
         assert!(!space.contains(&bad_count));
 
         // Flat obs should not match Dict space
@@ -338,9 +331,7 @@ mod tests {
     #[test]
     fn test_dict_obs_space_does_not_match_flat_obs() {
         let space = ObsSpace::Discrete(5);
-        let dict_obs = Observation::Dict(vec![
-            ("x".into(), vec![3.0]),
-        ]);
+        let dict_obs = Observation::Dict(vec![("x".into(), vec![3.0])]);
         assert!(!space.contains(&dict_obs));
     }
 }

@@ -3,13 +3,21 @@ use rlox_nn::TensorData;
 
 /// Convert TensorData to a Burn Tensor<B, 1>.
 pub fn to_tensor_1d<B: Backend>(data: &TensorData, device: &B::Device) -> Tensor<B, 1> {
-    let td = burn::tensor::TensorData::new(data.data.clone(), burn::tensor::Shape::new([data.data.len()]));
+    let td = burn::tensor::TensorData::new(
+        data.data.clone(),
+        burn::tensor::Shape::new([data.data.len()]),
+    );
     Tensor::from_data(td, device)
 }
 
 /// Convert TensorData to a Burn Tensor<B, 2>.
 pub fn to_tensor_2d<B: Backend>(data: &TensorData, device: &B::Device) -> Tensor<B, 2> {
-    assert_eq!(data.shape.len(), 2, "expected 2D shape, got {:?}", data.shape);
+    assert_eq!(
+        data.shape.len(),
+        2,
+        "expected 2D shape, got {:?}",
+        data.shape
+    );
     let td = burn::tensor::TensorData::new(
         data.data.clone(),
         burn::tensor::Shape::new([data.shape[0], data.shape[1]]),

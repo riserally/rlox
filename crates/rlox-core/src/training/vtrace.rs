@@ -57,7 +57,9 @@ pub fn compute_vtrace(
         let delta_t = rho_t * (rewards[last] + gamma * next_value - values[last]);
         // vs_next for the last step is bootstrap_value (zeroed if terminal)
         let vs_next_val = bootstrap_value * non_terminal;
-        vs[last] = values[last] + delta_t + gamma * non_terminal * rho_bar.min(ratio).min(c_bar) * (vs_next_val - next_value);
+        vs[last] = values[last]
+            + delta_t
+            + gamma * non_terminal * rho_bar.min(ratio).min(c_bar) * (vs_next_val - next_value);
         pg_advantages[last] = rho_t * (rewards[last] + gamma * vs_next_val - values[last]);
     }
 
@@ -110,8 +112,10 @@ mod tests {
         let gamma = 0.99;
 
         let dones = vec![0.0; 3];
-        let (vs, _adv) = compute_vtrace(&log_rhos, &rewards, &values, &dones, bootstrap, gamma, 1.0, 1.0)
-            .unwrap();
+        let (vs, _adv) = compute_vtrace(
+            &log_rhos, &rewards, &values, &dones, bootstrap, gamma, 1.0, 1.0,
+        )
+        .unwrap();
 
         // On-policy with rho=c=1:
         // t=2: delta = 1*(1 + 0.99*0 - 0) = 1, vs[2] = 0 + 1 + 0.99*1*(0-0) = 1
@@ -135,9 +139,10 @@ mod tests {
         let c_bar = 10.0;
 
         let dones = vec![0.0];
-        let (vs, adv) =
-            compute_vtrace(&log_rhos, &rewards, &values, &dones, bootstrap, gamma, rho_bar, c_bar)
-                .unwrap();
+        let (vs, adv) = compute_vtrace(
+            &log_rhos, &rewards, &values, &dones, bootstrap, gamma, rho_bar, c_bar,
+        )
+        .unwrap();
 
         let rho = log_rho.exp(); // ~1.6487
         let _c = c_bar.min(rho);
@@ -172,10 +177,14 @@ mod tests {
         let gamma = 0.99;
 
         let dones = vec![0.0];
-        let (vs_clipped, _) =
-            compute_vtrace(&log_rhos, &rewards, &values, &dones, bootstrap, gamma, 1.0, 1.0).unwrap();
-        let (vs_unclipped, _) =
-            compute_vtrace(&log_rhos, &rewards, &values, &dones, bootstrap, gamma, 200.0, 200.0).unwrap();
+        let (vs_clipped, _) = compute_vtrace(
+            &log_rhos, &rewards, &values, &dones, bootstrap, gamma, 1.0, 1.0,
+        )
+        .unwrap();
+        let (vs_unclipped, _) = compute_vtrace(
+            &log_rhos, &rewards, &values, &dones, bootstrap, gamma, 200.0, 200.0,
+        )
+        .unwrap();
 
         // With rho_bar=1.0, rho is clamped to 1.0 => delta = 1*(1-0) = 1 => vs = 1.0
         assert!((vs_clipped[0] - 1.0).abs() < 1e-5);
@@ -190,7 +199,8 @@ mod tests {
         let rewards = vec![1.0; n];
         let values = vec![0.5; n];
         let dones = vec![0.0; n];
-        let (vs, adv) = compute_vtrace(&log_rhos, &rewards, &values, &dones, 0.0, 0.99, 1.0, 1.0).unwrap();
+        let (vs, adv) =
+            compute_vtrace(&log_rhos, &rewards, &values, &dones, 0.0, 0.99, 1.0, 1.0).unwrap();
         assert_eq!(vs.len(), n);
         assert_eq!(adv.len(), n);
     }
@@ -364,12 +374,42 @@ mod tests {
         let vs_0 = 0.5 + delta_0 + 0.9 * c_0 * (vs_1 - 1.0);
         let pg_0 = rho_0 * (1.0 + 0.9 * vs_1 - 0.5);
 
-        assert!((vs[0] - vs_0).abs() < 1e-4, "vs[0]: got {}, expected {}", vs[0], vs_0);
-        assert!((vs[1] - vs_1).abs() < 1e-4, "vs[1]: got {}, expected {}", vs[1], vs_1);
-        assert!((vs[2] - vs_2).abs() < 1e-4, "vs[2]: got {}, expected {}", vs[2], vs_2);
-        assert!((adv[0] - pg_0).abs() < 1e-4, "adv[0]: got {}, expected {}", adv[0], pg_0);
-        assert!((adv[1] - pg_1).abs() < 1e-4, "adv[1]: got {}, expected {}", adv[1], pg_1);
-        assert!((adv[2] - pg_2).abs() < 1e-4, "adv[2]: got {}, expected {}", adv[2], pg_2);
+        assert!(
+            (vs[0] - vs_0).abs() < 1e-4,
+            "vs[0]: got {}, expected {}",
+            vs[0],
+            vs_0
+        );
+        assert!(
+            (vs[1] - vs_1).abs() < 1e-4,
+            "vs[1]: got {}, expected {}",
+            vs[1],
+            vs_1
+        );
+        assert!(
+            (vs[2] - vs_2).abs() < 1e-4,
+            "vs[2]: got {}, expected {}",
+            vs[2],
+            vs_2
+        );
+        assert!(
+            (adv[0] - pg_0).abs() < 1e-4,
+            "adv[0]: got {}, expected {}",
+            adv[0],
+            pg_0
+        );
+        assert!(
+            (adv[1] - pg_1).abs() < 1e-4,
+            "adv[1]: got {}, expected {}",
+            adv[1],
+            pg_1
+        );
+        assert!(
+            (adv[2] - pg_2).abs() < 1e-4,
+            "adv[2]: got {}, expected {}",
+            adv[2],
+            pg_2
+        );
 
         // Suppress unused-variable warnings
         let _ = (c_0, c_1, c_2, pg_0, pg_1, pg_2, delta_0, delta_1, delta_2);
@@ -387,14 +427,28 @@ mod tests {
         // With done at last step
         let dones_terminal = vec![1.0];
         let (vs_term, adv_term) = compute_vtrace(
-            &log_rhos, &rewards, &values, &dones_terminal, bootstrap, gamma, 1.0, 1.0,
+            &log_rhos,
+            &rewards,
+            &values,
+            &dones_terminal,
+            bootstrap,
+            gamma,
+            1.0,
+            1.0,
         )
         .unwrap();
 
         // Without done
         let dones_none = vec![0.0];
         let (vs_cont, adv_cont) = compute_vtrace(
-            &log_rhos, &rewards, &values, &dones_none, bootstrap, gamma, 1.0, 1.0,
+            &log_rhos,
+            &rewards,
+            &values,
+            &dones_none,
+            bootstrap,
+            gamma,
+            1.0,
+            1.0,
         )
         .unwrap();
 

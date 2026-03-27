@@ -228,8 +228,13 @@ impl PrioritizedReplayBuffer {
 
     pub fn push(&mut self, record: ExperienceRecord, priority: f64) -> Result<(), RloxError> {
         self.push_slices(
-            &record.obs, &record.next_obs, &record.action,
-            record.reward, record.terminated, record.truncated, priority,
+            &record.obs,
+            &record.next_obs,
+            &record.action,
+            record.reward,
+            record.terminated,
+            record.truncated,
+            priority,
         )
     }
 
@@ -239,7 +244,11 @@ impl PrioritizedReplayBuffer {
     }
 
     /// Sample a batch with importance-sampling weights.
-    pub fn sample(&self, batch_size: usize, seed: u64) -> Result<PrioritizedSampledBatch, RloxError> {
+    pub fn sample(
+        &self,
+        batch_size: usize,
+        seed: u64,
+    ) -> Result<PrioritizedSampledBatch, RloxError> {
         if self.count == 0 {
             return Err(RloxError::BufferError(
                 "cannot sample from empty buffer".into(),
@@ -535,7 +544,10 @@ mod tests {
             }
         }
         // With priority 100 vs 49*1 = 149 total, idx 0 should appear ~67% of time
-        assert!(count_high > 200, "high priority item should be sampled frequently, got {count_high}/1000");
+        assert!(
+            count_high > 200,
+            "high priority item should be sampled frequently, got {count_high}/1000"
+        );
     }
 
     #[test]
@@ -556,7 +568,10 @@ mod tests {
                 }
             }
         }
-        assert!(count_idx0 > 100, "updated high-priority item should be sampled frequently");
+        assert!(
+            count_idx0 > 100,
+            "updated high-priority item should be sampled frequently"
+        );
     }
 
     #[test]

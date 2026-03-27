@@ -53,21 +53,15 @@ impl AsyncCollector {
             // Derive obs_dim from the observation space
             let obs_dim = match envs.obs_space() {
                 crate::env::spaces::ObsSpace::Discrete(_) => 1,
-                crate::env::spaces::ObsSpace::Box { shape, .. } => {
-                    shape.iter().product()
-                }
+                crate::env::spaces::ObsSpace::Box { shape, .. } => shape.iter().product(),
                 crate::env::spaces::ObsSpace::MultiDiscrete(v) => v.len(),
-                crate::env::spaces::ObsSpace::Dict(entries) => {
-                    entries.iter().map(|(_, d)| d).sum()
-                }
+                crate::env::spaces::ObsSpace::Dict(entries) => entries.iter().map(|(_, d)| d).sum(),
             };
 
             // Derive act_dim from the action space
             let act_dim = match envs.action_space() {
                 crate::env::spaces::ActionSpace::Discrete(_) => 1,
-                crate::env::spaces::ActionSpace::Box { shape, .. } => {
-                    shape.iter().product()
-                }
+                crate::env::spaces::ActionSpace::Box { shape, .. } => shape.iter().product(),
                 crate::env::spaces::ActionSpace::MultiDiscrete(v) => v.len(),
             };
 
@@ -76,10 +70,8 @@ impl AsyncCollector {
                 Ok(obs) => obs,
                 Err(_) => return,
             };
-            let mut current_obs: Vec<f32> = init_obs
-                .into_iter()
-                .flat_map(|o| o.into_inner())
-                .collect();
+            let mut current_obs: Vec<f32> =
+                init_obs.into_iter().flat_map(|o| o.into_inner()).collect();
 
             while !stop.load(Ordering::Relaxed) {
                 let total = n_steps * n_envs;
@@ -130,9 +122,7 @@ impl AsyncCollector {
                         Ok(transition) => {
                             for i in 0..n_envs {
                                 all_rewards.push(transition.rewards[i]);
-                                let done = if transition.terminated[i]
-                                    || transition.truncated[i]
-                                {
+                                let done = if transition.terminated[i] || transition.truncated[i] {
                                     1.0
                                 } else {
                                     0.0
@@ -142,7 +132,8 @@ impl AsyncCollector {
                             // Update current observations (reuse allocation)
                             let mut offset = 0;
                             for obs_vec in transition.obs {
-                                current_obs[offset..offset + obs_vec.len()].copy_from_slice(&obs_vec);
+                                current_obs[offset..offset + obs_vec.len()]
+                                    .copy_from_slice(&obs_vec);
                                 offset += obs_vec.len();
                             }
                         }
@@ -324,15 +315,8 @@ mod tests {
                 (vec![1.0; n], vec![-0.5; n])
             });
 
-        let mut collector = AsyncCollector::start(
-            make_vec_env(4, 42),
-            16,
-            0.99,
-            0.95,
-            tx,
-            value_fn,
-            action_fn,
-        );
+        let mut collector =
+            AsyncCollector::start(make_vec_env(4, 42), 16, 0.99, 0.95, tx, value_fn, action_fn);
 
         let batch = pipe.recv().unwrap();
         for &a in &batch.advantages {

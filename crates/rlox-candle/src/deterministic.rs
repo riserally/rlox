@@ -4,8 +4,8 @@ use candle_core::Device;
 use candle_nn::{Optimizer, VarBuilder, VarMap};
 
 use rlox_nn::{
-    Activation, DeterministicPolicy as DeterministicPolicyTrait, MLPConfig,
-    NNError, TensorData, TrainMetrics,
+    Activation, DeterministicPolicy as DeterministicPolicyTrait, MLPConfig, NNError, TensorData,
+    TrainMetrics,
 };
 
 use crate::convert::*;
@@ -56,9 +56,14 @@ impl CandleDeterministicPolicy {
         }
 
         let params = varmap.all_vars();
-        let optimizer =
-            candle_nn::AdamW::new(params, candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
+        let optimizer = candle_nn::AdamW::new(
+            params,
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
 
         Ok(Self {
             net,
@@ -88,7 +93,11 @@ impl CandleDeterministicPolicy {
         let scaled = (&actions * self.max_action as f64).nn_err()?;
 
         // Q1 with full autograd — gradient flows through critic back to actor
-        let q1 = critic.q1_forward(&obs_t, &scaled).nn_err()?.squeeze(1).nn_err()?;
+        let q1 = critic
+            .q1_forward(&obs_t, &scaled)
+            .nn_err()?
+            .squeeze(1)
+            .nn_err()?;
 
         let actor_loss = q1.neg().nn_err()?.mean_all().nn_err()?;
 

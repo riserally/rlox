@@ -49,9 +49,14 @@ impl CandleActorCritic {
         let critic = MLP::new(&critic_config, vb.pp("critic")).nn_err()?;
 
         let params = varmap.all_vars();
-        let optimizer =
-            candle_nn::AdamW::new(params, candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
+        let optimizer = candle_nn::AdamW::new(
+            params,
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
 
         Ok(Self {
             actor,
@@ -200,16 +205,20 @@ impl rlox_nn::ActorCritic for CandleActorCritic {
         let value_loss = if config.clip_vloss {
             let old_v = to_tensor_1d(old_values, &self.device).nn_err()?;
             let v_diff = (&new_values - &old_v).nn_err()?;
-            let v_clipped = (&old_v
-                + v_diff
-                    .clamp(-config.clip_eps, config.clip_eps)
-                    .nn_err()?)
-            .nn_err()?;
+            let v_clipped =
+                (&old_v + v_diff.clamp(-config.clip_eps, config.clip_eps).nn_err()?).nn_err()?;
             let vf1 = (&new_values - &ret).nn_err()?.sqr().nn_err()?;
             let vf2 = (&v_clipped - &ret).nn_err()?.sqr().nn_err()?;
             (vf1.maximum(&vf2).nn_err()?.mean_all().nn_err()? * 0.5).nn_err()?
         } else {
-            ((&new_values - &ret).nn_err()?.sqr().nn_err()?.mean_all().nn_err()? * 0.5).nn_err()?
+            ((&new_values - &ret)
+                .nn_err()?
+                .sqr()
+                .nn_err()?
+                .mean_all()
+                .nn_err()?
+                * 0.5)
+                .nn_err()?
         };
 
         let entropy_loss = entropy.mean_all().nn_err()?;

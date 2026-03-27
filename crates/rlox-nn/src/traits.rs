@@ -165,11 +165,7 @@ pub trait QFunction {
     fn q_values(&self, obs: &TensorData) -> Result<TensorData, NNError>;
 
     /// Compute Q-value for (obs, action) pairs. Returns [batch_size].
-    fn q_value_at(
-        &self,
-        obs: &TensorData,
-        actions: &TensorData,
-    ) -> Result<TensorData, NNError>;
+    fn q_value_at(&self, obs: &TensorData, actions: &TensorData) -> Result<TensorData, NNError>;
 
     /// Perform one DQN TD gradient step.
     /// Returns (loss, td_errors) where td_errors can be used for PER.
@@ -201,10 +197,7 @@ pub trait QFunction {
 pub trait StochasticPolicy {
     /// Sample actions with reparameterization trick.
     /// Returns (squashed_actions [batch, act_dim], log_probs [batch]).
-    fn sample_actions(
-        &self,
-        obs: &TensorData,
-    ) -> Result<(TensorData, TensorData), NNError>;
+    fn sample_actions(&self, obs: &TensorData) -> Result<(TensorData, TensorData), NNError>;
 
     /// Deterministic action (mean through squashing).
     fn deterministic_action(&self, obs: &TensorData) -> Result<TensorData, NNError>;
@@ -219,11 +212,7 @@ pub trait StochasticPolicy {
 /// Continuous Q-function for SAC/TD3 (takes obs + action as input).
 pub trait ContinuousQFunction {
     /// Compute Q-value for (obs, action). Returns [batch_size].
-    fn q_value(
-        &self,
-        obs: &TensorData,
-        actions: &TensorData,
-    ) -> Result<TensorData, NNError>;
+    fn q_value(&self, obs: &TensorData, actions: &TensorData) -> Result<TensorData, NNError>;
 
     /// Compute twin Q-values for (obs, action). Returns (q1, q2), each [batch_size].
     fn twin_q_values(

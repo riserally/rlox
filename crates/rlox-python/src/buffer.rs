@@ -62,16 +62,11 @@ impl<'py> BatchDictBuilder<'py> {
     /// Add a 1D bool-as-u8 array (terminated, truncated).
     fn add_bool(&self, key: &str, data: &[bool]) -> PyResult<()> {
         let u8s: Vec<u8> = data.iter().map(|&b| b as u8).collect();
-        self.dict
-            .set_item(key, PyArray1::from_slice(self.py, &u8s))
+        self.dict.set_item(key, PyArray1::from_slice(self.py, &u8s))
     }
 
     /// Add extra columns from the sampled batch.
-    fn add_extra_columns(
-        &self,
-        extra: &[(String, Vec<f32>)],
-        batch_size: usize,
-    ) -> PyResult<()> {
+    fn add_extra_columns(&self, extra: &[(String, Vec<f32>)], batch_size: usize) -> PyResult<()> {
         for (name, data) in extra {
             let dim = data.len() / batch_size;
             let arr = PyArray1::from_slice(self.py, data);
@@ -134,7 +129,14 @@ impl PyExperienceTable {
             }
         };
         self.inner
-            .push_slices(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated)
+            .push_slices(
+                obs_slice,
+                next_obs_slice,
+                action_slice,
+                reward,
+                terminated,
+                truncated,
+            )
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -229,7 +231,14 @@ impl PyReplayBuffer {
             }
         };
         self.inner
-            .push_slices(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated)
+            .push_slices(
+                obs_slice,
+                next_obs_slice,
+                action_slice,
+                reward,
+                terminated,
+                truncated,
+            )
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -243,14 +252,18 @@ impl PyReplayBuffer {
         batch_size: usize,
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let batch = py.allow_threads(|| {
-            self.inner.sample(batch_size, seed)
-        })
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let batch = py
+            .allow_threads(|| self.inner.sample(batch_size, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);
         builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
-        builder.add_2d("next_obs", batch.next_observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d(
+            "next_obs",
+            batch.next_observations,
+            batch.batch_size,
+            batch.obs_dim,
+        )?;
         builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
         builder.add_1d_f32("rewards", batch.rewards)?;
         builder.add_bool("terminated", &batch.terminated)?;
@@ -305,7 +318,15 @@ impl PyPrioritizedReplayBuffer {
             }
         };
         self.inner
-            .push_slices(obs_slice, next_obs_slice, action_slice, reward, terminated, truncated, priority)
+            .push_slices(
+                obs_slice,
+                next_obs_slice,
+                action_slice,
+                reward,
+                terminated,
+                truncated,
+                priority,
+            )
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -317,14 +338,18 @@ impl PyPrioritizedReplayBuffer {
         batch_size: usize,
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let batch = py.allow_threads(|| {
-            self.inner.sample(batch_size, seed)
-        })
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let batch = py
+            .allow_threads(|| self.inner.sample(batch_size, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);
         builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
-        builder.add_2d("next_obs", batch.next_observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d(
+            "next_obs",
+            batch.next_observations,
+            batch.batch_size,
+            batch.obs_dim,
+        )?;
         builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
         builder.add_1d_f32("rewards", batch.rewards)?;
         builder.add_bool("terminated", &batch.terminated)?;
@@ -334,7 +359,9 @@ impl PyPrioritizedReplayBuffer {
         let weights: Vec<f32> = batch.weights.iter().map(|&w| w as f32).collect();
         builder.add_1d_f32("weights", weights)?;
         let indices: Vec<u64> = batch.indices.iter().map(|&i| i as u64).collect();
-        builder.dict.set_item("indices", PyArray1::from_vec(py, indices))?;
+        builder
+            .dict
+            .set_item("indices", PyArray1::from_vec(py, indices))?;
 
         Ok(builder.build())
     }
@@ -428,14 +455,18 @@ impl PyMmapReplayBuffer {
         batch_size: usize,
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let batch = py.allow_threads(|| {
-            self.inner.sample(batch_size, seed)
-        })
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let batch = py
+            .allow_threads(|| self.inner.sample(batch_size, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);
         builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
-        builder.add_2d("next_obs", batch.next_observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d(
+            "next_obs",
+            batch.next_observations,
+            batch.batch_size,
+            batch.obs_dim,
+        )?;
         builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
         builder.add_1d_f32("rewards", batch.rewards)?;
         builder.add_bool("terminated", &batch.terminated)?;

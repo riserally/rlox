@@ -143,7 +143,13 @@ impl VecEnv {
                     transition.obs = new_obs;
                 }
                 let obs_data = transition.obs.into_inner();
-                Ok((obs_data, transition.reward, transition.terminated, transition.truncated, term_obs))
+                Ok((
+                    obs_data,
+                    transition.reward,
+                    transition.terminated,
+                    transition.truncated,
+                    term_obs,
+                ))
             })
             .collect();
 
@@ -251,7 +257,10 @@ mod tests {
         let actions: Vec<Action> = (0..4).map(|i| Action::Discrete((i % 2) as u32)).collect();
 
         let batch_flat = venv.step_all_flat(&actions).unwrap();
-        assert!(batch_flat.obs.is_empty(), "obs Vec should be empty in flat mode");
+        assert!(
+            batch_flat.obs.is_empty(),
+            "obs Vec should be empty in flat mode"
+        );
         assert_eq!(batch_flat.obs_flat.len(), 4 * 4); // 4 envs * 4 obs_dim (CartPole)
         assert_eq!(batch_flat.obs_dim, 4);
         assert_eq!(batch_flat.rewards.len(), 4);
@@ -314,8 +323,9 @@ mod tests {
     fn vec_env_1024_envs_no_panic() {
         // Ensure 1024 parallel envs don't cause thread pool issues
         let mut venv = make_vec_env(1024, 42);
-        let actions: Vec<Action> =
-            (0..1024).map(|i| Action::Discrete((i % 2) as u32)).collect();
+        let actions: Vec<Action> = (0..1024)
+            .map(|i| Action::Discrete((i % 2) as u32))
+            .collect();
         // Step 10 times
         for _ in 0..10 {
             let batch = venv.step_all(&actions).unwrap();
@@ -329,8 +339,7 @@ mod tests {
         let run = || {
             let mut venv = make_vec_env(64, 42);
             venv.reset_all(Some(42)).unwrap();
-            let actions: Vec<Action> =
-                (0..64).map(|i| Action::Discrete((i % 2) as u32)).collect();
+            let actions: Vec<Action> = (0..64).map(|i| Action::Discrete((i % 2) as u32)).collect();
             let mut all_rewards = Vec::new();
             for _ in 0..50 {
                 let batch = venv.step_all(&actions).unwrap();

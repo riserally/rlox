@@ -14,14 +14,10 @@ fn bench_observation_clone(c: &mut Criterion) {
     group.sample_size(50);
 
     for obs_dim in [4, 17, 28224] {
-        group.bench_with_input(
-            BenchmarkId::new("obs_dim", obs_dim),
-            &obs_dim,
-            |b, &dim| {
-                let obs = Observation::Flat(vec![0.42_f32; dim]);
-                b.iter(|| black_box(obs.clone()));
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("obs_dim", obs_dim), &obs_dim, |b, &dim| {
+            let obs = Observation::Flat(vec![0.42_f32; dim]);
+            b.iter(|| black_box(obs.clone()));
+        });
     }
 
     group.finish();
@@ -51,22 +47,18 @@ fn bench_vec_extend_from_slice(c: &mut Criterion) {
     group.sample_size(50);
 
     for obs_dim in [4, 17, 28224] {
-        group.bench_with_input(
-            BenchmarkId::new("obs_dim", obs_dim),
-            &obs_dim,
-            |b, &dim| {
-                let slice = vec![0.42_f32; dim];
-                // Simulate appending 256 observations (one batch) into a columnar buffer
-                let num_appends = 256;
-                b.iter(|| {
-                    let mut buf = Vec::with_capacity(dim * num_appends);
-                    for _ in 0..num_appends {
-                        buf.extend_from_slice(black_box(&slice));
-                    }
-                    black_box(buf);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("obs_dim", obs_dim), &obs_dim, |b, &dim| {
+            let slice = vec![0.42_f32; dim];
+            // Simulate appending 256 observations (one batch) into a columnar buffer
+            let num_appends = 256;
+            b.iter(|| {
+                let mut buf = Vec::with_capacity(dim * num_appends);
+                for _ in 0..num_appends {
+                    buf.extend_from_slice(black_box(&slice));
+                }
+                black_box(buf);
+            });
+        });
     }
 
     group.finish();

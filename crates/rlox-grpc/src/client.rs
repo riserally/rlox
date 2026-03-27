@@ -61,10 +61,7 @@ impl RemoteEnvClient {
     }
 
     /// Reset the remote batch of environments.
-    pub async fn reset_batch(
-        &mut self,
-        seed: Option<u64>,
-    ) -> Result<Vec<Observation>, GrpcError> {
+    pub async fn reset_batch(&mut self, seed: Option<u64>) -> Result<Vec<Observation>, GrpcError> {
         let request = ResetRequest {
             seed: seed.unwrap_or(0),
             has_seed: seed.is_some(),

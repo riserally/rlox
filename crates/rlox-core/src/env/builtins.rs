@@ -107,9 +107,8 @@ impl RLEnv for CartPole {
 
         // Gymnasium uses Euler integration (not semi-implicit)
         let temp = (force + POLEMASS_LENGTH * theta_dot * theta_dot * sin_theta) / TOTAL_MASS;
-        let theta_acc =
-            (GRAVITY * sin_theta - cos_theta * temp)
-                / (LENGTH * (4.0 / 3.0 - MASSPOLE * cos_theta * cos_theta / TOTAL_MASS));
+        let theta_acc = (GRAVITY * sin_theta - cos_theta * temp)
+            / (LENGTH * (4.0 / 3.0 - MASSPOLE * cos_theta * cos_theta / TOTAL_MASS));
         let x_acc = temp - POLEMASS_LENGTH * theta_acc * cos_theta / TOTAL_MASS;
 
         // Euler integration
@@ -121,9 +120,10 @@ impl RLEnv for CartPole {
         self.state = [new_x, new_x_dot, new_theta, new_theta_dot];
         self.steps += 1;
 
-        let terminated =
-            new_x < -X_THRESHOLD || new_x > X_THRESHOLD
-                || new_theta < -THETA_THRESHOLD || new_theta > THETA_THRESHOLD;
+        let terminated = new_x < -X_THRESHOLD
+            || new_x > X_THRESHOLD
+            || new_theta < -THETA_THRESHOLD
+            || new_theta > THETA_THRESHOLD;
 
         let truncated = !terminated && self.steps >= MAX_STEPS;
 
@@ -319,6 +319,9 @@ mod tests {
                 Err(_) => break,
             }
         }
-        assert!(terminated, "CartPole should terminate when always pushing right");
+        assert!(
+            terminated,
+            "CartPole should terminate when always pushing right"
+        );
     }
 }

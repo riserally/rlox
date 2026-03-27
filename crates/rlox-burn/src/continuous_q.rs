@@ -35,7 +35,11 @@ impl<B: Backend> ContinuousQModel<B> {
         }
     }
 
-    fn mlp_forward(layers: &[burn::nn::Linear<B>], input: Tensor<B, 2>, act: ActivationKind) -> Tensor<B, 2> {
+    fn mlp_forward(
+        layers: &[burn::nn::Linear<B>],
+        input: Tensor<B, 2>,
+        act: ActivationKind,
+    ) -> Tensor<B, 2> {
         let n = layers.len();
         let mut x = input;
         for (i, layer) in layers.iter().enumerate() {
@@ -85,13 +89,7 @@ pub struct BurnTwinQ<B: AutodiffBackend> {
 }
 
 impl<B: AutodiffBackend> BurnTwinQ<B> {
-    pub fn new(
-        obs_dim: usize,
-        act_dim: usize,
-        hidden: usize,
-        lr: f32,
-        device: B::Device,
-    ) -> Self {
+    pub fn new(obs_dim: usize, act_dim: usize, hidden: usize, lr: f32, device: B::Device) -> Self {
         let q1 = ContinuousQModel::new(obs_dim, act_dim, hidden, &device);
         let q2 = ContinuousQModel::new(obs_dim, act_dim, hidden, &device);
         let q1_target = q1.valid();
@@ -110,11 +108,7 @@ impl<B: AutodiffBackend> BurnTwinQ<B> {
     }
 
     /// Forward through Q1 with autograd (for actor loss in SAC/TD3).
-    pub fn q1_forward_ad(
-        &self,
-        obs: Tensor<B, 2>,
-        actions: Tensor<B, 2>,
-    ) -> Tensor<B, 2> {
+    pub fn q1_forward_ad(&self, obs: Tensor<B, 2>, actions: Tensor<B, 2>) -> Tensor<B, 2> {
         self.q1.forward(obs, actions)
     }
 
@@ -134,11 +128,7 @@ impl<B: AutodiffBackend> ContinuousQFunction for BurnTwinQ<B>
 where
     B::Device: Clone,
 {
-    fn q_value(
-        &self,
-        obs: &TensorData,
-        actions: &TensorData,
-    ) -> Result<TensorData, NNError> {
+    fn q_value(&self, obs: &TensorData, actions: &TensorData) -> Result<TensorData, NNError> {
         let obs_t = to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
         let act_t = to_tensor_2d::<B::InnerBackend>(actions, &self.device.clone().into());
         let q = self.q1.valid().forward(obs_t, act_t).squeeze::<1>(1);
@@ -153,7 +143,11 @@ where
         let dev: <B::InnerBackend as Backend>::Device = self.device.clone().into();
         let obs_t = to_tensor_2d::<B::InnerBackend>(obs, &dev);
         let act_t = to_tensor_2d::<B::InnerBackend>(actions, &dev);
-        let q1 = self.q1.valid().forward(obs_t.clone(), act_t.clone()).squeeze::<1>(1);
+        let q1 = self
+            .q1
+            .valid()
+            .forward(obs_t.clone(), act_t.clone())
+            .squeeze::<1>(1);
         let q2 = self.q2.valid().forward(obs_t, act_t).squeeze::<1>(1);
         Ok((from_tensor_1d(q1), from_tensor_1d(q2)))
     }
@@ -166,7 +160,10 @@ where
         let dev: <B::InnerBackend as Backend>::Device = self.device.clone().into();
         let obs_t = to_tensor_2d::<B::InnerBackend>(obs, &dev);
         let act_t = to_tensor_2d::<B::InnerBackend>(actions, &dev);
-        let q1 = self.q1_target.forward(obs_t.clone(), act_t.clone()).squeeze::<1>(1);
+        let q1 = self
+            .q1_target
+            .forward(obs_t.clone(), act_t.clone())
+            .squeeze::<1>(1);
         let q2 = self.q2_target.forward(obs_t, act_t).squeeze::<1>(1);
         Ok((from_tensor_1d(q1), from_tensor_1d(q2)))
     }
@@ -182,12 +179,17 @@ where
         let target_t = to_tensor_1d::<B>(targets, &self.device);
 
         // Q1 loss
-        let q1 = self.q1.forward(obs_t.clone(), act_t.clone()).squeeze::<1>(1);
+        let q1 = self
+            .q1
+            .forward(obs_t.clone(), act_t.clone())
+            .squeeze::<1>(1);
         let q1_loss = (q1 - target_t.clone()).powf_scalar(2.0).mean();
 
         let grads1 = q1_loss.clone().backward();
         let grads1 = GradientsParams::from_grads(grads1, &self.q1.params);
-        self.q1.params = self.q1_optimizer.step(self.lr.into(), self.q1.params.clone(), grads1);
+        self.q1.params = self
+            .q1_optimizer
+            .step(self.lr.into(), self.q1.params.clone(), grads1);
 
         // Q2 loss
         let q2 = self.q2.forward(obs_t, act_t).squeeze::<1>(1);
@@ -195,7 +197,9 @@ where
 
         let grads2 = q2_loss.clone().backward();
         let grads2 = GradientsParams::from_grads(grads2, &self.q2.params);
-        self.q2.params = self.q2_optimizer.step(self.lr.into(), self.q2.params.clone(), grads2);
+        self.q2.params = self
+            .q2_optimizer
+            .step(self.lr.into(), self.q2.params.clone(), grads2);
 
         let q1_val: f32 = q1_loss.inner().into_data().to_vec::<f32>().unwrap()[0];
         let q2_val: f32 = q2_loss.inner().into_data().to_vec::<f32>().unwrap()[0];
@@ -255,7 +259,9 @@ fn polyak_update_q_model<B: Backend>(
 
     let new_net_params = target.params.net.clone().load_record(tgt_record);
     ContinuousQModel {
-        params: ContinuousQParams { net: new_net_params },
+        params: ContinuousQParams {
+            net: new_net_params,
+        },
         activation: target.activation,
     }
 }

@@ -148,7 +148,11 @@ impl ReplayBuffer {
     ///
     /// Panics if `idx >= self.count`.
     pub(crate) fn get(&self, idx: usize) -> (&[f32], &[f32], &[f32], f32, bool, bool) {
-        assert!(idx < self.count, "index {idx} out of bounds (count={})", self.count);
+        assert!(
+            idx < self.count,
+            "index {idx} out of bounds (count={})",
+            self.count
+        );
         let obs_start = idx * self.obs_dim;
         let act_start = idx * self.act_dim;
         (
@@ -209,8 +213,12 @@ impl ReplayBuffer {
     /// Push a transition, overwriting the oldest if at capacity.
     pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
         self.push_slices(
-            &record.obs, &record.next_obs, &record.action,
-            record.reward, record.terminated, record.truncated,
+            &record.obs,
+            &record.next_obs,
+            &record.action,
+            record.reward,
+            record.terminated,
+            record.truncated,
         )
     }
 
@@ -271,7 +279,12 @@ impl ReplayBuffer {
     /// Sample into a pre-allocated batch, reusing its capacity.
     ///
     /// Same as `sample()` but avoids allocation by reusing `batch`.
-    pub fn sample_into(&self, batch: &mut SampledBatch, batch_size: usize, seed: u64) -> Result<(), RloxError> {
+    pub fn sample_into(
+        &self,
+        batch: &mut SampledBatch,
+        batch_size: usize,
+        seed: u64,
+    ) -> Result<(), RloxError> {
         if batch_size > self.count {
             return Err(RloxError::BufferError(format!(
                 "batch_size {} > buffer len {}",
@@ -293,10 +306,16 @@ impl ReplayBuffer {
         for _ in 0..batch_size {
             let idx = rng.random_range(0..self.count);
             let obs_start = idx * self.obs_dim;
-            batch.observations.extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
-            batch.next_observations.extend_from_slice(&self.next_observations[obs_start..obs_start + self.obs_dim]);
+            batch
+                .observations
+                .extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
+            batch
+                .next_observations
+                .extend_from_slice(&self.next_observations[obs_start..obs_start + self.obs_dim]);
             let act_start = idx * self.act_dim;
-            batch.actions.extend_from_slice(&self.actions[act_start..act_start + self.act_dim]);
+            batch
+                .actions
+                .extend_from_slice(&self.actions[act_start..act_start + self.act_dim]);
             batch.rewards.push(self.rewards[idx]);
             batch.terminated.push(self.terminated[idx]);
             batch.truncated.push(self.truncated[idx]);

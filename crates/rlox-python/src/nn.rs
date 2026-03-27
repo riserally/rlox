@@ -179,12 +179,24 @@ impl PyActorCritic {
         };
 
         let metrics = match &mut self.inner {
-            Backend::Burn(ac) => {
-                ac.ppo_step(&obs_td, &actions_td, &old_lp_td, &adv_td, &ret_td, &old_v_td, &config)
-            }
-            Backend::Candle(ac) => {
-                ac.ppo_step(&obs_td, &actions_td, &old_lp_td, &adv_td, &ret_td, &old_v_td, &config)
-            }
+            Backend::Burn(ac) => ac.ppo_step(
+                &obs_td,
+                &actions_td,
+                &old_lp_td,
+                &adv_td,
+                &ret_td,
+                &old_v_td,
+                &config,
+            ),
+            Backend::Candle(ac) => ac.ppo_step(
+                &obs_td,
+                &actions_td,
+                &old_lp_td,
+                &adv_td,
+                &ret_td,
+                &old_v_td,
+                &config,
+            ),
         }
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 

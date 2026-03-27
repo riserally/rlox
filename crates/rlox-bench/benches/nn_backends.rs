@@ -37,7 +37,9 @@ fn burn_device() -> BurnDevice {
 }
 
 fn random_obs(batch: usize, dim: usize) -> TensorData {
-    let data: Vec<f32> = (0..batch * dim).map(|i| ((i as f32) * 0.01).sin()).collect();
+    let data: Vec<f32> = (0..batch * dim)
+        .map(|i| ((i as f32) * 0.01).sin())
+        .collect();
     TensorData::new(data, vec![batch, dim])
 }
 
@@ -55,35 +57,25 @@ fn bench_actor_critic_act(c: &mut Criterion) {
     for batch_size in [1, 32, 256] {
         let obs = random_obs(batch_size, obs_dim);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let ac = BurnActorCritic::<B>::new(
-                    obs_dim,
-                    n_actions,
-                    hidden,
-                    3e-4,
-                    burn_device().into(),
-                    42,
-                );
-                b.iter(|| ac.act(black_box(&obs)).unwrap());
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let ac = BurnActorCritic::<B>::new(
+                obs_dim,
+                n_actions,
+                hidden,
+                3e-4,
+                burn_device().into(),
+                42,
+            );
+            b.iter(|| ac.act(black_box(&obs)).unwrap());
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
             &batch_size,
             |b, _| {
-                let ac = CandleActorCritic::new(
-                    obs_dim,
-                    n_actions,
-                    hidden,
-                    3e-4,
-                    CandleDevice::Cpu,
-                    42,
-                )
-                .unwrap();
+                let ac =
+                    CandleActorCritic::new(obs_dim, n_actions, hidden, 3e-4, CandleDevice::Cpu, 42)
+                        .unwrap();
                 b.iter(|| ac.act(black_box(&obs)).unwrap());
             },
         );
@@ -111,46 +103,36 @@ fn bench_ppo_step(c: &mut Criterion) {
         let returns = TensorData::new(vec![1.0; batch_size], vec![batch_size]);
         let old_values = TensorData::zeros(vec![batch_size]);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let mut ac = BurnActorCritic::<B>::new(
-                    obs_dim,
-                    n_actions,
-                    hidden,
-                    3e-4,
-                    burn_device().into(),
-                    42,
-                );
-                b.iter(|| {
-                    ac.ppo_step(
-                        black_box(&obs),
-                        black_box(&actions),
-                        black_box(&old_lp),
-                        black_box(&advantages),
-                        black_box(&returns),
-                        black_box(&old_values),
-                        &config,
-                    )
-                    .unwrap()
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let mut ac = BurnActorCritic::<B>::new(
+                obs_dim,
+                n_actions,
+                hidden,
+                3e-4,
+                burn_device().into(),
+                42,
+            );
+            b.iter(|| {
+                ac.ppo_step(
+                    black_box(&obs),
+                    black_box(&actions),
+                    black_box(&old_lp),
+                    black_box(&advantages),
+                    black_box(&returns),
+                    black_box(&old_values),
+                    &config,
+                )
+                .unwrap()
+            });
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
             &batch_size,
             |b, _| {
-                let mut ac = CandleActorCritic::new(
-                    obs_dim,
-                    n_actions,
-                    hidden,
-                    3e-4,
-                    CandleDevice::Cpu,
-                    42,
-                )
-                .unwrap();
+                let mut ac =
+                    CandleActorCritic::new(obs_dim, n_actions, hidden, 3e-4, CandleDevice::Cpu, 42)
+                        .unwrap();
                 b.iter(|| {
                     ac.ppo_step(
                         black_box(&obs),
@@ -183,14 +165,10 @@ fn bench_dqn_q_values(c: &mut Criterion) {
     for batch_size in [1, 32, 256] {
         let obs = random_obs(batch_size, obs_dim);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let dqn = BurnDQN::<B>::new(obs_dim, n_actions, hidden, 1e-4, burn_device().into());
-                b.iter(|| dqn.q_values(black_box(&obs)).unwrap());
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let dqn = BurnDQN::<B>::new(obs_dim, n_actions, hidden, 1e-4, burn_device().into());
+            b.iter(|| dqn.q_values(black_box(&obs)).unwrap());
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
@@ -219,23 +197,18 @@ fn bench_dqn_td_step(c: &mut Criterion) {
         let actions = TensorData::new(vec![0.0; batch_size], vec![batch_size]);
         let targets = TensorData::new(vec![1.0; batch_size], vec![batch_size]);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let mut dqn =
-                    BurnDQN::<B>::new(obs_dim, n_actions, hidden, 1e-4, burn_device().into());
-                b.iter(|| {
-                    dqn.td_step(
-                        black_box(&obs),
-                        black_box(&actions),
-                        black_box(&targets),
-                        None,
-                    )
-                    .unwrap()
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let mut dqn = BurnDQN::<B>::new(obs_dim, n_actions, hidden, 1e-4, burn_device().into());
+            b.iter(|| {
+                dqn.td_step(
+                    black_box(&obs),
+                    black_box(&actions),
+                    black_box(&targets),
+                    None,
+                )
+                .unwrap()
+            });
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
@@ -272,21 +245,17 @@ fn bench_sac_sample(c: &mut Criterion) {
     for batch_size in [1, 32, 256] {
         let obs = random_obs(batch_size, obs_dim);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let policy = BurnStochasticPolicy::<B>::new(
-                    obs_dim,
-                    act_dim,
-                    hidden,
-                    3e-4,
-                    burn_device().into(),
-                    42,
-                );
-                b.iter(|| policy.sample_actions(black_box(&obs)).unwrap());
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let policy = BurnStochasticPolicy::<B>::new(
+                obs_dim,
+                act_dim,
+                hidden,
+                3e-4,
+                burn_device().into(),
+                42,
+            );
+            b.iter(|| policy.sample_actions(black_box(&obs)).unwrap());
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
@@ -322,21 +291,17 @@ fn bench_td3_act(c: &mut Criterion) {
     for batch_size in [1, 32, 256] {
         let obs = random_obs(batch_size, obs_dim);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let policy = BurnDeterministicPolicy::<B>::new(
-                    obs_dim,
-                    act_dim,
-                    hidden,
-                    1.0,
-                    1e-3,
-                    burn_device().into(),
-                );
-                b.iter(|| policy.act(black_box(&obs)).unwrap());
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let policy = BurnDeterministicPolicy::<B>::new(
+                obs_dim,
+                act_dim,
+                hidden,
+                1.0,
+                1e-3,
+                burn_device().into(),
+            );
+            b.iter(|| policy.act(black_box(&obs)).unwrap());
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
@@ -378,19 +343,14 @@ fn bench_twin_q(c: &mut Criterion) {
             vec![batch_size, act_dim],
         );
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let critic =
-                    BurnTwinQ::<B>::new(obs_dim, act_dim, hidden, 3e-4, burn_device().into());
-                b.iter(|| {
-                    critic
-                        .twin_q_values(black_box(&obs), black_box(&actions))
-                        .unwrap()
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let critic = BurnTwinQ::<B>::new(obs_dim, act_dim, hidden, 3e-4, burn_device().into());
+            b.iter(|| {
+                critic
+                    .twin_q_values(black_box(&obs), black_box(&actions))
+                    .unwrap()
+            });
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
@@ -430,23 +390,15 @@ fn bench_critic_step(c: &mut Criterion) {
         );
         let targets = TensorData::new(vec![1.0; batch_size], vec![batch_size]);
 
-        group.bench_with_input(
-            BenchmarkId::new("burn", batch_size),
-            &batch_size,
-            |b, _| {
-                let mut critic =
-                    BurnTwinQ::<B>::new(obs_dim, act_dim, hidden, 3e-4, burn_device().into());
-                b.iter(|| {
-                    critic
-                        .critic_step(
-                            black_box(&obs),
-                            black_box(&actions),
-                            black_box(&targets),
-                        )
-                        .unwrap()
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("burn", batch_size), &batch_size, |b, _| {
+            let mut critic =
+                BurnTwinQ::<B>::new(obs_dim, act_dim, hidden, 3e-4, burn_device().into());
+            b.iter(|| {
+                critic
+                    .critic_step(black_box(&obs), black_box(&actions), black_box(&targets))
+                    .unwrap()
+            });
+        });
 
         group.bench_with_input(
             BenchmarkId::new("candle", batch_size),
@@ -456,11 +408,7 @@ fn bench_critic_step(c: &mut Criterion) {
                     CandleTwinQ::new(obs_dim, act_dim, hidden, 3e-4, CandleDevice::Cpu).unwrap();
                 b.iter(|| {
                     critic
-                        .critic_step(
-                            black_box(&obs),
-                            black_box(&actions),
-                            black_box(&targets),
-                        )
+                        .critic_step(black_box(&obs), black_box(&actions), black_box(&targets))
                         .unwrap()
                 });
             },

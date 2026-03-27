@@ -40,10 +40,9 @@ pub fn compute_batch_group_advantages<'py>(
     group_size: usize,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let rewards_owned = rewards.as_slice()?.to_vec();
-    let result = py.allow_threads(|| {
-        ops::compute_batch_group_advantages(&rewards_owned, group_size)
-    })
-    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = py
+        .allow_threads(|| ops::compute_batch_group_advantages(&rewards_owned, group_size))
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyArray1::from_vec(py, result))
 }
 
@@ -72,10 +71,9 @@ pub fn compute_batch_token_kl<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let policy_owned = log_probs_policy.as_slice()?.to_vec();
     let ref_owned = log_probs_ref.as_slice()?.to_vec();
-    let result = py.allow_threads(|| {
-        ops::compute_batch_token_kl(&policy_owned, &ref_owned, seq_len)
-    })
-    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = py
+        .allow_threads(|| ops::compute_batch_token_kl(&policy_owned, &ref_owned, seq_len))
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyArray1::from_vec(py, result))
 }
 
@@ -92,10 +90,9 @@ pub fn compute_batch_token_kl_schulman<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let policy_owned = log_probs_policy.as_slice()?.to_vec();
     let ref_owned = log_probs_ref.as_slice()?.to_vec();
-    let result = py.allow_threads(|| {
-        ops::compute_batch_token_kl_schulman(&policy_owned, &ref_owned, seq_len)
-    })
-    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = py
+        .allow_threads(|| ops::compute_batch_token_kl_schulman(&policy_owned, &ref_owned, seq_len))
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyArray1::from_vec(py, result))
 }
 
@@ -137,10 +134,9 @@ pub fn compute_batch_token_kl_f32<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     let policy_owned = log_probs_policy.as_slice()?.to_vec();
     let ref_owned = log_probs_ref.as_slice()?.to_vec();
-    let result = py.allow_threads(|| {
-        ops::f32_ops::compute_batch_token_kl(&policy_owned, &ref_owned, seq_len)
-    })
-    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = py
+        .allow_threads(|| ops::f32_ops::compute_batch_token_kl(&policy_owned, &ref_owned, seq_len))
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyArray1::from_vec(py, result))
 }
 
@@ -154,9 +150,10 @@ pub fn compute_batch_token_kl_schulman_f32<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     let policy_owned = log_probs_policy.as_slice()?.to_vec();
     let ref_owned = log_probs_ref.as_slice()?.to_vec();
-    let result = py.allow_threads(|| {
-        ops::f32_ops::compute_batch_token_kl_schulman(&policy_owned, &ref_owned, seq_len)
-    })
+    let result = py
+        .allow_threads(|| {
+            ops::f32_ops::compute_batch_token_kl_schulman(&policy_owned, &ref_owned, seq_len)
+        })
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     Ok(PyArray1::from_vec(py, result))
 }

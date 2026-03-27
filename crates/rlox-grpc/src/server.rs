@@ -7,9 +7,7 @@ use rlox_core::env::parallel::VecEnv;
 use rlox_core::env::spaces::Action;
 
 use crate::proto::env_service_server::EnvService;
-use crate::proto::{
-    Empty, ResetRequest, ResetResponse, SpacesResponse, StepRequest, StepResponse,
-};
+use crate::proto::{Empty, ResetRequest, ResetResponse, SpacesResponse, StepRequest, StepResponse};
 
 /// A gRPC service that wraps a `VecEnv` for remote environment stepping.
 ///
@@ -60,7 +58,9 @@ impl EnvService for EnvWorker {
                 .collect()
         } else {
             if act_dim == 0 {
-                return Err(Status::invalid_argument("act_dim must be > 0 for continuous actions"));
+                return Err(Status::invalid_argument(
+                    "act_dim must be > 0 for continuous actions",
+                ));
             }
             if req.actions.len() != num_envs * act_dim {
                 return Err(Status::invalid_argument(format!(

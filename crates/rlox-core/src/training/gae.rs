@@ -164,7 +164,8 @@ mod tests {
         let last_value = 0.0;
         let gamma = 0.99;
         let gae_lambda = 0.95;
-        let (advantages, _returns) = compute_gae(rewards, values, &dones, last_value, gamma, gae_lambda);
+        let (advantages, _returns) =
+            compute_gae(rewards, values, &dones, last_value, gamma, gae_lambda);
         assert_eq!(advantages.len(), 1);
         assert!((advantages[0] - 0.5).abs() < 1e-6);
     }
@@ -177,7 +178,8 @@ mod tests {
         let last_value = 0.0;
         let gamma = 0.99;
         let gae_lambda = 0.95;
-        let (advantages, _returns) = compute_gae(rewards, values, &dones, last_value, gamma, gae_lambda);
+        let (advantages, _returns) =
+            compute_gae(rewards, values, &dones, last_value, gamma, gae_lambda);
         assert_eq!(advantages.len(), 3);
         // Last step: delta = 1.0 + 0.99*0 - 0 = 1.0, A = 1.0
         assert!((advantages[2] - 1.0).abs() < 1e-6);
@@ -250,16 +252,43 @@ mod tests {
         let dones = vec![0.0, 0.0, 1.0, 0.0, 1.0, 0.0];
         let last_values = vec![0.0, 0.5];
 
-        let (adv_b, ret_b) = compute_gae_batched(&rewards, &values, &dones, &last_values, 3, gamma, lam);
+        let (adv_b, ret_b) =
+            compute_gae_batched(&rewards, &values, &dones, &last_values, 3, gamma, lam);
 
-        let (adv0, ret0) = compute_gae(&rewards[..3], &values[..3], &dones[..3], last_values[0], gamma, lam);
-        let (adv1, ret1) = compute_gae(&rewards[3..], &values[3..], &dones[3..], last_values[1], gamma, lam);
+        let (adv0, ret0) = compute_gae(
+            &rewards[..3],
+            &values[..3],
+            &dones[..3],
+            last_values[0],
+            gamma,
+            lam,
+        );
+        let (adv1, ret1) = compute_gae(
+            &rewards[3..],
+            &values[3..],
+            &dones[3..],
+            last_values[1],
+            gamma,
+            lam,
+        );
 
         for i in 0..3 {
-            assert!((adv_b[i] - adv0[i]).abs() < 1e-12, "env0 adv mismatch at {i}");
-            assert!((ret_b[i] - ret0[i]).abs() < 1e-12, "env0 ret mismatch at {i}");
-            assert!((adv_b[3 + i] - adv1[i]).abs() < 1e-12, "env1 adv mismatch at {i}");
-            assert!((ret_b[3 + i] - ret1[i]).abs() < 1e-12, "env1 ret mismatch at {i}");
+            assert!(
+                (adv_b[i] - adv0[i]).abs() < 1e-12,
+                "env0 adv mismatch at {i}"
+            );
+            assert!(
+                (ret_b[i] - ret0[i]).abs() < 1e-12,
+                "env0 ret mismatch at {i}"
+            );
+            assert!(
+                (adv_b[3 + i] - adv1[i]).abs() < 1e-12,
+                "env1 adv mismatch at {i}"
+            );
+            assert!(
+                (ret_b[3 + i] - ret1[i]).abs() < 1e-12,
+                "env1 ret mismatch at {i}"
+            );
         }
     }
 
@@ -280,7 +309,13 @@ mod tests {
         let last_values_f32: Vec<f32> = vec![0.0, 0.5];
 
         let (adv_f32, ret_f32) = compute_gae_batched_f32(
-            &rewards_f32, &values_f32, &dones_f32, &last_values_f32, 3, gamma, lam,
+            &rewards_f32,
+            &values_f32,
+            &dones_f32,
+            &last_values_f32,
+            3,
+            gamma,
+            lam,
         );
 
         let rewards_f64: Vec<f64> = rewards_f32.iter().map(|&x| x as f64).collect();
@@ -289,12 +324,24 @@ mod tests {
         let last_values_f64: Vec<f64> = last_values_f32.iter().map(|&x| x as f64).collect();
 
         let (adv_f64, ret_f64) = compute_gae_batched(
-            &rewards_f64, &values_f64, &dones_f64, &last_values_f64, 3, 0.99, 0.95,
+            &rewards_f64,
+            &values_f64,
+            &dones_f64,
+            &last_values_f64,
+            3,
+            0.99,
+            0.95,
         );
 
         for i in 0..6 {
-            assert!((adv_f32[i] as f64 - adv_f64[i]).abs() < 1e-5, "adv mismatch at {i}");
-            assert!((ret_f32[i] as f64 - ret_f64[i]).abs() < 1e-5, "ret mismatch at {i}");
+            assert!(
+                (adv_f32[i] as f64 - adv_f64[i]).abs() < 1e-5,
+                "adv mismatch at {i}"
+            );
+            assert!(
+                (ret_f32[i] as f64 - ret_f64[i]).abs() < 1e-5,
+                "ret mismatch at {i}"
+            );
         }
     }
 

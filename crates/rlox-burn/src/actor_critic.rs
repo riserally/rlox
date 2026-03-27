@@ -57,7 +57,11 @@ impl<B: Backend> DiscreteActorCriticModel<B> {
         }
     }
 
-    fn mlp_forward(layers: &[burn::nn::Linear<B>], input: Tensor<B, 2>, act: ActivationKind) -> Tensor<B, 2> {
+    fn mlp_forward(
+        layers: &[burn::nn::Linear<B>],
+        input: Tensor<B, 2>,
+        act: ActivationKind,
+    ) -> Tensor<B, 2> {
         let n = layers.len();
         let mut x = input;
         for (i, layer) in layers.iter().enumerate() {
@@ -132,10 +136,7 @@ impl<B: AutodiffBackend> BurnActorCritic<B> {
 
     fn compute_logits_np(&self, obs: &TensorData) -> Vec<Vec<f32>> {
         let batch_size = obs.shape[0];
-        let obs_tensor = to_tensor_2d::<B::InnerBackend>(
-            obs,
-            &self.device.clone().into(),
-        );
+        let obs_tensor = to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
         let logits = self.model.valid().actor_forward(obs_tensor);
         let logits_data: Vec<f32> = logits.into_data().to_vec().unwrap();
 
@@ -186,8 +187,7 @@ where
             });
         }
 
-        let obs_tensor =
-            to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
+        let obs_tensor = to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
         let values = self.model.valid().critic_forward(obs_tensor);
         let values = values.squeeze::<1>(1);
         Ok(from_tensor_1d(values))
@@ -259,15 +259,17 @@ where
 
         // Clipped surrogate
         let pg_loss1 = -adv.clone() * ratio.clone();
-        let clamped = ratio.clone().clamp(1.0 - config.clip_eps, 1.0 + config.clip_eps);
+        let clamped = ratio
+            .clone()
+            .clamp(1.0 - config.clip_eps, 1.0 + config.clip_eps);
         let pg_loss2 = -adv * clamped;
         let policy_loss = Tensor::max_pair(pg_loss1, pg_loss2).mean();
 
         // Value loss
         let value_loss = if config.clip_vloss {
             let old_v = to_tensor_1d::<B>(old_values, &self.device);
-            let v_clipped =
-                old_v.clone() + (new_values.clone() - old_v).clamp(-config.clip_eps, config.clip_eps);
+            let v_clipped = old_v.clone()
+                + (new_values.clone() - old_v).clamp(-config.clip_eps, config.clip_eps);
             let vf1 = (new_values - ret.clone()).powf_scalar(2.0);
             let vf2 = (v_clipped - ret).powf_scalar(2.0);
             Tensor::max_pair(vf1, vf2).mean() * 0.5
@@ -276,13 +278,15 @@ where
         };
 
         let entropy_loss = entropy.mean();
-        let total_loss =
-            policy_loss.clone() + value_loss.clone() * config.vf_coef - entropy_loss.clone() * config.ent_coef;
+        let total_loss = policy_loss.clone() + value_loss.clone() * config.vf_coef
+            - entropy_loss.clone() * config.ent_coef;
 
         // Backward + step on the params Module
         let grads = total_loss.backward();
         let grads = GradientsParams::from_grads(grads, &self.model.params);
-        self.model.params = self.optimizer.step(self.lr.into(), self.model.params.clone(), grads);
+        self.model.params = self
+            .optimizer
+            .step(self.lr.into(), self.model.params.clone(), grads);
 
         // Extract metrics (no_grad)
         let policy_loss_val: f32 = policy_loss.inner().into_data().to_vec::<f32>().unwrap()[0];
@@ -326,13 +330,23 @@ where
         self.model
             .params
             .clone()
-            .save_file(path, &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new())
+            .save_file(
+                path,
+                &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(),
+            )
             .map_err(|e| NNError::Serialization(e.to_string()))
     }
 
     fn load(&mut self, path: &Path) -> Result<(), NNError> {
-        let loaded = self.model.params.clone()
-            .load_file(path, &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(), &self.device)
+        let loaded = self
+            .model
+            .params
+            .clone()
+            .load_file(
+                path,
+                &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(),
+                &self.device,
+            )
             .map_err(|e| NNError::Serialization(e.to_string()))?;
         self.model.params = loaded;
         Ok(())
@@ -404,8 +418,7 @@ mod tests {
 
     #[test]
     fn test_ppo_step_runs() {
-        let mut ac =
-            BurnActorCritic::<TestBackend>::new(4, 2, 64, 2.5e-4, device().into(), 42);
+        let mut ac = BurnActorCritic::<TestBackend>::new(4, 2, 64, 2.5e-4, device().into(), 42);
 
         let batch_size = 32;
         let obs = TensorData::zeros(vec![batch_size, 4]);
@@ -417,7 +430,15 @@ mod tests {
 
         let config = PPOStepConfig::default();
         let metrics = ac
-            .ppo_step(&obs, &actions, &old_log_probs, &advantages, &returns, &old_values, &config)
+            .ppo_step(
+                &obs,
+                &actions,
+                &old_log_probs,
+                &advantages,
+                &returns,
+                &old_values,
+                &config,
+            )
             .unwrap();
 
         assert!(metrics.get("policy_loss").is_some());
@@ -429,8 +450,7 @@ mod tests {
 
     #[test]
     fn test_ppo_step_reduces_loss() {
-        let mut ac =
-            BurnActorCritic::<TestBackend>::new(4, 2, 64, 1e-3, device().into(), 42);
+        let mut ac = BurnActorCritic::<TestBackend>::new(4, 2, 64, 1e-3, device().into(), 42);
 
         let batch_size = 64;
         let obs = TensorData::new(
@@ -446,10 +466,26 @@ mod tests {
         let config = PPOStepConfig::default();
 
         let m1 = ac
-            .ppo_step(&obs, &actions, &old_log_probs, &advantages, &returns, &old_values, &config)
+            .ppo_step(
+                &obs,
+                &actions,
+                &old_log_probs,
+                &advantages,
+                &returns,
+                &old_values,
+                &config,
+            )
             .unwrap();
         let m2 = ac
-            .ppo_step(&obs, &actions, &old_log_probs, &advantages, &returns, &old_values, &config)
+            .ppo_step(
+                &obs,
+                &actions,
+                &old_log_probs,
+                &advantages,
+                &returns,
+                &old_values,
+                &config,
+            )
             .unwrap();
 
         let vl1 = m1.get("value_loss").unwrap();
@@ -461,8 +497,7 @@ mod tests {
     #[test]
     fn test_lr_get_set() {
         use rlox_nn::ActorCritic;
-        let mut ac =
-            BurnActorCritic::<TestBackend>::new(4, 2, 64, 2.5e-4, device().into(), 42);
+        let mut ac = BurnActorCritic::<TestBackend>::new(4, 2, 64, 2.5e-4, device().into(), 42);
         assert!((ac.learning_rate() - 2.5e-4).abs() < 1e-8);
         ac.set_learning_rate(1e-3);
         assert!((ac.learning_rate() - 1e-3).abs() < 1e-8);

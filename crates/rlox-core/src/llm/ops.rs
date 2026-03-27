@@ -12,7 +12,11 @@ macro_rules! impl_kl_ops {
 
                 let n = rewards.len() as $float;
                 let mean = rewards.iter().sum::<$float>() / n;
-                let variance = rewards.iter().map(|&r| (r - mean) * (r - mean)).sum::<$float>() / n;
+                let variance = rewards
+                    .iter()
+                    .map(|&r| (r - mean) * (r - mean))
+                    .sum::<$float>()
+                    / n;
                 let std = variance.sqrt();
 
                 if std < 1e-8 as $float {
@@ -46,7 +50,10 @@ macro_rules! impl_kl_ops {
             ///
             /// `rewards` is a flat slice of length `n_prompts * group_size`.
             /// Returns a Vec of the same length with per-group z-score normalisation.
-            pub fn compute_batch_group_advantages(rewards: &[$float], group_size: usize) -> Result<Vec<$float>, RloxError> {
+            pub fn compute_batch_group_advantages(
+                rewards: &[$float],
+                group_size: usize,
+            ) -> Result<Vec<$float>, RloxError> {
                 if group_size == 0 {
                     return Err(RloxError::ShapeMismatch {
                         expected: "group_size > 0".to_string(),
@@ -224,7 +231,11 @@ pub struct DPOPair {
 }
 
 impl DPOPair {
-    pub fn new(prompt_tokens: Vec<u32>, chosen_tokens: Vec<u32>, rejected_tokens: Vec<u32>) -> Self {
+    pub fn new(
+        prompt_tokens: Vec<u32>,
+        chosen_tokens: Vec<u32>,
+        rejected_tokens: Vec<u32>,
+    ) -> Self {
         Self {
             prompt_tokens,
             chosen_tokens,

@@ -171,7 +171,10 @@ mod tests {
     #[test]
     fn test_transition_meta_timestamp_nonzero() {
         let meta = TransitionMeta::new(0, 0, 0, 0, 0);
-        assert!(meta.timestamp_ns > 0, "auto-filled timestamp must be non-zero");
+        assert!(
+            meta.timestamp_ns > 0,
+            "auto-filled timestamp must be non-zero"
+        );
     }
 
     #[test]

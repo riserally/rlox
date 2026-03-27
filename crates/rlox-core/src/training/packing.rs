@@ -20,7 +20,10 @@ pub struct PackedBatch {
 /// if no existing bin can fit the sequence.
 ///
 /// Returns `Err` if any single sequence exceeds `max_length`.
-pub fn pack_sequences(sequences: &[&[u32]], max_length: usize) -> Result<Vec<PackedBatch>, RloxError> {
+pub fn pack_sequences(
+    sequences: &[&[u32]],
+    max_length: usize,
+) -> Result<Vec<PackedBatch>, RloxError> {
     if sequences.is_empty() {
         return Ok(Vec::new());
     }
@@ -38,7 +41,8 @@ pub fn pack_sequences(sequences: &[&[u32]], max_length: usize) -> Result<Vec<Pac
     }
 
     // Sort by length descending (first-fit-decreasing)
-    let mut indexed: Vec<(usize, &[u32])> = sequences.iter().enumerate().map(|(i, s)| (i, *s)).collect();
+    let mut indexed: Vec<(usize, &[u32])> =
+        sequences.iter().enumerate().map(|(i, s)| (i, *s)).collect();
     indexed.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
 
     // Bins: track remaining capacity and accumulated sequences
@@ -61,7 +65,8 @@ pub fn pack_sequences(sequences: &[&[u32]], max_length: usize) -> Result<Vec<Pac
             if bin.used + seq_len <= max_length {
                 bin.sequence_starts.push(bin.used);
                 bin.tokens.extend_from_slice(seq);
-                bin.attention_mask.extend(std::iter::repeat(1u32).take(seq_len));
+                bin.attention_mask
+                    .extend(std::iter::repeat(1u32).take(seq_len));
                 for j in 0..seq_len {
                     bin.position_ids.push(j as u32);
                 }
@@ -81,7 +86,8 @@ pub fn pack_sequences(sequences: &[&[u32]], max_length: usize) -> Result<Vec<Pac
             };
             bin.sequence_starts.push(0);
             bin.tokens.extend_from_slice(seq);
-            bin.attention_mask.extend(std::iter::repeat(1u32).take(seq_len));
+            bin.attention_mask
+                .extend(std::iter::repeat(1u32).take(seq_len));
             for j in 0..seq_len {
                 bin.position_ids.push(j as u32);
             }
@@ -113,7 +119,11 @@ mod tests {
         let seqs: Vec<Vec<u32>> = vec![vec![1, 2, 3], vec![4, 5, 6]];
         let slices: Vec<&[u32]> = seqs.iter().map(|s| s.as_slice()).collect();
         let packed = pack_sequences(&slices, 6).unwrap();
-        assert_eq!(packed.len(), 1, "should produce 1 bin for total_len=max_len");
+        assert_eq!(
+            packed.len(),
+            1,
+            "should produce 1 bin for total_len=max_len"
+        );
         assert_eq!(packed[0].input_ids.len(), 6);
     }
 
@@ -170,7 +180,10 @@ mod tests {
         let long_seq = vec![1u32; 100];
         let slices = vec![long_seq.as_slice()];
         let result = pack_sequences(&slices, 50);
-        assert!(result.is_err(), "sequence longer than max_length must return Err");
+        assert!(
+            result.is_err(),
+            "sequence longer than max_length must return Err"
+        );
     }
 
     #[test]

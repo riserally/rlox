@@ -26,12 +26,10 @@ fn bench_cartpole_single_step(c: &mut Criterion) {
 
     group.bench_function("step", |b| {
         let mut env = CartPole::new(Some(42));
-        b.iter(|| {
-            match env.step(black_box(&Action::Discrete(1))) {
-                Ok(_) => {}
-                Err(_) => {
-                    let _ = env.reset(Some(42));
-                }
+        b.iter(|| match env.step(black_box(&Action::Discrete(1))) {
+            Ok(_) => {}
+            Err(_) => {
+                let _ = env.reset(Some(42));
             }
         });
     });
@@ -47,8 +45,7 @@ fn bench_vecenv_step_all(c: &mut Criterion) {
     for n in [1, 4, 16, 64, 128, 256, 512, 1024] {
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             let mut venv = make_vec_env(n, 42);
-            let actions: Vec<Action> =
-                (0..n).map(|i| Action::Discrete((i % 2) as u32)).collect();
+            let actions: Vec<Action> = (0..n).map(|i| Action::Discrete((i % 2) as u32)).collect();
 
             b.iter(|| {
                 let result = venv.step_all(black_box(&actions));
@@ -86,12 +83,10 @@ fn bench_scaling_efficiency(c: &mut Criterion) {
     // Baseline: single CartPole step throughput
     group.bench_function(BenchmarkId::new("cartpole_step", 1), |b| {
         let mut env = CartPole::new(Some(42));
-        b.iter(|| {
-            match env.step(black_box(&Action::Discrete(1))) {
-                Ok(_) => {}
-                Err(_) => {
-                    let _ = env.reset(Some(42));
-                }
+        b.iter(|| match env.step(black_box(&Action::Discrete(1))) {
+            Ok(_) => {}
+            Err(_) => {
+                let _ = env.reset(Some(42));
             }
         });
     });
@@ -100,8 +95,7 @@ fn bench_scaling_efficiency(c: &mut Criterion) {
     for n in [1, 4, 16, 64, 128, 256, 512, 1024] {
         group.bench_function(BenchmarkId::new("vecenv_step", n), |b| {
             let mut venv = make_vec_env(n, 42);
-            let actions: Vec<Action> =
-                (0..n).map(|i| Action::Discrete((i % 2) as u32)).collect();
+            let actions: Vec<Action> = (0..n).map(|i| Action::Discrete((i % 2) as u32)).collect();
 
             b.iter(|| {
                 let result = venv.step_all(black_box(&actions));

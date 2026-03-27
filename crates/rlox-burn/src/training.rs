@@ -31,7 +31,9 @@ mod tests {
         let critic = BurnTwinQ::<TestBackend>::new(3, 1, 64, 3e-4, device().into());
 
         let obs = TensorData::new(
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
             vec![4, 3],
         );
 
@@ -78,7 +80,10 @@ mod tests {
                 all_changed = false;
             }
         }
-        assert!(all_changed, "every TD3 actor step should produce a parameter change");
+        assert!(
+            all_changed,
+            "every TD3 actor step should produce a parameter change"
+        );
     }
 
     // ─── SAC gradient flow ───────────────────────────────────

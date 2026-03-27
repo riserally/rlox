@@ -67,7 +67,9 @@ where
 
         let grads = alpha_loss.clone().backward();
         let grads = GradientsParams::from_grads(grads, &self.model);
-        self.model = self.optimizer.step(self.lr.into(), self.model.clone(), grads);
+        self.model = self
+            .optimizer
+            .step(self.lr.into(), self.model.clone(), grads);
 
         let loss_val: f32 = alpha_loss.inner().into_data().to_vec::<f32>().unwrap()[0];
         Ok(loss_val as f64)
@@ -129,6 +131,9 @@ mod tests {
         }
 
         let alpha = tuner.alpha();
-        assert!(alpha > 1.0, "alpha should increase when policy is too deterministic: {alpha}");
+        assert!(
+            alpha > 1.0,
+            "alpha should increase when policy is too deterministic: {alpha}"
+        );
     }
 }

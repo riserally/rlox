@@ -6,7 +6,9 @@ mod training;
 
 use pyo3::prelude::*;
 
-use buffer::{PyExperienceTable, PyMmapReplayBuffer, PyPrioritizedReplayBuffer, PyReplayBuffer, PyVarLenStore};
+use buffer::{
+    PyExperienceTable, PyMmapReplayBuffer, PyPrioritizedReplayBuffer, PyReplayBuffer, PyVarLenStore,
+};
 use env::{PyCartPole, PyGymEnv, PyVecEnv};
 use llm::PyDPOPair;
 use nn::PyActorCritic;
@@ -41,6 +43,9 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(llm::compute_token_kl_f32, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_token_kl_schulman_f32, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_batch_token_kl_f32, m)?)?;
-    m.add_function(wrap_pyfunction!(llm::compute_batch_token_kl_schulman_f32, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        llm::compute_batch_token_kl_schulman_f32,
+        m
+    )?)?;
     Ok(())
 }

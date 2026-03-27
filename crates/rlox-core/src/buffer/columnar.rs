@@ -96,8 +96,12 @@ impl ExperienceTable {
     /// Append a single transition. Returns error on dimension mismatch.
     pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
         self.push_slices(
-            &record.obs, &record.next_obs, &record.action,
-            record.reward, record.terminated, record.truncated,
+            &record.obs,
+            &record.next_obs,
+            &record.action,
+            record.reward,
+            record.terminated,
+            record.truncated,
         )
     }
 

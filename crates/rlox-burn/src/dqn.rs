@@ -34,7 +34,11 @@ impl<B: Backend> QNetworkModel<B> {
         }
     }
 
-    fn mlp_forward(layers: &[burn::nn::Linear<B>], input: Tensor<B, 2>, act: ActivationKind) -> Tensor<B, 2> {
+    fn mlp_forward(
+        layers: &[burn::nn::Linear<B>],
+        input: Tensor<B, 2>,
+        act: ActivationKind,
+    ) -> Tensor<B, 2> {
         let n = layers.len();
         let mut x = input;
         for (i, layer) in layers.iter().enumerate() {
@@ -115,7 +119,11 @@ impl<B: Backend> DuelingQNetworkModel<B> {
         }
     }
 
-    fn mlp_forward(layers: &[burn::nn::Linear<B>], input: Tensor<B, 2>, act: ActivationKind) -> Tensor<B, 2> {
+    fn mlp_forward(
+        layers: &[burn::nn::Linear<B>],
+        input: Tensor<B, 2>,
+        act: ActivationKind,
+    ) -> Tensor<B, 2> {
         let n = layers.len();
         let mut x = input;
         for (i, layer) in layers.iter().enumerate() {
@@ -129,8 +137,16 @@ impl<B: Backend> DuelingQNetworkModel<B> {
 
     pub fn forward(&self, obs: Tensor<B, 2>) -> Tensor<B, 2> {
         let features = Self::mlp_forward(&self.params.feature.layers, obs, self.feature_activation);
-        let value = Self::mlp_forward(&self.params.value_stream.layers, features.clone(), self.value_activation);
-        let advantage = Self::mlp_forward(&self.params.advantage_stream.layers, features, self.advantage_activation);
+        let value = Self::mlp_forward(
+            &self.params.value_stream.layers,
+            features.clone(),
+            self.value_activation,
+        );
+        let advantage = Self::mlp_forward(
+            &self.params.advantage_stream.layers,
+            features,
+            self.advantage_activation,
+        );
         let adv_mean = advantage.clone().mean_dim(1);
         value + advantage - adv_mean
     }
@@ -185,22 +201,15 @@ where
     B::Device: Clone,
 {
     fn q_values(&self, obs: &TensorData) -> Result<TensorData, NNError> {
-        let obs_tensor =
-            to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
+        let obs_tensor = to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
         let q = self.q_network.valid().forward(obs_tensor);
         Ok(from_tensor_2d(q))
     }
 
-    fn q_value_at(
-        &self,
-        obs: &TensorData,
-        actions: &TensorData,
-    ) -> Result<TensorData, NNError> {
-        let obs_tensor =
-            to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
+    fn q_value_at(&self, obs: &TensorData, actions: &TensorData) -> Result<TensorData, NNError> {
+        let obs_tensor = to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
         let q = self.q_network.valid().forward(obs_tensor);
-        let actions_int =
-            to_int_tensor_1d::<B::InnerBackend>(actions, &self.device.clone().into());
+        let actions_int = to_int_tensor_1d::<B::InnerBackend>(actions, &self.device.clone().into());
         let actions_2d = actions_int.unsqueeze_dim(1);
         let gathered = q.gather(1, actions_2d).squeeze::<1>(1);
         Ok(from_tensor_1d(gathered))
@@ -232,7 +241,9 @@ where
 
         let grads = loss.clone().backward();
         let grads = GradientsParams::from_grads(grads, &self.q_network.params);
-        self.q_network.params = self.optimizer.step(self.lr.into(), self.q_network.params.clone(), grads);
+        self.q_network.params =
+            self.optimizer
+                .step(self.lr.into(), self.q_network.params.clone(), grads);
 
         let loss_val: f32 = loss.inner().into_data().to_vec::<f32>().unwrap()[0];
         let td_errors = from_tensor_1d(td_error.inner());
@@ -241,8 +252,7 @@ where
     }
 
     fn target_q_values(&self, obs: &TensorData) -> Result<TensorData, NNError> {
-        let obs_tensor =
-            to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
+        let obs_tensor = to_tensor_2d::<B::InnerBackend>(obs, &self.device.clone().into());
         let q = self.target_network.forward(obs_tensor);
         Ok(from_tensor_2d(q))
     }
@@ -322,7 +332,9 @@ mod tests {
         let targets = TensorData::new(vec![1.0; 16], vec![16]);
         let weights = TensorData::ones(vec![16]);
 
-        let (loss, _) = dqn.td_step(&obs, &actions, &targets, Some(&weights)).unwrap();
+        let (loss, _) = dqn
+            .td_step(&obs, &actions, &targets, Some(&weights))
+            .unwrap();
         assert!(loss.is_finite());
     }
 

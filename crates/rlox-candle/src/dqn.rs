@@ -51,9 +51,14 @@ impl CandleDQN {
         drop(t_data);
 
         let params = varmap.all_vars();
-        let optimizer =
-            candle_nn::AdamW::new(params, candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
+        let optimizer = candle_nn::AdamW::new(
+            params,
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
 
         Ok(Self {
             q_network,
@@ -77,11 +82,7 @@ impl QFunction for CandleDQN {
         from_tensor_2d(&q).nn_err()
     }
 
-    fn q_value_at(
-        &self,
-        obs: &TensorData,
-        actions: &TensorData,
-    ) -> Result<TensorData, NNError> {
+    fn q_value_at(&self, obs: &TensorData, actions: &TensorData) -> Result<TensorData, NNError> {
         let obs_t = to_tensor_2d(obs, &self.device).nn_err()?;
         let q = self.q_network.forward(&obs_t).nn_err()?;
         let actions_idx = to_int_tensor_1d(actions, &self.device).nn_err()?;

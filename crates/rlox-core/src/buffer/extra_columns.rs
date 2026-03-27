@@ -72,7 +72,12 @@ impl ExtraColumns {
     /// Write values for one column at a given buffer position.
     ///
     /// The `values` slice must have length equal to the column's dimensionality.
-    pub fn push(&mut self, handle: ColumnHandle, pos: usize, values: &[f32]) -> Result<(), RloxError> {
+    pub fn push(
+        &mut self,
+        handle: ColumnHandle,
+        pos: usize,
+        values: &[f32],
+    ) -> Result<(), RloxError> {
         let dim = self.dims[handle.0];
         if values.len() != dim {
             return Err(RloxError::ShapeMismatch {
@@ -208,7 +213,10 @@ mod tests {
         let result = ec.push(h, 0, &[1.0]); // dim 1 but column expects 2
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("dim=2"), "error should mention dim, got: {err}");
+        assert!(
+            err.contains("dim=2"),
+            "error should mention dim, got: {err}"
+        );
 
         let result = ec.push(h, 0, &[1.0, 2.0, 3.0]); // dim 3 but expects 2
         assert!(result.is_err());

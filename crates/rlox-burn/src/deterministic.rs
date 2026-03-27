@@ -8,8 +8,8 @@ use burn::prelude::*;
 use burn::tensor::backend::AutodiffBackend;
 
 use rlox_nn::{
-    Activation, DeterministicPolicy as DeterministicPolicyTrait, MLPConfig,
-    NNError, TensorData, TrainMetrics,
+    Activation, DeterministicPolicy as DeterministicPolicyTrait, MLPConfig, NNError, TensorData,
+    TrainMetrics,
 };
 
 use crate::convert::*;
@@ -31,7 +31,13 @@ pub struct DeterministicModel<B: Backend> {
 }
 
 impl<B: Backend> DeterministicModel<B> {
-    pub fn new(obs_dim: usize, act_dim: usize, hidden: usize, max_action: f32, device: &B::Device) -> Self {
+    pub fn new(
+        obs_dim: usize,
+        act_dim: usize,
+        hidden: usize,
+        max_action: f32,
+        device: &B::Device,
+    ) -> Self {
         let config = MLPConfig::new(obs_dim, act_dim)
             .with_hidden(vec![hidden, hidden])
             .with_activation(Activation::ReLU)
@@ -143,9 +149,9 @@ where
 
         let grads = actor_loss.clone().backward();
         let grads = GradientsParams::from_grads(grads, &self.model.params);
-        self.model.params =
-            self.optimizer
-                .step(self.lr.into(), self.model.params.clone(), grads);
+        self.model.params = self
+            .optimizer
+            .step(self.lr.into(), self.model.params.clone(), grads);
 
         let loss_val: f32 = actor_loss.inner().into_data().to_vec::<f32>().unwrap()[0];
 
@@ -182,7 +188,8 @@ where
             let mut tgt_record = self.target.params.net.clone().into_record();
             let dev: <B::InnerBackend as Backend>::Device = self.device.clone().into();
 
-            for (src_layer, tgt_layer) in src_record.layers.iter().zip(tgt_record.layers.iter_mut()) {
+            for (src_layer, tgt_layer) in src_record.layers.iter().zip(tgt_record.layers.iter_mut())
+            {
                 let src_w: Tensor<B::InnerBackend, 2> =
                     Tensor::from_data(src_layer.weight.val().into_data(), &dev);
                 let tgt_w: Tensor<B::InnerBackend, 2> =
@@ -217,13 +224,23 @@ where
         self.model
             .params
             .clone()
-            .save_file(path, &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new())
+            .save_file(
+                path,
+                &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(),
+            )
             .map_err(|e| NNError::Serialization(e.to_string()))
     }
 
     fn load(&mut self, path: &Path) -> Result<(), NNError> {
-        let loaded = self.model.params.clone()
-            .load_file(path, &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(), &self.device)
+        let loaded = self
+            .model
+            .params
+            .clone()
+            .load_file(
+                path,
+                &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(),
+                &self.device,
+            )
             .map_err(|e| NNError::Serialization(e.to_string()))?;
         self.model.params = loaded;
         Ok(())
@@ -267,7 +284,8 @@ mod tests {
 
     #[test]
     fn test_act_shape() {
-        let policy = BurnDeterministicPolicy::<TestBackend>::new(3, 1, 64, 1.0, 3e-4, device().into());
+        let policy =
+            BurnDeterministicPolicy::<TestBackend>::new(3, 1, 64, 1.0, 3e-4, device().into());
         let obs = TensorData::zeros(vec![8, 3]);
         let actions = policy.act(&obs).unwrap();
         assert_eq!(actions.shape, vec![8, 1]);
@@ -275,7 +293,8 @@ mod tests {
 
     #[test]
     fn test_target_act_matches_initially() {
-        let policy = BurnDeterministicPolicy::<TestBackend>::new(3, 1, 64, 1.0, 3e-4, device().into());
+        let policy =
+            BurnDeterministicPolicy::<TestBackend>::new(3, 1, 64, 1.0, 3e-4, device().into());
         let obs = TensorData::zeros(vec![4, 3]);
         let act = policy.act(&obs).unwrap();
         let tgt_act = policy.target_act(&obs).unwrap();
@@ -287,7 +306,8 @@ mod tests {
 
     #[test]
     fn test_soft_update_preserves_equal_weights() {
-        let mut policy = BurnDeterministicPolicy::<TestBackend>::new(3, 1, 64, 1.0, 3e-4, device().into());
+        let mut policy =
+            BurnDeterministicPolicy::<TestBackend>::new(3, 1, 64, 1.0, 3e-4, device().into());
         let obs = TensorData::zeros(vec![4, 3]);
 
         // Online and target start equal
@@ -302,7 +322,10 @@ mod tests {
         let act_after = policy.act(&obs).unwrap();
         let tgt_after = policy.target_act(&obs).unwrap();
         for (a, b) in act_after.data.iter().zip(tgt_after.data.iter()) {
-            assert!((a - b).abs() < 1e-5, "soft update on equal weights should preserve equality: {a} vs {b}");
+            assert!(
+                (a - b).abs() < 1e-5,
+                "soft update on equal weights should preserve equality: {a} vs {b}"
+            );
         }
 
         // Hard update should also preserve equality

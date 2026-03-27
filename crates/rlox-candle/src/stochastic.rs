@@ -5,9 +5,7 @@ use candle_nn::{linear, Linear, Module, Optimizer, VarBuilder, VarMap};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
-use rlox_nn::{
-    Activation, MLPConfig, NNError, StochasticPolicy, TensorData, TrainMetrics,
-};
+use rlox_nn::{Activation, MLPConfig, NNError, StochasticPolicy, TensorData, TrainMetrics};
 
 use crate::convert::*;
 use crate::mlp::MLP;
@@ -48,9 +46,14 @@ impl CandleStochasticPolicy {
         let log_std_head = linear(hidden, act_dim, vb.pp("log_std")).nn_err()?;
 
         let params = varmap.all_vars();
-        let optimizer =
-            candle_nn::AdamW::new(params, candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
+        let optimizer = candle_nn::AdamW::new(
+            params,
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
 
         Ok(Self {
             shared,
@@ -68,7 +71,10 @@ impl CandleStochasticPolicy {
     fn forward(&self, obs: &Tensor) -> candle_core::Result<(Tensor, Tensor)> {
         let h = self.shared.forward(obs)?;
         let mean = self.mean_head.forward(&h)?;
-        let log_std = self.log_std_head.forward(&h)?.clamp(LOG_STD_MIN, LOG_STD_MAX)?;
+        let log_std = self
+            .log_std_head
+            .forward(&h)?
+            .clamp(LOG_STD_MIN, LOG_STD_MAX)?;
         Ok((mean, log_std))
     }
 }
@@ -89,16 +95,18 @@ impl CandleStochasticPolicy {
         let (mean, log_std) = self.forward(&obs_t).nn_err()?;
         let std = log_std.exp().nn_err()?;
 
-        let eps =
-            Tensor::randn(0.0_f32, 1.0, (batch_size, self.act_dim), &self.device).nn_err()?;
+        let eps = Tensor::randn(0.0_f32, 1.0, (batch_size, self.act_dim), &self.device).nn_err()?;
         let x_t = (&mean + &(&std * &eps).nn_err()?).nn_err()?;
         let y_t = x_t.tanh().nn_err()?;
 
         // Log-prob (differentiable) — use (x_t - mean) for correct values
         let var = std.sqr().nn_err()?;
         let residual = (&x_t - &mean).nn_err()?;
-        let normal_lp =
-            (&residual.sqr().nn_err()? / &var).nn_err()?.neg().nn_err()? / 2.0;
+        let normal_lp = (&residual.sqr().nn_err()? / &var)
+            .nn_err()?
+            .neg()
+            .nn_err()?
+            / 2.0;
         let normal_lp = normal_lp.nn_err()?;
         let log_std_term = std.log().nn_err()?.neg().nn_err()?;
         let const_term = -0.5 * (2.0 * std::f32::consts::PI).ln();
@@ -137,10 +145,7 @@ impl CandleStochasticPolicy {
 }
 
 impl StochasticPolicy for CandleStochasticPolicy {
-    fn sample_actions(
-        &self,
-        obs: &TensorData,
-    ) -> Result<(TensorData, TensorData), NNError> {
+    fn sample_actions(&self, obs: &TensorData) -> Result<(TensorData, TensorData), NNError> {
         let batch_size = obs.shape[0];
         let obs_t = to_tensor_2d(obs, &self.device).nn_err()?;
         let (mean, log_std) = self.forward(&obs_t).nn_err()?;
@@ -169,8 +174,8 @@ impl StochasticPolicy for CandleStochasticPolicy {
 
                 actions_flat.push(y);
 
-                let normal_lp = -0.5 * ((x - m) / s).powi(2) - s.ln()
-                    - 0.5 * (2.0 * std::f32::consts::PI).ln();
+                let normal_lp =
+                    -0.5 * ((x - m) / s).powi(2) - s.ln() - 0.5 * (2.0 * std::f32::consts::PI).ln();
                 let correction = -(1.0 - y * y + 1e-6).ln();
                 lp_sum += normal_lp + correction;
             }

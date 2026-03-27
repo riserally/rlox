@@ -9,9 +9,7 @@ use burn::tensor::backend::AutodiffBackend;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
-use rlox_nn::{
-    Activation, MLPConfig, NNError, StochasticPolicy, TensorData, TrainMetrics,
-};
+use rlox_nn::{Activation, MLPConfig, NNError, StochasticPolicy, TensorData, TrainMetrics};
 
 use crate::convert::*;
 use crate::mlp::{apply_activation, ActivationKind, MLPParams, MLP};
@@ -69,7 +67,11 @@ impl<B: Backend> SquashedGaussianModel<B> {
     pub fn forward(&self, obs: Tensor<B, 2>) -> (Tensor<B, 2>, Tensor<B, 2>) {
         let h = self.shared_forward(obs);
         let mean = self.params.mean_head.forward(h.clone());
-        let log_std = self.params.log_std_head.forward(h).clamp(LOG_STD_MIN, LOG_STD_MAX);
+        let log_std = self
+            .params
+            .log_std_head
+            .forward(h)
+            .clamp(LOG_STD_MIN, LOG_STD_MAX);
         (mean, log_std)
     }
 
@@ -178,9 +180,9 @@ where
 
         let grads = actor_loss.clone().backward();
         let grads = GradientsParams::from_grads(grads, &self.model.params);
-        self.model.params =
-            self.optimizer
-                .step(self.lr.into(), self.model.params.clone(), grads);
+        self.model.params = self
+            .optimizer
+            .step(self.lr.into(), self.model.params.clone(), grads);
 
         let loss_val: f32 = actor_loss.inner().into_data().to_vec::<f32>().unwrap()[0];
 
@@ -194,10 +196,7 @@ impl<B: AutodiffBackend> StochasticPolicy for BurnStochasticPolicy<B>
 where
     B::Device: Clone,
 {
-    fn sample_actions(
-        &self,
-        obs: &TensorData,
-    ) -> Result<(TensorData, TensorData), NNError> {
+    fn sample_actions(&self, obs: &TensorData) -> Result<(TensorData, TensorData), NNError> {
         let batch_size = obs.shape[0];
         let dev: <B::InnerBackend as Backend>::Device = self.device.clone().into();
         let obs_t = to_tensor_2d::<B::InnerBackend>(obs, &dev);
@@ -234,8 +233,8 @@ where
                 actions_flat.push(y);
 
                 // Normal log_prob
-                let normal_lp = -0.5 * ((x - m) / s).powi(2) - s.ln()
-                    - 0.5 * (2.0 * std::f32::consts::PI).ln();
+                let normal_lp =
+                    -0.5 * ((x - m) / s).powi(2) - s.ln() - 0.5 * (2.0 * std::f32::consts::PI).ln();
                 // Tanh correction
                 let correction = -(1.0 - y * y + 1e-6).ln();
                 lp_sum += normal_lp + correction;
@@ -269,13 +268,23 @@ where
         self.model
             .params
             .clone()
-            .save_file(path, &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new())
+            .save_file(
+                path,
+                &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(),
+            )
             .map_err(|e| NNError::Serialization(e.to_string()))
     }
 
     fn load(&mut self, path: &Path) -> Result<(), NNError> {
-        let loaded = self.model.params.clone()
-            .load_file(path, &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(), &self.device)
+        let loaded = self
+            .model
+            .params
+            .clone()
+            .load_file(
+                path,
+                &burn::record::DefaultFileRecorder::<burn::record::FullPrecisionSettings>::new(),
+                &self.device,
+            )
             .map_err(|e| NNError::Serialization(e.to_string()))?;
         self.model.params = loaded;
         Ok(())
@@ -311,7 +320,10 @@ mod tests {
         let (_, log_std) = model.forward(obs);
         let data: Vec<f32> = log_std.into_data().to_vec().unwrap();
         for &v in &data {
-            assert!(v >= LOG_STD_MIN && v <= LOG_STD_MAX, "log_std out of range: {v}");
+            assert!(
+                v >= LOG_STD_MIN && v <= LOG_STD_MAX,
+                "log_std out of range: {v}"
+            );
         }
     }
 

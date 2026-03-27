@@ -58,7 +58,7 @@ mod tests {
     fn kl_controller_stays_near_target() {
         let mut kl = KLController::new(0.01, 0.02);
         kl.update(0.02); // measured KL == target
-        // Coefficient should remain exactly the same (within dead zone)
+                         // Coefficient should remain exactly the same (within dead zone)
         assert!((kl.coefficient() - 0.01).abs() < 0.005);
     }
 

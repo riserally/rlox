@@ -39,7 +39,10 @@ pub fn compute_gae<'py>(
     let dones_vec: Vec<f64> = if let Ok(arr) = dones.extract::<PyReadonlyArray1<'py, f64>>() {
         arr.as_slice()?.to_vec()
     } else if let Ok(arr) = dones.extract::<PyReadonlyArray1<'py, bool>>() {
-        arr.as_slice()?.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect()
+        arr.as_slice()?
+            .iter()
+            .map(|&b| if b { 1.0 } else { 0.0 })
+            .collect()
     } else {
         let np_arr: &Bound<'py, pyo3::types::PyAny> = dones;
         let float_arr = np_arr
@@ -50,7 +53,14 @@ pub fn compute_gae<'py>(
     };
 
     let (advantages, returns) = py.allow_threads(|| {
-        gae::compute_gae(&rewards_owned, &values_owned, &dones_vec, last_value, gamma, lam)
+        gae::compute_gae(
+            &rewards_owned,
+            &values_owned,
+            &dones_vec,
+            last_value,
+            gamma,
+            lam,
+        )
     });
 
     Ok((
@@ -85,8 +95,13 @@ pub fn compute_gae_batched<'py>(
 
     let (advantages, returns) = py.allow_threads(|| {
         gae::compute_gae_batched(
-            &rewards_owned, &values_owned, &dones_owned, &last_values_owned,
-            n_steps, gamma, lam,
+            &rewards_owned,
+            &values_owned,
+            &dones_owned,
+            &last_values_owned,
+            n_steps,
+            gamma,
+            lam,
         )
     });
     Ok((
@@ -117,8 +132,13 @@ pub fn compute_gae_batched_f32<'py>(
 
     let (advantages, returns) = py.allow_threads(|| {
         gae::compute_gae_batched_f32(
-            &rewards_owned, &values_owned, &dones_owned, &last_values_owned,
-            n_steps, gamma, lam,
+            &rewards_owned,
+            &values_owned,
+            &dones_owned,
+            &last_values_owned,
+            n_steps,
+            gamma,
+            lam,
         )
     });
     Ok((
@@ -211,7 +231,14 @@ pub fn pack_sequences<'py>(
         dict.set_item("position_ids", PyArray1::from_vec(py, batch.position_ids))?;
         dict.set_item(
             "sequence_starts",
-            PyArray1::from_vec(py, batch.sequence_starts.into_iter().map(|s| s as u64).collect()),
+            PyArray1::from_vec(
+                py,
+                batch
+                    .sequence_starts
+                    .into_iter()
+                    .map(|s| s as u64)
+                    .collect(),
+            ),
         )?;
         result.push(dict);
     }
@@ -250,19 +277,20 @@ pub fn compute_vtrace<'py>(
     let values_owned = values.as_slice()?.to_vec();
     let dones_owned = dones.as_slice()?.to_vec();
 
-    let (vs, pg_advantages) = py.allow_threads(|| {
-        vtrace::compute_vtrace(
-            &log_rhos_owned,
-            &rewards_owned,
-            &values_owned,
-            &dones_owned,
-            bootstrap_value,
-            gamma,
-            rho_bar,
-            c_bar,
-        )
-    })
-    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let (vs, pg_advantages) = py
+        .allow_threads(|| {
+            vtrace::compute_vtrace(
+                &log_rhos_owned,
+                &rewards_owned,
+                &values_owned,
+                &dones_owned,
+                bootstrap_value,
+                gamma,
+                rho_bar,
+                c_bar,
+            )
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray1::from_vec(py, vs),

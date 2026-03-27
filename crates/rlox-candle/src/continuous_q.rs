@@ -54,12 +54,22 @@ impl CandleTwinQ {
 
         // Separate optimizers for q1 and q2 params
         let all_params = varmap.all_vars();
-        let q1_optimizer =
-            candle_nn::AdamW::new(all_params.clone(), candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
-        let q2_optimizer =
-            candle_nn::AdamW::new(all_params, candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
+        let q1_optimizer = candle_nn::AdamW::new(
+            all_params.clone(),
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
+        let q2_optimizer = candle_nn::AdamW::new(
+            all_params,
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
 
         Ok(Self {
             q1,
@@ -98,11 +108,7 @@ impl CandleTwinQ {
 }
 
 impl ContinuousQFunction for CandleTwinQ {
-    fn q_value(
-        &self,
-        obs: &TensorData,
-        actions: &TensorData,
-    ) -> Result<TensorData, NNError> {
+    fn q_value(&self, obs: &TensorData, actions: &TensorData) -> Result<TensorData, NNError> {
         let obs_t = to_tensor_2d(obs, &self.device).nn_err()?;
         let act_t = to_tensor_2d(actions, &self.device).nn_err()?;
         let q = Self::forward_q(&self.q1, &obs_t, &act_t)

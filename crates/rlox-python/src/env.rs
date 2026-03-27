@@ -49,7 +49,11 @@ impl PyCartPole {
     }
 
     #[pyo3(signature = (seed = None))]
-    fn reset<'py>(&mut self, py: Python<'py>, seed: Option<u64>) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    fn reset<'py>(
+        &mut self,
+        py: Python<'py>,
+        seed: Option<u64>,
+    ) -> PyResult<Bound<'py, PyArray1<f32>>> {
         let obs = self.inner.reset(seed).map_err(rlox_err_to_py)?;
         Ok(PyArray1::from_slice(py, obs.as_slice()))
     }

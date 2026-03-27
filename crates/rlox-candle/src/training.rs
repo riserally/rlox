@@ -17,12 +17,13 @@ mod tests {
 
     #[test]
     fn test_td3_actor_step_changes_params() {
-        let mut policy =
-            CandleDeterministicPolicy::new(3, 1, 64, 1.0, 1e-2, Device::Cpu).unwrap();
+        let mut policy = CandleDeterministicPolicy::new(3, 1, 64, 1.0, 1e-2, Device::Cpu).unwrap();
         let critic = CandleTwinQ::new(3, 1, 64, 3e-4, Device::Cpu).unwrap();
 
         let obs = TensorData::new(
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
             vec![4, 3],
         );
 
@@ -48,8 +49,7 @@ mod tests {
 
     #[test]
     fn test_td3_multiple_steps_reduce_negative_q() {
-        let mut policy =
-            CandleDeterministicPolicy::new(3, 1, 64, 1.0, 1e-2, Device::Cpu).unwrap();
+        let mut policy = CandleDeterministicPolicy::new(3, 1, 64, 1.0, 1e-2, Device::Cpu).unwrap();
         let critic = CandleTwinQ::new(3, 1, 64, 3e-4, Device::Cpu).unwrap();
 
         let obs = TensorData::new(vec![1.0, 0.5, -1.0, 2.0, -0.5, 0.0], vec![2, 3]);
@@ -68,15 +68,17 @@ mod tests {
                 all_changed = false;
             }
         }
-        assert!(all_changed, "every TD3 actor step should produce a parameter change");
+        assert!(
+            all_changed,
+            "every TD3 actor step should produce a parameter change"
+        );
     }
 
     // ─── SAC gradient flow ───────────────────────────────────
 
     #[test]
     fn test_sac_actor_step_changes_params() {
-        let mut policy =
-            CandleStochasticPolicy::new(3, 2, 64, 1e-2, Device::Cpu, 42).unwrap();
+        let mut policy = CandleStochasticPolicy::new(3, 2, 64, 1e-2, Device::Cpu, 42).unwrap();
         let critic = CandleTwinQ::new(3, 2, 64, 3e-4, Device::Cpu).unwrap();
 
         let obs = TensorData::new(
@@ -106,8 +108,7 @@ mod tests {
 
     #[test]
     fn test_sac_multiple_steps_change_policy() {
-        let mut policy =
-            CandleStochasticPolicy::new(3, 1, 64, 1e-2, Device::Cpu, 42).unwrap();
+        let mut policy = CandleStochasticPolicy::new(3, 1, 64, 1e-2, Device::Cpu, 42).unwrap();
         let critic = CandleTwinQ::new(3, 1, 64, 3e-4, Device::Cpu).unwrap();
 
         let obs = TensorData::new(vec![1.0, 0.5, -1.0, 2.0, -0.5, 0.0], vec![2, 3]);

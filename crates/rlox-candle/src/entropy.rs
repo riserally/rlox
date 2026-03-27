@@ -1,5 +1,5 @@
 use candle_core::{Device, Tensor};
-use candle_nn::{Optimizer, VarMap, VarBuilder};
+use candle_nn::{Optimizer, VarBuilder, VarMap};
 
 use rlox_nn::{EntropyTuner, NNError, TensorData};
 
@@ -16,12 +16,19 @@ impl CandleEntropyTuner {
     pub fn new(lr: f64, device: Device) -> Result<Self, NNError> {
         let varmap = VarMap::new();
         let vb = VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-        let log_alpha = vb.get_with_hints(1, "log_alpha", candle_nn::Init::Const(0.0)).nn_err()?;
+        let log_alpha = vb
+            .get_with_hints(1, "log_alpha", candle_nn::Init::Const(0.0))
+            .nn_err()?;
 
         let params = varmap.all_vars();
-        let optimizer =
-            candle_nn::AdamW::new(params, candle_nn::ParamsAdamW { lr, ..Default::default() })
-                .nn_err()?;
+        let optimizer = candle_nn::AdamW::new(
+            params,
+            candle_nn::ParamsAdamW {
+                lr,
+                ..Default::default()
+            },
+        )
+        .nn_err()?;
 
         Ok(Self {
             varmap,

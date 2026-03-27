@@ -71,7 +71,10 @@ mod tests {
         let logits = vec![1.0, 2.0, 3.0];
         let log_probs = log_softmax(&logits);
         let sum: f32 = log_probs.iter().map(|&lp| lp.exp()).sum();
-        assert!((sum - 1.0).abs() < 1e-5, "softmax should sum to 1, got {sum}");
+        assert!(
+            (sum - 1.0).abs() < 1e-5,
+            "softmax should sum to 1, got {sum}"
+        );
     }
 
     #[test]
@@ -131,7 +134,10 @@ mod tests {
     fn test_categorical_entropy_deterministic() {
         let logits = vec![100.0, -100.0, -100.0];
         let ent = categorical_entropy(&logits);
-        assert!(ent < 0.01, "near-deterministic should have low entropy: {ent}");
+        assert!(
+            ent < 0.01,
+            "near-deterministic should have low entropy: {ent}"
+        );
     }
 
     #[test]

@@ -40,6 +40,9 @@ class SAC:
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
         compile: bool = False,
+        actor: nn.Module | None = None,
+        critic: nn.Module | None = None,
+        buffer: object | None = None,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -72,10 +75,14 @@ class SAC:
         self.act_dim = act_dim
         self.act_high = act_high
 
-        # Networks
-        self.actor = SquashedGaussianPolicy(obs_dim, act_dim, hidden)
-        self.critic1 = QNetwork(obs_dim, act_dim, hidden)
-        self.critic2 = QNetwork(obs_dim, act_dim, hidden)
+        # Networks — use custom if provided, otherwise default MLP
+        self.actor = actor if actor is not None else SquashedGaussianPolicy(obs_dim, act_dim, hidden)
+        if critic is not None:
+            self.critic1 = critic
+            self.critic2 = copy.deepcopy(critic)
+        else:
+            self.critic1 = QNetwork(obs_dim, act_dim, hidden)
+            self.critic2 = QNetwork(obs_dim, act_dim, hidden)
         self.critic1_target = copy.deepcopy(self.critic1)
         self.critic2_target = copy.deepcopy(self.critic2)
 
@@ -97,8 +104,8 @@ class SAC:
         else:
             self.alpha = 0.2
 
-        # Replay buffer
-        self.buffer = rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
+        # Replay buffer — use custom if provided
+        self.buffer = buffer if buffer is not None else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
 
         # Callbacks and logger
         self.callbacks = CallbackList(callbacks)

@@ -81,7 +81,92 @@ ppo = PPO(env_id="CartPole-v1", policy=MyCNNPolicy((4,), 2))
 ppo.train(total_timesteps=50_000)
 ```
 
-## Example 2: Custom Exploration Strategy
+## Example 2: Custom Networks for Off-Policy Algorithms
+
+SAC, TD3, and DQN now accept custom networks via `actor=`, `critic=`, `q_network=`, and `buffer=` parameters:
+
+```python
+from rlox.algorithms.sac import SAC
+from rlox.algorithms.td3 import TD3
+from rlox.algorithms.dqn import DQN
+import torch.nn as nn
+
+# --- SAC with custom CNN actor and critic ---
+
+class MyCNNActor(nn.Module):
+    """Custom CNN actor that satisfies StochasticActor protocol."""
+    def __init__(self, obs_shape, act_dim):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(obs_shape[0], 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
+            nn.Flatten(),
+        )
+        with torch.no_grad():
+            feat_size = self.features(torch.zeros(1, *obs_shape)).shape[1]
+        self.mean = nn.Linear(feat_size, act_dim)
+        self.log_std = nn.Parameter(torch.zeros(act_dim))
+
+    def sample(self, obs):
+        features = self.features(obs)
+        mean = torch.tanh(self.mean(features))
+        std = self.log_std.exp().expand_as(mean)
+        dist = torch.distributions.Normal(mean, std)
+        action = dist.rsample()
+        log_prob = dist.log_prob(action).sum(-1)
+        return action, log_prob
+
+    def deterministic(self, obs):
+        return torch.tanh(self.mean(self.features(obs)))
+
+# Inject custom actor — SAC handles everything else
+sac = SAC(env_id="Pendulum-v1", actor=MyCNNActor((3,), 1), learning_starts=1000)
+sac.train(total_timesteps=50_000)
+
+# --- TD3 with custom critic ---
+
+class MyWideCritic(nn.Module):
+    """Wider critic network."""
+    def __init__(self, obs_dim, act_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim + act_dim, 512), nn.ReLU(),
+            nn.Linear(512, 512), nn.ReLU(),
+            nn.Linear(512, 1),
+        )
+    def forward(self, obs, action):
+        return self.net(torch.cat([obs, action], dim=-1))
+
+td3 = TD3(env_id="Pendulum-v1", critic=MyWideCritic(3, 1))
+
+# --- DQN with custom Q-network ---
+
+class MyDuelingNet(nn.Module):
+    """Custom dueling architecture with attention."""
+    def __init__(self, obs_dim, n_actions):
+        super().__init__()
+        self.shared = nn.Sequential(nn.Linear(obs_dim, 128), nn.ReLU())
+        self.value = nn.Linear(128, 1)
+        self.advantage = nn.Linear(128, n_actions)
+
+    def forward(self, obs):
+        features = self.shared(obs)
+        v = self.value(features)
+        a = self.advantage(features)
+        return v + a - a.mean(dim=-1, keepdim=True)
+
+dqn = DQN(env_id="CartPole-v1", q_network=MyDuelingNet(4, 2))
+
+# --- Custom replay buffer ---
+import rlox
+mmap_buf = rlox.MmapReplayBuffer(
+    hot_capacity=10_000, total_capacity=500_000,
+    obs_dim=4, act_dim=1, cold_path="/tmp/replay.bin"
+)
+dqn = DQN(env_id="CartPole-v1", buffer=mmap_buf)
+```
+
+## Example 3: Custom Exploration Strategy
 
 ```python
 from rlox.exploration import OUNoise, GaussianNoise, EpsilonGreedy

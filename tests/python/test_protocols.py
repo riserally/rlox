@@ -253,3 +253,77 @@ class TestPPOBuilder:
         custom = DiscretePolicy(obs_dim=4, n_actions=2, hidden=128)
         ppo = PPOBuilder().env("CartPole-v1").policy(custom).build()
         assert ppo.policy is custom
+
+
+# ---------------------------------------------------------------------------
+# Custom network injection
+# ---------------------------------------------------------------------------
+
+
+class TestCustomNetworks:
+    def test_sac_custom_actor(self):
+        from rlox.algorithms.sac import SAC
+        from rlox.networks import SquashedGaussianPolicy
+
+        custom_actor = SquashedGaussianPolicy(obs_dim=3, act_dim=1, hidden=128)
+        sac = SAC(env_id="Pendulum-v1", actor=custom_actor, learning_starts=0)
+        assert sac.actor is custom_actor
+
+    def test_sac_custom_critic(self):
+        from rlox.algorithms.sac import SAC
+        from rlox.networks import QNetwork
+
+        custom_critic = QNetwork(obs_dim=3, act_dim=1, hidden=128)
+        sac = SAC(env_id="Pendulum-v1", critic=custom_critic, learning_starts=0)
+        assert sac.critic1 is custom_critic
+        # critic2 should be a deepcopy, not the same object
+        assert sac.critic2 is not custom_critic
+
+    def test_td3_custom_actor(self):
+        from rlox.algorithms.td3 import TD3
+        from rlox.networks import DeterministicPolicy
+
+        custom_actor = DeterministicPolicy(obs_dim=3, act_dim=1, hidden=128, max_action=2.0)
+        td3 = TD3(env_id="Pendulum-v1", actor=custom_actor, learning_starts=0)
+        assert td3.actor is custom_actor
+
+    def test_td3_custom_critic(self):
+        from rlox.algorithms.td3 import TD3
+        from rlox.networks import QNetwork
+
+        custom_critic = QNetwork(obs_dim=3, act_dim=1, hidden=128)
+        td3 = TD3(env_id="Pendulum-v1", critic=custom_critic, learning_starts=0)
+        assert td3.critic1 is custom_critic
+
+    def test_dqn_custom_q_network(self):
+        from rlox.algorithms.dqn import DQN
+        from rlox.networks import SimpleQNetwork
+
+        custom_q = SimpleQNetwork(obs_dim=4, act_dim=2, hidden=128)
+        dqn = DQN(env_id="CartPole-v1", q_network=custom_q, learning_starts=0)
+        assert dqn.q_network is custom_q
+
+    def test_sac_custom_cnn_actor(self):
+        """Test that a completely custom nn.Module works as SAC actor."""
+        import torch.nn as nn
+
+        class MyCNNActor(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.net = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 1))
+                self.log_std = nn.Parameter(torch.zeros(1))
+
+            def sample(self, obs):
+                mean = torch.tanh(self.net(obs))
+                std = self.log_std.exp().expand_as(mean)
+                dist = torch.distributions.Normal(mean, std)
+                action = dist.rsample()
+                log_prob = dist.log_prob(action).sum(-1)
+                return action, log_prob
+
+            def deterministic(self, obs):
+                return torch.tanh(self.net(obs))
+
+        from rlox.algorithms.sac import SAC
+        sac = SAC(env_id="Pendulum-v1", actor=MyCNNActor(), learning_starts=0)
+        assert isinstance(sac.actor, MyCNNActor)

@@ -41,6 +41,9 @@ class TD3:
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
         compile: bool = False,
+        actor: nn.Module | None = None,
+        critic: nn.Module | None = None,
+        buffer: object | None = None,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -68,11 +71,15 @@ class TD3:
         self.act_dim = act_dim
         self.act_high = act_high
 
-        # Networks
-        self.actor = DeterministicPolicy(obs_dim, act_dim, hidden, act_high)
+        # Networks — use custom if provided, otherwise default MLP
+        self.actor = actor if actor is not None else DeterministicPolicy(obs_dim, act_dim, hidden, act_high)
         self.actor_target = copy.deepcopy(self.actor)
-        self.critic1 = QNetwork(obs_dim, act_dim, hidden)
-        self.critic2 = QNetwork(obs_dim, act_dim, hidden)
+        if critic is not None:
+            self.critic1 = critic
+            self.critic2 = copy.deepcopy(critic)
+        else:
+            self.critic1 = QNetwork(obs_dim, act_dim, hidden)
+            self.critic2 = QNetwork(obs_dim, act_dim, hidden)
         self.critic1_target = copy.deepcopy(self.critic1)
         self.critic2_target = copy.deepcopy(self.critic2)
 
@@ -80,8 +87,8 @@ class TD3:
         self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(), lr=learning_rate)
         self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(), lr=learning_rate)
 
-        # Replay buffer
-        self.buffer = rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
+        # Replay buffer — use custom if provided
+        self.buffer = buffer if buffer is not None else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
 
         # Callbacks and logger
         self.callbacks = CallbackList(callbacks)

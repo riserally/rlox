@@ -46,6 +46,8 @@ class DQN:
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
         compile: bool = False,
+        q_network: nn.Module | None = None,
+        buffer: object | None = None,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -90,15 +92,20 @@ class DQN:
         self.obs_dim = obs_dim
         self.act_dim = act_dim
 
-        # Networks
-        net_cls = DuelingQNetwork if dueling else SimpleQNetwork
-        self.q_network = net_cls(obs_dim, act_dim, hidden)
+        # Networks — use custom if provided, otherwise default MLP
+        if q_network is not None:
+            self.q_network = q_network
+        else:
+            net_cls = DuelingQNetwork if dueling else SimpleQNetwork
+            self.q_network = net_cls(obs_dim, act_dim, hidden)
         self.target_network = copy.deepcopy(self.q_network)
 
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
 
-        # Buffer (actions stored as 1-dim)
-        if prioritized:
+        # Buffer — use custom if provided
+        if buffer is not None:
+            self.buffer = buffer
+        elif prioritized:
             self.buffer = rlox.PrioritizedReplayBuffer(
                 buffer_size, obs_dim, 1, alpha=alpha, beta=beta_start
             )

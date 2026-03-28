@@ -215,7 +215,7 @@ class DQN:
             # Callback: on_step
             self._global_step += 1
             should_continue = self.callbacks.on_step(
-                reward=ep_reward, step=self._global_step
+                reward=ep_reward, step=self._global_step, algo=self
             )
             if not should_continue:
                 break

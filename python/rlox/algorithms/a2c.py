@@ -127,7 +127,7 @@ class A2C:
             self.callbacks.on_train_batch(loss=loss.item(), **last_metrics)
 
             should_continue = self.callbacks.on_step(
-                reward=mean_ep_reward, step=update
+                reward=mean_ep_reward, step=update, algo=self
             )
             if not should_continue:
                 break

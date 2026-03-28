@@ -52,16 +52,21 @@ class Callback:
 class EvalCallback(Callback):
     """Periodic evaluation with optional best model saving.
 
+    Requires the training loop to pass ``algo=self`` in ``on_step()`` kwargs.
+    The algorithm must implement ``predict(obs, deterministic=True)``.
+
     Parameters
     ----------
     eval_env : gymnasium.Env, optional
-        Environment for evaluation (separate from training env).
+        Environment for evaluation. If None, created from algo's env_id.
     eval_freq : int
         Evaluate every ``eval_freq`` steps (default 10000).
     n_eval_episodes : int
         Number of evaluation episodes (default 5).
     best_model_path : str, optional
         If set, save the best model weights to this path.
+    verbose : bool
+        Print evaluation results (default True).
     """
 
     def __init__(
@@ -70,6 +75,7 @@ class EvalCallback(Callback):
         eval_freq: int = 10000,
         n_eval_episodes: int = 5,
         best_model_path: str | None = None,
+        verbose: bool = True,
     ):
         super().__init__()
         self.eval_env = eval_env
@@ -77,10 +83,61 @@ class EvalCallback(Callback):
         self.n_eval_episodes = n_eval_episodes
         self.best_model_path = best_model_path
         self.best_reward = float("-inf")
+        self.verbose = verbose
         self._step_count = 0
+        self.eval_results: list[tuple[int, float]] = []
 
     def on_step(self, **kwargs: Any) -> bool:
-        self._step_count += 1
+        step = kwargs.get("step", None)
+        if step is not None:
+            self._step_count = step
+        else:
+            self._step_count += 1
+
+        if self._step_count % self.eval_freq != 0:
+            return True
+
+        algo = kwargs.get("algo")
+        if algo is None or not hasattr(algo, "predict"):
+            return True
+
+        # Create eval env if needed
+        env = self.eval_env
+        if env is None:
+            env_id = getattr(algo, "env_id", None)
+            if env_id is None:
+                return True
+            import gymnasium as gym
+            env = gym.make(env_id)
+
+        rewards = []
+        for _ in range(self.n_eval_episodes):
+            obs, _ = env.reset()
+            ep_reward, done = 0.0, False
+            while not done:
+                action = algo.predict(obs, deterministic=True)
+                obs, r, term, trunc, _ = env.step(action)
+                ep_reward += r
+                done = term or trunc
+            rewards.append(ep_reward)
+
+        mean_reward = sum(rewards) / len(rewards)
+        self.eval_results.append((self._step_count, mean_reward))
+
+        if self.verbose:
+            print(f"  [eval] step={self._step_count}  mean_reward={mean_reward:.1f}")
+
+        if self.best_model_path and mean_reward > self.best_reward:
+            self.best_reward = mean_reward
+            if hasattr(algo, "save"):
+                algo.save(self.best_model_path)
+                if self.verbose:
+                    print(f"  [eval] New best model saved ({mean_reward:.1f})")
+
+        # Close env if we created it
+        if self.eval_env is None:
+            env.close()
+
         return True
 
 
@@ -119,22 +176,48 @@ class EarlyStoppingCallback(Callback):
 class CheckpointCallback(Callback):
     """Periodic checkpoint saving.
 
+    Requires the training loop to pass ``algo=self`` in ``on_step()`` kwargs.
+    The algorithm must implement ``save(path)``.
+
     Parameters
     ----------
     save_freq : int
         Save a checkpoint every ``save_freq`` steps (default 10000).
     save_path : str
         Directory for checkpoint files (default "checkpoints").
+    verbose : bool
+        Print when saving (default True).
     """
 
-    def __init__(self, save_freq: int = 10000, save_path: str = "checkpoints"):
+    def __init__(self, save_freq: int = 10000, save_path: str = "checkpoints", verbose: bool = True):
         super().__init__()
         self.save_freq = save_freq
         self.save_path = save_path
+        self.verbose = verbose
         self._step_count = 0
 
     def on_step(self, **kwargs: Any) -> bool:
-        self._step_count += 1
+        import os
+
+        step = kwargs.get("step", None)
+        if step is not None:
+            self._step_count = step
+        else:
+            self._step_count += 1
+
+        if self._step_count % self.save_freq != 0:
+            return True
+
+        algo = kwargs.get("algo")
+        if algo is None or not hasattr(algo, "save"):
+            return True
+
+        os.makedirs(self.save_path, exist_ok=True)
+        path = os.path.join(self.save_path, f"checkpoint_{self._step_count}.pt")
+        algo.save(path)
+        if self.verbose:
+            print(f"  [checkpoint] Saved to {path}")
+
         return True
 
 

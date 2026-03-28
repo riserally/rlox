@@ -242,6 +242,34 @@ impl PyReplayBuffer {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    /// Push multiple transitions at once from flat numpy arrays.
+    ///
+    /// Useful for vectorized environment collection where multiple
+    /// transitions are available simultaneously.
+    #[pyo3(signature = (obs, next_obs, actions, rewards, terminated, truncated))]
+    fn push_batch(
+        &mut self,
+        obs: PyReadonlyArray1<f32>,
+        next_obs: PyReadonlyArray1<f32>,
+        actions: PyReadonlyArray1<f32>,
+        rewards: PyReadonlyArray1<f32>,
+        terminated: PyReadonlyArray1<u8>,
+        truncated: PyReadonlyArray1<u8>,
+    ) -> PyResult<()> {
+        let term_bool: Vec<bool> = terminated.as_slice()?.iter().map(|&v| v != 0).collect();
+        let trunc_bool: Vec<bool> = truncated.as_slice()?.iter().map(|&v| v != 0).collect();
+        self.inner
+            .push_batch(
+                obs.as_slice()?,
+                next_obs.as_slice()?,
+                actions.as_slice()?,
+                rewards.as_slice()?,
+                &term_bool,
+                &trunc_bool,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
     /// Sample a batch. Returns a dict with numpy arrays.
     ///
     /// Extra columns (if registered) appear as additional keys in the dict.

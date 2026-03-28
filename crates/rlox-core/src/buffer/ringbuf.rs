@@ -210,6 +210,44 @@ impl ReplayBuffer {
         Ok(())
     }
 
+    /// Push multiple transitions at once from flat arrays.
+    ///
+    /// `obs_batch` shape: `[n * obs_dim]`, `next_obs_batch`: same,
+    /// `actions_batch`: `[n * act_dim]`, others: `[n]`.
+    pub fn push_batch(
+        &mut self,
+        obs_batch: &[f32],
+        next_obs_batch: &[f32],
+        actions_batch: &[f32],
+        rewards: &[f32],
+        terminated: &[bool],
+        truncated: &[bool],
+    ) -> Result<(), RloxError> {
+        let n = rewards.len();
+        if obs_batch.len() != n * self.obs_dim
+            || next_obs_batch.len() != n * self.obs_dim
+            || actions_batch.len() != n * self.act_dim
+            || terminated.len() != n
+            || truncated.len() != n
+        {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("n={n}, obs_dim={}, act_dim={}", self.obs_dim, self.act_dim),
+                got: format!(
+                    "obs={}, next_obs={}, act={}, rew={}, term={}, trunc={}",
+                    obs_batch.len(), next_obs_batch.len(), actions_batch.len(),
+                    rewards.len(), terminated.len(), truncated.len()
+                ),
+            });
+        }
+        for i in 0..n {
+            let obs = &obs_batch[i * self.obs_dim..(i + 1) * self.obs_dim];
+            let next_obs = &next_obs_batch[i * self.obs_dim..(i + 1) * self.obs_dim];
+            let action = &actions_batch[i * self.act_dim..(i + 1) * self.act_dim];
+            self.push_slices(obs, next_obs, action, rewards[i], terminated[i], truncated[i])?;
+        }
+        Ok(())
+    }
+
     /// Push a transition, overwriting the oldest if at capacity.
     pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
         self.push_slices(

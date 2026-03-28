@@ -182,7 +182,7 @@ class PPO:
 
             # Step callback (per rollout, not per env step)
             should_continue = self.callbacks.on_step(
-                reward=mean_ep_reward, step=self._global_step
+                reward=mean_ep_reward, step=self._global_step, algo=self
             )
             if not should_continue:
                 break

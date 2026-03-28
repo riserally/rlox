@@ -45,6 +45,7 @@ class DQN:
         seed: int = 42,
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
+        compile: bool = False,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -111,6 +112,10 @@ class DQN:
         self.callbacks = CallbackList(callbacks)
         self.logger = logger
         self._global_step = 0
+
+        if compile:
+            from rlox.compile import compile_policy
+            compile_policy(self)
 
     def _get_epsilon(self, step: int, total_timesteps: int) -> float:
         fraction = min(1.0, step / max(1, int(total_timesteps * self.exploration_fraction)))

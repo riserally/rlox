@@ -39,6 +39,7 @@ class A2C:
         policy: nn.Module | None = None,
         logger: LoggerCallback | None = None,
         callbacks: list[Callback] | None = None,
+        compile: bool = False,
     ):
         self.env_id = env_id
         self.n_envs = n_envs
@@ -80,6 +81,10 @@ class A2C:
 
         self.logger = logger
         self.callbacks = CallbackList(callbacks)
+
+        if compile:
+            from rlox.compile import compile_policy
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         steps_per_rollout = self.n_envs * self.n_steps

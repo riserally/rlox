@@ -40,6 +40,7 @@ class TD3:
         exploration_noise: float = 0.1,
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
+        compile: bool = False,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -102,6 +103,10 @@ class TD3:
             "noise_clip": self.noise_clip,
             "exploration_noise": self.exploration_noise,
         }
+
+        if compile:
+            from rlox.compile import compile_policy
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         obs, _ = self.env.reset()

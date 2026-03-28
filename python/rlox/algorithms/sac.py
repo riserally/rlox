@@ -39,6 +39,7 @@ class SAC:
         target_entropy: float | None = None,
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
+        compile: bool = False,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -103,6 +104,10 @@ class SAC:
         self.callbacks = CallbackList(callbacks)
         self.logger = logger
         self._global_step = 0
+
+        if compile:
+            from rlox.compile import compile_policy
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         obs, _ = self.env.reset()

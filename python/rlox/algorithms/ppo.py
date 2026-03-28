@@ -67,6 +67,7 @@ class PPO:
         policy: nn.Module | None = None,
         logger: LoggerCallback | None = None,
         callbacks: list[Callback] | None = None,
+        compile: bool = False,
         **config_kwargs: Any,
     ):
         self.env_id = env_id
@@ -123,6 +124,10 @@ class PPO:
         self.logger = logger
         self.callbacks = CallbackList(callbacks)
         self._global_step = 0
+
+        if compile:
+            from rlox.compile import compile_policy
+            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run PPO training and return final metrics."""

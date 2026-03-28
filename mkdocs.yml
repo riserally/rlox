@@ -77,6 +77,7 @@ nav:
     - LLM Post-Training (DPO/GRPO): llm-post-training.md
     - Math Reference: math-reference.md
   - Tutorials:
+    - Custom Components: tutorials/custom-components.md
     - Custom Rewards & Training Loops: tutorials/custom-rewards-and-training-loops.md
   - Benchmarks:
     - Overview: benchmark/README.md

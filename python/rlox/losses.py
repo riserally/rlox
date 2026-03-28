@@ -127,3 +127,61 @@ class PPOLoss:
             "clip_fraction": clip_fraction,
         }
         return total_loss, metrics
+
+
+class LossComponent:
+    """Base class for composable loss terms.
+
+    Subclass and override ``compute()`` to create custom loss terms
+    that can be combined with ``CompositeLoss``.
+
+    Example
+    -------
+    >>> class KLPenalty(LossComponent):
+    ...     def __init__(self, ref_policy, coef=0.1):
+    ...         self.ref_policy = ref_policy
+    ...         self.coef = coef
+    ...     def compute(self, **kwargs):
+    ...         obs = kwargs["obs"]
+    ...         kl = compute_kl(kwargs["policy"], self.ref_policy, obs)
+    ...         return self.coef * kl, {"kl": kl.item()}
+    """
+
+    def compute(self, **kwargs) -> tuple[torch.Tensor, dict[str, float]]:
+        """Compute loss value and metrics.
+
+        Returns
+        -------
+        loss : scalar tensor
+        metrics : dict of metric name → value
+        """
+        raise NotImplementedError
+
+
+class CompositeLoss:
+    """Combine multiple loss terms with weights.
+
+    Parameters
+    ----------
+    components : list of (weight, LossComponent) tuples
+
+    Example
+    -------
+    >>> combined = CompositeLoss([
+    ...     (1.0, MainLoss()),
+    ...     (0.1, AuxiliaryLoss()),
+    ... ])
+    >>> total_loss, metrics = combined.compute(obs=obs, actions=actions)
+    """
+
+    def __init__(self, components: list[tuple[float, LossComponent]]):
+        self.components = components
+
+    def compute(self, **kwargs) -> tuple[torch.Tensor, dict[str, float]]:
+        total_loss = torch.tensor(0.0)
+        all_metrics: dict[str, float] = {}
+        for weight, component in self.components:
+            loss, metrics = component.compute(**kwargs)
+            total_loss = total_loss + weight * loss
+            all_metrics.update(metrics)
+        return total_loss, all_metrics

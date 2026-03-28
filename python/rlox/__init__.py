@@ -86,6 +86,26 @@ from rlox.callbacks import (
     TimingCallback,
 )
 
+# -- Protocols -----------------------------------------------------------------
+from rlox.protocols import (
+    OnPolicyActor,
+    StochasticActor,
+    DeterministicActor,
+    QFunction,
+    DiscreteQFunction,
+    ExplorationStrategy,
+    ReplayBufferProtocol,
+)
+
+# -- Exploration ---------------------------------------------------------------
+from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise
+
+# -- Builders ------------------------------------------------------------------
+from rlox.builders import PPOBuilder, SACBuilder, DQNBuilder
+
+# -- Losses (composable) ------------------------------------------------------
+from rlox.losses import LossComponent, CompositeLoss
+
 # -- Logging -------------------------------------------------------------------
 from rlox.logging import LoggerCallback, WandbLogger, TensorBoardLogger, ConsoleLogger
 

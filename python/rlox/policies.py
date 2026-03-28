@@ -74,6 +74,14 @@ class DiscretePolicy(nn.Module):
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
         return self.critic(obs).squeeze(-1)
 
+    def get_action_value(self, obs: torch.Tensor):
+        """Combined action + value in a single call (saves one Python dispatch)."""
+        logits = self.actor(obs)
+        dist = torch.distributions.Categorical(logits=logits)
+        action = dist.sample()
+        value = self.critic(obs).squeeze(-1)
+        return action, dist.log_prob(action), value
+
     def get_logprob_and_entropy(self, obs: torch.Tensor, actions: torch.Tensor):
         logits = self.actor(obs)
         dist = torch.distributions.Categorical(logits=logits)
@@ -140,6 +148,14 @@ class ContinuousPolicy(nn.Module):
 
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
         return self.critic(obs).squeeze(-1)
+
+    def get_action_value(self, obs: torch.Tensor):
+        """Combined action + value in a single call."""
+        dist = self._build_dist(obs)
+        actions = dist.sample()
+        log_probs = dist.log_prob(actions).sum(dim=-1)
+        value = self.critic(obs).squeeze(-1)
+        return actions, log_probs, value
 
     def get_logprob_and_entropy(
         self, obs: torch.Tensor, actions: torch.Tensor

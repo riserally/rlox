@@ -114,8 +114,12 @@ class IMPALA:
         else:
             self.n_actions = int(np.prod(action_space.shape))
 
-        # Learner policy
-        self.policy = DiscretePolicy(obs_dim=self.obs_dim, n_actions=self.n_actions)
+        # Learner policy — auto-select based on action space
+        if is_discrete:
+            self.policy = DiscretePolicy(obs_dim=self.obs_dim, n_actions=self.n_actions)
+        else:
+            from rlox.policies import ContinuousPolicy
+            self.policy = ContinuousPolicy(obs_dim=self.obs_dim, act_dim=self.n_actions)
         self.optimizer = torch.optim.RMSprop(
             self.policy.parameters(), lr=learning_rate, eps=1e-5
         )

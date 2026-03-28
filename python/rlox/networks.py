@@ -11,10 +11,16 @@ import torch.nn as nn
 
 
 def polyak_update(source: nn.Module, target: nn.Module, tau: float = 0.005) -> None:
-    """Soft update: target = tau * source + (1 - tau) * target."""
+    """Soft update: target = tau * source + (1 - tau) * target.
+
+    Uses torch._foreach ops to batch the update across all parameters,
+    reducing Python loop overhead.
+    """
     with torch.no_grad():
-        for sp, tp in zip(source.parameters(), target.parameters()):
-            tp.data.mul_(1.0 - tau).add_(sp.data, alpha=tau)
+        source_params = list(source.parameters())
+        target_params = list(target.parameters())
+        torch._foreach_mul_(target_params, 1.0 - tau)
+        torch._foreach_add_(target_params, source_params, alpha=tau)
 
 
 class QNetwork(nn.Module):

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import io
+import os
+import threading
 from typing import Any
 
 import torch
@@ -21,6 +24,7 @@ class Checkpoint:
         config: dict[str, Any],
         buffer: Any | None = None,
         rng_state: Any | None = None,
+        async_save: bool = False,
     ) -> None:
         data: dict[str, Any] = {
             "model_state_dict": model.state_dict(),
@@ -33,7 +37,22 @@ class Checkpoint:
         if rng_state is not None:
             data["rng_state"] = rng_state
         data["torch_rng_state"] = torch.random.get_rng_state()
-        torch.save(data, path)
+
+        if async_save:
+            # Serialize to buffer on main thread, write on background thread
+            buf = io.BytesIO()
+            torch.save(data, buf)
+            raw = buf.getvalue()
+
+            def _write():
+                tmp = path + ".tmp"
+                with open(tmp, "wb") as f:
+                    f.write(raw)
+                os.replace(tmp, path)
+
+            threading.Thread(target=_write, daemon=True).start()
+        else:
+            torch.save(data, path)
 
     @staticmethod
     def load(path: str) -> dict[str, Any]:

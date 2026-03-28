@@ -131,8 +131,11 @@ class RolloutCollector:
             obs_tensor = torch.as_tensor(self._obs, dtype=torch.float32, device=self.device)
             obs_input = self._maybe_normalize_obs(obs_tensor)
 
-            actions, log_probs = policy.get_action_and_logprob(obs_input)
-            values = policy.get_value(obs_input)
+            if hasattr(policy, 'get_action_value'):
+                actions, log_probs, values = policy.get_action_value(obs_input)
+            else:
+                actions, log_probs = policy.get_action_and_logprob(obs_input)
+                values = policy.get_value(obs_input)
 
             # Step environment
             actions_np = actions.cpu().numpy()

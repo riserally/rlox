@@ -65,21 +65,38 @@ class RolloutBatch:
             that doesn't fill a complete minibatch.
         """
         n = self.obs.shape[0]
+
         if shuffle:
-            indices = torch.randperm(n)
+            perm = torch.randperm(n)
+            # Pre-shuffle all fields once, then slice contiguously (views, no copy)
+            obs = self.obs[perm]
+            actions = self.actions[perm]
+            rewards = self.rewards[perm]
+            dones = self.dones[perm]
+            log_probs = self.log_probs[perm]
+            values = self.values[perm]
+            advantages = self.advantages[perm]
+            returns = self.returns[perm]
         else:
-            indices = torch.arange(n)
+            obs = self.obs
+            actions = self.actions
+            rewards = self.rewards
+            dones = self.dones
+            log_probs = self.log_probs
+            values = self.values
+            advantages = self.advantages
+            returns = self.returns
 
         n_complete = (n // batch_size) * batch_size
         for start in range(0, n_complete, batch_size):
-            idx = indices[start : start + batch_size]
+            end = start + batch_size
             yield RolloutBatch(
-                obs=self.obs[idx],
-                actions=self.actions[idx],
-                rewards=self.rewards[idx],
-                dones=self.dones[idx],
-                log_probs=self.log_probs[idx],
-                values=self.values[idx],
-                advantages=self.advantages[idx],
-                returns=self.returns[idx],
+                obs=obs[start:end],
+                actions=actions[start:end],
+                rewards=rewards[start:end],
+                dones=dones[start:end],
+                log_probs=log_probs[start:end],
+                values=values[start:end],
+                advantages=advantages[start:end],
+                returns=returns[start:end],
             )

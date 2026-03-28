@@ -1,0 +1,21 @@
+algorithm: DQN
+environment: LunarLander-v3
+action_space: discrete
+threshold: 200.0
+max_steps: 500_000
+eval_freq: 5_000
+eval_episodes: 10
+
+hyperparameters:
+  buffer_size: 100_000
+  batch_size: 64
+  learning_rate: 1.0e-4
+  gamma: 0.99
+  exploration_fraction: 0.1
+  exploration_final_eps: 0.05
+  target_update_interval: 1_000
+  learning_starts: 10_000
+
+policy:
+  type: MlpPolicy
+  hidden_sizes: [64, 64]

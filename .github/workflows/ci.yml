@@ -52,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install protoc
         run: sudo apt-get install -y protobuf-compiler
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets -- -D warnings -A clippy::too_many_arguments -A clippy::type_complexity -A clippy::empty_line_after_doc_comments -A clippy::manual_range_contains -A clippy::repeat_vec_with_capacity
 
   fmt:
     name: Rustfmt

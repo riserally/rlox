@@ -7,6 +7,7 @@
 <p align="center">Rust-accelerated reinforcement learning — the Polars architecture pattern applied to RL.</p>
 
 <p align="center">
+  <a href="https://riserally.github.io/rlox/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-7c4dff.svg" alt="Documentation"></a>
   <a href="https://crates.io/crates/rlox-core"><img src="https://img.shields.io/crates/v/rlox-core.svg" alt="crates.io"></a>
   <a href="https://pypi.org/project/rlox/"><img src="https://img.shields.io/pypi/v/rlox.svg" alt="PyPI"></a>
   <a href="https://github.com/riserally/rlox/actions/workflows/ci.yml"><img src="https://github.com/riserally/rlox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -72,6 +73,18 @@ result = env.step_all(actions)
 ```
 
 > More examples in [`examples/`](examples/) — PPO, SAC, GRPO custom rewards, fast GAE, VecEnv throughput.
+
+## Documentation
+
+| Resource | Link |
+|----------|------|
+| **Full Documentation** | [riserally.github.io/rlox](https://riserally.github.io/rlox/) |
+| Getting Started | [Tutorial](https://riserally.github.io/rlox/python/getting-started/) |
+| Python API Guide | [User Guide](https://riserally.github.io/rlox/python/) |
+| Examples | [Code Examples](https://riserally.github.io/rlox/python/examples/) |
+| Rust API | [cargo doc](https://riserally.github.io/rlox/rust/rlox_core/) |
+| Migrating from SB3 | [Migration Guide](https://riserally.github.io/rlox/python/tutorials/migration-sb3/) |
+| API Reference | [Autodoc](https://riserally.github.io/rlox/python/api/) |
 
 ## Architecture
 

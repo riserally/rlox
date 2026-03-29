@@ -73,9 +73,7 @@ class TrainingDiagnostics(Callback):
             warnings.warn(msg, stacklevel=2)
 
         if explained_var is not None and explained_var < -1.0:
-            msg = (
-                f"Value function divergence: explained_var={explained_var:.4f} < -1.0"
-            )
+            msg = f"Value function divergence: explained_var={explained_var:.4f} < -1.0"
             self.warnings.append(msg)
             warnings.warn(msg, stacklevel=2)
 

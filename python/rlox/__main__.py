@@ -23,6 +23,7 @@ ALGO_MAP = {
 def _import_algo(name: str):
     module_path, cls_name = ALGO_MAP[name].rsplit(":", 1)
     import importlib
+
     mod = importlib.import_module(module_path)
     return getattr(mod, cls_name)
 
@@ -33,6 +34,7 @@ def cmd_train(args):
     kwargs: dict = {"seed": args.seed}
     if args.config:
         import yaml
+
         with open(args.config) as f:
             cfg = yaml.safe_load(f)
         hp = cfg.get("hyperparameters", cfg)
@@ -45,11 +47,14 @@ def cmd_train(args):
         algo = algo_cls(env_id=args.env, **kwargs)
 
     from rlox.logging import ConsoleLogger
+
     algo_inner = getattr(algo, "algo", algo)
     if hasattr(algo_inner, "logger") and algo_inner.logger is None:
         algo_inner.logger = ConsoleLogger(log_interval=args.log_interval)
 
-    print(f"Training {args.algo.upper()} on {args.env} for {args.timesteps} steps (seed={args.seed})")
+    print(
+        f"Training {args.algo.upper()} on {args.env} for {args.timesteps} steps (seed={args.seed})"
+    )
     metrics = algo.train(total_timesteps=args.timesteps)
     print(f"\nTraining complete. Final metrics: {metrics}")
 
@@ -84,7 +89,9 @@ def cmd_eval(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="rlox", description="rlox reinforcement learning CLI")
+    parser = argparse.ArgumentParser(
+        prog="rlox", description="rlox reinforcement learning CLI"
+    )
     sub = parser.add_subparsers(dest="command")
 
     # Train

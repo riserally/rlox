@@ -234,8 +234,12 @@ impl ReplayBuffer {
                 expected: format!("n={n}, obs_dim={}, act_dim={}", self.obs_dim, self.act_dim),
                 got: format!(
                     "obs={}, next_obs={}, act={}, rew={}, term={}, trunc={}",
-                    obs_batch.len(), next_obs_batch.len(), actions_batch.len(),
-                    rewards.len(), terminated.len(), truncated.len()
+                    obs_batch.len(),
+                    next_obs_batch.len(),
+                    actions_batch.len(),
+                    rewards.len(),
+                    terminated.len(),
+                    truncated.len()
                 ),
             });
         }
@@ -243,7 +247,14 @@ impl ReplayBuffer {
             let obs = &obs_batch[i * self.obs_dim..(i + 1) * self.obs_dim];
             let next_obs = &next_obs_batch[i * self.obs_dim..(i + 1) * self.obs_dim];
             let action = &actions_batch[i * self.act_dim..(i + 1) * self.act_dim];
-            self.push_slices(obs, next_obs, action, rewards[i], terminated[i], truncated[i])?;
+            self.push_slices(
+                obs,
+                next_obs,
+                action,
+                rewards[i],
+                terminated[i],
+                truncated[i],
+            )?;
         }
         Ok(())
     }

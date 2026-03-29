@@ -95,12 +95,8 @@ class Pipeline:
                     gamma=gamma,
                     lam=gae_lambda,
                 )
-                all_advantages.append(
-                    torch.as_tensor(adv, dtype=torch.float32)
-                )
-                all_returns.append(
-                    torch.as_tensor(ret, dtype=torch.float32)
-                )
+                all_advantages.append(torch.as_tensor(adv, dtype=torch.float32))
+                all_returns.append(torch.as_tensor(ret, dtype=torch.float32))
 
             # Stack and flatten
             obs_t = torch.stack(all_obs)

@@ -81,27 +81,29 @@ _DQN_KWARG_MAP: dict[str, str] = {
 }
 
 # SB3 kwargs that we silently ignore (no rlox equivalent yet).
-_IGNORED_KWARGS = frozenset({
-    "verbose",
-    "device",
-    "policy_kwargs",
-    "stats_window_size",
-    "train_freq",
-    "gradient_steps",
-    "optimize_memory_usage",
-    "replay_buffer_class",
-    "replay_buffer_kwargs",
-    "target_policy_noise",
-    "target_noise_clip",
-    "use_sde",
-    "sde_sample_freq",
-    "use_sde_at_warmup",
-    "clip_range_vf",
-    "target_kl",
-    "create_eval_env",
-    "monitor_wrapper",
-    "_init_setup_model",
-})
+_IGNORED_KWARGS = frozenset(
+    {
+        "verbose",
+        "device",
+        "policy_kwargs",
+        "stats_window_size",
+        "train_freq",
+        "gradient_steps",
+        "optimize_memory_usage",
+        "replay_buffer_class",
+        "replay_buffer_kwargs",
+        "target_policy_noise",
+        "target_noise_clip",
+        "use_sde",
+        "sde_sample_freq",
+        "use_sde_at_warmup",
+        "clip_range_vf",
+        "target_kl",
+        "create_eval_env",
+        "monitor_wrapper",
+        "_init_setup_model",
+    }
+)
 
 
 def _translate_kwargs(
@@ -134,6 +136,7 @@ def _translate_kwargs(
 # PPO
 # ---------------------------------------------------------------------------
 
+
 class PPO:
     """SB3-compatible PPO wrapper around ``rlox.algorithms.ppo.PPO``."""
 
@@ -158,6 +161,7 @@ class PPO:
         logger = None
         if tensorboard_log is not None:
             from rlox.logging import TensorBoardLogger
+
             logger = TensorBoardLogger(log_dir=tensorboard_log)
 
         # Policy: string -> auto-detect; nn.Module -> pass through
@@ -206,9 +210,7 @@ class PPO:
             The second element is ``None`` because rlox does not track
             hidden states.
         """
-        obs_t = torch.as_tensor(
-            np.asarray(observation), dtype=torch.float32
-        )
+        obs_t = torch.as_tensor(np.asarray(observation), dtype=torch.float32)
         if obs_t.dim() == 1:
             obs_t = obs_t.unsqueeze(0)
 
@@ -268,6 +270,7 @@ class PPO:
 # SAC
 # ---------------------------------------------------------------------------
 
+
 class SAC:
     """SB3-compatible SAC wrapper around ``rlox.algorithms.sac.SAC``."""
 
@@ -309,9 +312,7 @@ class SAC:
         observation: np.ndarray | torch.Tensor,
         deterministic: bool = False,
     ) -> tuple[np.ndarray, None]:
-        obs_t = torch.as_tensor(
-            np.asarray(observation), dtype=torch.float32
-        )
+        obs_t = torch.as_tensor(np.asarray(observation), dtype=torch.float32)
         if obs_t.dim() == 1:
             obs_t = obs_t.unsqueeze(0)
 
@@ -350,6 +351,7 @@ class SAC:
 # ---------------------------------------------------------------------------
 # DQN
 # ---------------------------------------------------------------------------
+
 
 class DQN:
     """SB3-compatible DQN wrapper around ``rlox.algorithms.dqn.DQN``."""
@@ -392,9 +394,7 @@ class DQN:
         observation: np.ndarray | torch.Tensor,
         deterministic: bool = False,
     ) -> tuple[np.ndarray, None]:
-        obs_t = torch.as_tensor(
-            np.asarray(observation), dtype=torch.float32
-        )
+        obs_t = torch.as_tensor(np.asarray(observation), dtype=torch.float32)
         if obs_t.dim() == 1:
             obs_t = obs_t.unsqueeze(0)
 

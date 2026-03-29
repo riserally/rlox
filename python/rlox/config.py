@@ -63,6 +63,7 @@ class PPOConfig:
     anneal_lr : bool
         Whether to linearly anneal the learning rate (default True).
     """
+
     n_envs: int = 8
     n_steps: int = 128
     n_epochs: int = 4
@@ -145,6 +146,7 @@ class SACConfig:
     hidden : int
         Hidden layer width for actor and critic networks (default 256).
     """
+
     learning_rate: float = 3e-4
     buffer_size: int = 1_000_000
     batch_size: int = 256
@@ -233,6 +235,7 @@ class DQNConfig:
     hidden : int
         Hidden layer width (default 256).
     """
+
     learning_rate: float = 1e-4
     buffer_size: int = 1_000_000
     batch_size: int = 64

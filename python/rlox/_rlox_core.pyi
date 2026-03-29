@@ -742,7 +742,6 @@ class ActorCritic:
         lr: float = 2.5e-4,
         seed: int = 42,
     ) -> None: ...
-
     def act(
         self,
         obs: npt.NDArray[np.float32],

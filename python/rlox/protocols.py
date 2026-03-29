@@ -87,9 +87,7 @@ class StochasticActor(Protocol):
     Any nn.Module implementing sample() and deterministic() can be used as a SAC actor.
     """
 
-    def sample(
-        self, obs: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Sample actions with reparameterization.
 
         Returns
@@ -133,9 +131,7 @@ class QFunction(Protocol):
     Takes (obs, action) and returns scalar Q-value.
     """
 
-    def forward(
-        self, obs: torch.Tensor, action: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """Compute Q-value.
 
         Returns

@@ -83,10 +83,12 @@ class VllmBackend(_BaseBackend):
                 log_probs = None
                 if "logprobs" in choice and choice["logprobs"]:
                     log_probs = choice["logprobs"].get("token_logprobs", [])
-                results.append({
-                    "text": choice.get("text", ""),
-                    "log_probs": log_probs,
-                })
+                results.append(
+                    {
+                        "text": choice.get("text", ""),
+                        "log_probs": log_probs,
+                    }
+                )
 
         return results
 

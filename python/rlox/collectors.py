@@ -76,7 +76,8 @@ class RolloutCollector:
         gae_lambda: float = 0.95,
         normalize_rewards: bool = False,
         normalize_obs: bool = False,
-        reward_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None,
+        reward_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]
+        | None = None,
     ):
         self.env_id = env_id
         self.n_envs = n_envs
@@ -93,6 +94,7 @@ class RolloutCollector:
         else:
             self.env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
             import gymnasium as gym
+
             self._is_discrete = isinstance(self.env.action_space, gym.spaces.Discrete)
 
         self._obs: np.ndarray | None = None  # (n_envs, obs_dim)
@@ -128,10 +130,12 @@ class RolloutCollector:
         all_values = []
 
         for _ in range(n_steps):
-            obs_tensor = torch.as_tensor(self._obs, dtype=torch.float32, device=self.device)
+            obs_tensor = torch.as_tensor(
+                self._obs, dtype=torch.float32, device=self.device
+            )
             obs_input = self._maybe_normalize_obs(obs_tensor)
 
-            if hasattr(policy, 'get_action_value'):
+            if hasattr(policy, "get_action_value"):
                 actions, log_probs, values = policy.get_action_value(obs_input)
             else:
                 actions, log_probs = policy.get_action_and_logprob(obs_input)
@@ -153,14 +157,16 @@ class RolloutCollector:
             all_actions.append(actions)
             all_log_probs.append(log_probs)
             all_values.append(values)
-            all_rewards.append(torch.as_tensor(
-                raw_rewards.astype(np.float32), device=self.device
-            ))
+            all_rewards.append(
+                torch.as_tensor(raw_rewards.astype(np.float32), device=self.device)
+            )
 
             terminated = step_result["terminated"].astype(bool)
             truncated = step_result["truncated"].astype(bool)
             dones = terminated | truncated
-            all_dones.append(torch.as_tensor(dones.astype(np.float32), device=self.device))
+            all_dones.append(
+                torch.as_tensor(dones.astype(np.float32), device=self.device)
+            )
 
             # Next observations
             next_obs = step_result["obs"].copy()
@@ -170,14 +176,16 @@ class RolloutCollector:
             self._obs = next_obs
 
         # Bootstrap value for GAE
-        last_obs_tensor = torch.as_tensor(self._obs, dtype=torch.float32, device=self.device)
+        last_obs_tensor = torch.as_tensor(
+            self._obs, dtype=torch.float32, device=self.device
+        )
         last_obs_input = self._maybe_normalize_obs(last_obs_tensor)
         last_values = policy.get_value(last_obs_input)
 
         # Compute GAE in a single batched call (env-major flat layout)
-        rewards_stacked = torch.stack(all_rewards)   # (n_steps, n_envs)
-        values_stacked = torch.stack(all_values)     # (n_steps, n_envs)
-        dones_stacked = torch.stack(all_dones)       # (n_steps, n_envs)
+        rewards_stacked = torch.stack(all_rewards)  # (n_steps, n_envs)
+        values_stacked = torch.stack(all_values)  # (n_steps, n_envs)
+        dones_stacked = torch.stack(all_dones)  # (n_steps, n_envs)
 
         if self.normalize_rewards:
             r_np = rewards_stacked.cpu().numpy().astype(np.float64)
@@ -188,9 +196,15 @@ class RolloutCollector:
             rewards_stacked = rewards_stacked / std
 
         # Transpose to (n_envs, n_steps) env-major, flatten contiguously
-        rewards_flat = rewards_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
-        values_flat = values_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
-        dones_flat = dones_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        rewards_flat = (
+            rewards_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        )
+        values_flat = (
+            values_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        )
+        dones_flat = (
+            dones_stacked.T.contiguous().cpu().numpy().astype(np.float64).ravel()
+        )
         last_vals = last_values.cpu().numpy().astype(np.float64)
 
         adv_flat, ret_flat = rlox.compute_gae_batched(
@@ -204,26 +218,42 @@ class RolloutCollector:
         )
 
         # Reshape from env-major (n_envs, n_steps) back to (n_steps, n_envs)
-        advantages_t = torch.as_tensor(
-            adv_flat, dtype=torch.float32, device=self.device,
-        ).reshape(self.n_envs, n_steps).T
-        returns_t = torch.as_tensor(
-            ret_flat, dtype=torch.float32, device=self.device,
-        ).reshape(self.n_envs, n_steps).T
+        advantages_t = (
+            torch.as_tensor(
+                adv_flat,
+                dtype=torch.float32,
+                device=self.device,
+            )
+            .reshape(self.n_envs, n_steps)
+            .T
+        )
+        returns_t = (
+            torch.as_tensor(
+                ret_flat,
+                dtype=torch.float32,
+                device=self.device,
+            )
+            .reshape(self.n_envs, n_steps)
+            .T
+        )
 
         # Stack: (n_steps, n_envs, ...) then flatten to (n_steps * n_envs, ...)
-        obs_t = torch.stack(all_obs)           # (n_steps, n_envs, obs_dim)
-        actions_t = torch.stack(all_actions)    # (n_steps, n_envs) or (n_steps, n_envs, act_dim)
-        rewards_t = rewards_stacked            # already (n_steps, n_envs)
-        dones_t = dones_stacked                # already (n_steps, n_envs)
+        obs_t = torch.stack(all_obs)  # (n_steps, n_envs, obs_dim)
+        actions_t = torch.stack(
+            all_actions
+        )  # (n_steps, n_envs) or (n_steps, n_envs, act_dim)
+        rewards_t = rewards_stacked  # already (n_steps, n_envs)
+        dones_t = dones_stacked  # already (n_steps, n_envs)
         log_probs_t = torch.stack(all_log_probs)  # (n_steps, n_envs)
-        values_t = values_stacked              # already (n_steps, n_envs)
+        values_t = values_stacked  # already (n_steps, n_envs)
 
         # Flatten (n_steps, n_envs, ...) -> (n_steps * n_envs, ...)
         total = n_steps * self.n_envs
         return RolloutBatch(
             obs=obs_t.reshape(total, *obs_t.shape[2:]),
-            actions=actions_t.reshape(total) if actions_t.dim() == 2 else actions_t.reshape(total, -1),
+            actions=actions_t.reshape(total)
+            if actions_t.dim() == 2
+            else actions_t.reshape(total, -1),
             rewards=rewards_t.reshape(total),
             dones=dones_t.reshape(total),
             log_probs=log_probs_t.reshape(total),

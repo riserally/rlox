@@ -91,7 +91,9 @@ class SquashedGaussianPolicy(nn.Module):
 class DeterministicPolicy(nn.Module):
     """Deterministic policy for TD3."""
 
-    def __init__(self, obs_dim: int, act_dim: int, hidden: int = 256, max_action: float = 1.0):
+    def __init__(
+        self, obs_dim: int, act_dim: int, hidden: int = 256, max_action: float = 1.0
+    ):
         super().__init__()
         self.max_action = max_action
         self.net = nn.Sequential(

@@ -92,7 +92,12 @@ def compile_policy(
         else:
             # Compile the hot methods used during training
             import torch
-            for method_name in ("get_action_and_logprob", "get_value", "get_logprob_and_entropy"):
+
+            for method_name in (
+                "get_action_and_logprob",
+                "get_value",
+                "get_logprob_and_entropy",
+            ):
                 if hasattr(policy, method_name):
                     try:
                         original = getattr(policy, method_name)

@@ -95,7 +95,9 @@ class PPOLoss:
         log_ratio = new_log_probs - old_log_probs
         ratio = log_ratio.exp()
         pg_loss1 = -advantages * ratio
-        pg_loss2 = -advantages * torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps)
+        pg_loss2 = -advantages * torch.clamp(
+            ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps
+        )
         policy_loss = torch.max(pg_loss1, pg_loss2).mean()
 
         # Value loss
@@ -112,7 +114,9 @@ class PPOLoss:
 
         entropy_loss = entropy.mean()
 
-        total_loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss
+        total_loss = (
+            policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss
+        )
 
         # Diagnostics
         with torch.no_grad():

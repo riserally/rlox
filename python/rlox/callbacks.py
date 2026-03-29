@@ -108,6 +108,7 @@ class EvalCallback(Callback):
             if env_id is None:
                 return True
             import gymnasium as gym
+
             env = gym.make(env_id)
 
         rewards = []
@@ -189,7 +190,12 @@ class CheckpointCallback(Callback):
         Print when saving (default True).
     """
 
-    def __init__(self, save_freq: int = 10000, save_path: str = "checkpoints", verbose: bool = True):
+    def __init__(
+        self,
+        save_freq: int = 10000,
+        save_path: str = "checkpoints",
+        verbose: bool = True,
+    ):
         super().__init__()
         self.save_freq = save_freq
         self.save_path = save_path
@@ -232,6 +238,7 @@ class ProgressBarCallback(Callback):
         total = kwargs.get("total_timesteps", 0)
         try:
             from tqdm.auto import tqdm
+
             self._pbar = tqdm(total=total, unit="step", desc="Training")
         except ImportError:
             self._pbar = None
@@ -260,6 +267,7 @@ class TimingCallback(Callback):
 
     def _switch_phase(self, name: str) -> None:
         import time
+
         now = time.perf_counter()
         if self._current_phase is not None:
             elapsed = now - self._phase_start
@@ -271,6 +279,7 @@ class TimingCallback(Callback):
 
     def on_training_start(self, **kwargs: Any) -> None:
         import time
+
         self._phase_start = time.perf_counter()
         self._current_phase = "env_step"
 

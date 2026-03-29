@@ -108,8 +108,11 @@ class PPOBuilder:
     def build(self):
         """Create and return the PPO instance."""
         from rlox.algorithms.ppo import PPO
+
         if self._env_id is None:
-            raise ValueError("env_id is required. Call .env('CartPole-v1') before .build()")
+            raise ValueError(
+                "env_id is required. Call .env('CartPole-v1') before .build()"
+            )
         return PPO(
             env_id=self._env_id,
             n_envs=self._n_envs,
@@ -155,6 +158,7 @@ class SACBuilder:
     def critic(self, c: nn.Module) -> SACBuilder:
         """Set both critics to the same architecture (separate instances)."""
         import copy
+
         self._critic1 = c
         self._critic2 = copy.deepcopy(c)
         return self
@@ -216,8 +220,11 @@ class SACBuilder:
     def build(self):
         """Create and return the SAC instance."""
         from rlox.algorithms.sac import SAC
+
         if self._env_id is None:
-            raise ValueError("env_id is required. Call .env('Pendulum-v1') before .build()")
+            raise ValueError(
+                "env_id is required. Call .env('Pendulum-v1') before .build()"
+            )
         sac = SAC(
             env_id=self._env_id,
             seed=self._seed,
@@ -291,6 +298,7 @@ class DQNBuilder:
 
     def build(self):
         from rlox.algorithms.dqn import DQN
+
         if self._env_id is None:
             raise ValueError("env_id is required")
         dqn = DQN(
@@ -303,6 +311,7 @@ class DQNBuilder:
         )
         if self._q_network is not None:
             import copy
+
             dqn.q_network = self._q_network
             dqn.target_network = copy.deepcopy(self._q_network)
         return dqn

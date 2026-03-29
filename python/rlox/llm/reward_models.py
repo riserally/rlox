@@ -22,9 +22,7 @@ class RewardModelServer:
         self.model.eval()
 
     @torch.no_grad()
-    def score_batch(
-        self, prompts: list[str], completions: list[str]
-    ) -> np.ndarray:
+    def score_batch(self, prompts: list[str], completions: list[str]) -> np.ndarray:
         """Score a batch of prompt-completion pairs.
 
         Returns a 1-D numpy array of scalar rewards.
@@ -57,9 +55,7 @@ class EnsembleRewardModel:
         total = sum(weights)
         self.weights = [w / total for w in weights]
 
-    def score_batch(
-        self, prompts: list[str], completions: list[str]
-    ) -> np.ndarray:
+    def score_batch(self, prompts: list[str], completions: list[str]) -> np.ndarray:
         """Weighted average of individual model scores."""
         scores = None
         for server, weight in zip(self.servers, self.weights):
@@ -85,9 +81,7 @@ class MultiObjectiveReward:
         self.objectives = objectives
         self.weights = weights
 
-    def score_batch(
-        self, prompts: list[str], completions: list[str]
-    ) -> np.ndarray:
+    def score_batch(self, prompts: list[str], completions: list[str]) -> np.ndarray:
         """Compute weighted sum: sum(weight_i * objective_i)."""
         scores = None
         for name, objective_fn in self.objectives.items():

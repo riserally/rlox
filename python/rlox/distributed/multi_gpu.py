@@ -60,6 +60,7 @@ class MultiGPUTrainer:
 
         # Wrap trainable networks with DDP
         from torch.nn.parallel import DistributedDataParallel as DDP
+
         inner = getattr(self.trainer, "algo", self.trainer)
 
         # On-policy: single policy network
@@ -71,11 +72,19 @@ class MultiGPUTrainer:
             net = getattr(inner, attr, None)
             if net is not None:
                 import torch.nn as nn
+
                 if isinstance(net, nn.Module):
-                    setattr(inner, attr, DDP(net.to(self.device), device_ids=[self.rank]))
+                    setattr(
+                        inner, attr, DDP(net.to(self.device), device_ids=[self.rank])
+                    )
 
         # Move target networks to device WITHOUT DDP wrapping
-        for attr in ("critic1_target", "critic2_target", "actor_target", "target_network"):
+        for attr in (
+            "critic1_target",
+            "critic2_target",
+            "actor_target",
+            "target_network",
+        ):
             net = getattr(inner, attr, None)
             if net is not None:
                 setattr(inner, attr, net.to(self.device))

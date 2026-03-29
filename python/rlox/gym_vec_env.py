@@ -47,9 +47,7 @@ class GymVecEnv:
 
         return _thunk
 
-    def step_all(
-        self, actions: np.ndarray | list[Any]
-    ) -> dict[str, Any]:
+    def step_all(self, actions: np.ndarray | list[Any]) -> dict[str, Any]:
         """Step all sub-environments.
 
         Returns
@@ -67,7 +65,9 @@ class GymVecEnv:
         # in infos["final_obs"] for envs that finished this step.
         terminal_obs: list[np.ndarray | None] = [None] * self._n_envs
         if "final_obs" in infos:
-            dones = np.asarray(terminated, dtype=bool) | np.asarray(truncated, dtype=bool)
+            dones = np.asarray(terminated, dtype=bool) | np.asarray(
+                truncated, dtype=bool
+            )
             mask = infos.get("_final_obs", dones)
             for i in range(self._n_envs):
                 if mask[i] and infos["final_obs"][i] is not None:

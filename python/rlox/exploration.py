@@ -28,12 +28,16 @@ class GaussianNoise:
         Random seed for reproducibility.
     """
 
-    def __init__(self, sigma: float = 0.1, clip: float | None = None, seed: int | None = None):
+    def __init__(
+        self, sigma: float = 0.1, clip: float | None = None, seed: int | None = None
+    ):
         self.sigma = sigma
         self.clip = clip
         self._rng = np.random.default_rng(seed)
 
-    def select_action(self, action: np.ndarray, step: int, total_steps: int) -> np.ndarray:
+    def select_action(
+        self, action: np.ndarray, step: int, total_steps: int
+    ) -> np.ndarray:
         noise = self._rng.normal(0, self.sigma, size=action.shape)
         if self.clip is not None:
             noise = np.clip(noise, -self.clip, self.clip)
@@ -81,7 +85,9 @@ class EpsilonGreedy:
         frac = min(1.0, step / max(1, int(total_steps * self.decay_fraction)))
         return self.eps_start + frac * (self.eps_end - self.eps_start)
 
-    def select_action(self, action: np.ndarray, step: int, total_steps: int) -> np.ndarray:
+    def select_action(
+        self, action: np.ndarray, step: int, total_steps: int
+    ) -> np.ndarray:
         eps = self._get_epsilon(step, total_steps)
         if self._rng.random() < eps:
             return np.array([self._rng.integers(0, self.n_actions)])
@@ -126,8 +132,12 @@ class OUNoise:
         self._rng = np.random.default_rng(seed)
         self._state = np.zeros(action_dim)
 
-    def select_action(self, action: np.ndarray, step: int, total_steps: int) -> np.ndarray:
-        dx = self.theta * (self.mu - self._state) + self.sigma * self._rng.standard_normal(self.action_dim)
+    def select_action(
+        self, action: np.ndarray, step: int, total_steps: int
+    ) -> np.ndarray:
+        dx = self.theta * (
+            self.mu - self._state
+        ) + self.sigma * self._rng.standard_normal(self.action_dim)
         self._state = self._state + dx
         return action + self._state
 

@@ -1,5 +1,5 @@
 use numpy::{PyArray1, PyReadonlyArray1};
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -8,6 +8,14 @@ use burn::backend::Autodiff;
 use rlox_nn::{ActorCritic, PPOStepConfig, TensorData};
 
 type BurnBackend = Autodiff<NdArray>;
+
+use rlox_candle::collector::SharedPolicy;
+use rlox_core::env::builtins::CartPole;
+use rlox_core::env::parallel::VecEnv;
+use rlox_core::env::RLEnv;
+use rlox_core::pipeline::channel::Pipeline;
+use rlox_core::pipeline::collector::AsyncCollector;
+use rlox_core::seed::derive_seed;
 
 enum Backend {
     Burn(rlox_burn::actor_critic::BurnActorCritic<BurnBackend>),
@@ -222,6 +230,174 @@ impl PyActorCritic {
         match &mut self.inner {
             Backend::Burn(ac) => ac.set_learning_rate(lr),
             Backend::Candle(ac) => ac.set_learning_rate(lr),
+        }
+    }
+}
+
+/// Candle-powered rollout collector.
+///
+/// Runs policy inference entirely in Rust (no Python calls during collection).
+/// The collection loop runs in a background thread:
+///   VecEnv.step → Candle.act → Candle.value → GAE → channel.send
+///
+/// Python receives completed RolloutBatch objects via ``recv()``,
+/// runs PyTorch backward + optimizer step, then calls ``sync_weights()``
+/// to update the Candle policy.
+///
+/// Args:
+///     env_id: environment ID (currently "CartPole-v1" for native Rust env)
+///     n_envs: number of parallel environments
+///     obs_dim: observation dimension
+///     n_actions: number of discrete actions
+///     n_steps: rollout length per batch
+///     hidden: hidden layer width (default 64)
+///     lr: learning rate (default 2.5e-4)
+///     gamma: discount factor (default 0.99)
+///     gae_lambda: GAE lambda (default 0.95)
+///     seed: random seed (default 42)
+///     capacity: pipeline buffer capacity (default 2)
+#[pyclass(name = "CandleCollector")]
+pub struct PyCandleCollector {
+    shared: SharedPolicy,
+    pipeline: Pipeline,
+    collector: Option<AsyncCollector>,
+    obs_dim: usize,
+}
+
+#[pymethods]
+impl PyCandleCollector {
+    #[new]
+    #[pyo3(signature = (env_id, n_envs, obs_dim, n_actions, n_steps, hidden=64, lr=2.5e-4, gamma=0.99, gae_lambda=0.95, seed=42, capacity=2))]
+    fn new(
+        env_id: &str,
+        n_envs: usize,
+        obs_dim: usize,
+        n_actions: usize,
+        n_steps: usize,
+        hidden: usize,
+        lr: f64,
+        gamma: f64,
+        gae_lambda: f64,
+        seed: u64,
+        capacity: usize,
+    ) -> PyResult<Self> {
+        if env_id != "CartPole-v1" && env_id != "CartPole" {
+            return Err(PyValueError::new_err(format!(
+                "CandleCollector currently supports CartPole-v1 only (native Rust env). Got '{env_id}'."
+            )));
+        }
+
+        // Create Candle policy
+        let ac = rlox_candle::actor_critic::CandleActorCritic::new(
+            obs_dim, n_actions, hidden, lr, candle_core::Device::Cpu, seed,
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let shared = SharedPolicy::new(ac);
+
+        // Create pipeline
+        let pipeline = Pipeline::new(capacity);
+
+        // Create VecEnv
+        let envs: Vec<Box<dyn RLEnv>> = (0..n_envs)
+            .map(|i| Box::new(CartPole::new(Some(derive_seed(seed, i)))) as Box<dyn RLEnv>)
+            .collect();
+        let vec_env = Box::new(VecEnv::new(envs));
+
+        // Create Candle callbacks
+        let (action_fn, value_fn) =
+            rlox_candle::collector::make_candle_callbacks(shared.clone_ref(), obs_dim);
+
+        // Start collector
+        let collector = AsyncCollector::start(
+            vec_env, n_steps, gamma, gae_lambda, pipeline.sender(), value_fn, action_fn,
+        );
+
+        Ok(Self {
+            shared,
+            pipeline,
+            collector: Some(collector),
+            obs_dim,
+        })
+    }
+
+    /// Receive the next rollout batch (blocks until available).
+    ///
+    /// Returns a dict with numpy arrays: observations, actions, rewards,
+    /// dones, log_probs, values, advantages, returns, plus shape metadata.
+    fn recv<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py.allow_threads(|| {
+            self.pipeline.recv()
+        }).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let dict = PyDict::new(py);
+        dict.set_item("observations", PyArray1::from_vec(py, batch.observations))?;
+        dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
+        dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
+        dict.set_item("dones", PyArray1::from_vec(py, batch.dones))?;
+        dict.set_item("log_probs", PyArray1::from_vec(py, batch.log_probs))?;
+        dict.set_item("values", PyArray1::from_vec(py, batch.values))?;
+        dict.set_item("advantages", PyArray1::from_vec(py, batch.advantages))?;
+        dict.set_item("returns", PyArray1::from_vec(py, batch.returns))?;
+        dict.set_item("obs_dim", batch.obs_dim)?;
+        dict.set_item("act_dim", batch.act_dim)?;
+        dict.set_item("n_steps", batch.n_steps)?;
+        dict.set_item("n_envs", batch.n_envs)?;
+        Ok(dict)
+    }
+
+    /// Try to receive a batch without blocking. Returns None if empty.
+    fn try_recv<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        match self.pipeline.try_recv() {
+            Some(batch) => {
+                let dict = PyDict::new(py);
+                dict.set_item("observations", PyArray1::from_vec(py, batch.observations))?;
+                dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
+                dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
+                dict.set_item("dones", PyArray1::from_vec(py, batch.dones))?;
+                dict.set_item("log_probs", PyArray1::from_vec(py, batch.log_probs))?;
+                dict.set_item("values", PyArray1::from_vec(py, batch.values))?;
+                dict.set_item("advantages", PyArray1::from_vec(py, batch.advantages))?;
+                dict.set_item("returns", PyArray1::from_vec(py, batch.returns))?;
+                dict.set_item("obs_dim", batch.obs_dim)?;
+                dict.set_item("act_dim", batch.act_dim)?;
+                dict.set_item("n_steps", batch.n_steps)?;
+                dict.set_item("n_envs", batch.n_envs)?;
+                Ok(Some(dict))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Synchronize weights from a flat f32 numpy array.
+    ///
+    /// Call this after each PyTorch optimizer step to update the Candle
+    /// policy used for collection.
+    fn sync_weights(&self, weights: PyReadonlyArray1<'_, f32>) -> PyResult<()> {
+        let w = weights.as_slice()?;
+        self.shared
+            .sync_weights(w)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Extract current Candle weights as a flat f32 numpy array.
+    ///
+    /// Use this to initialize PyTorch parameters from Candle's random init.
+    fn get_weights<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        let w = self.shared
+            .get_weights()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(PyArray1::from_vec(py, w))
+    }
+
+    /// Number of batches currently buffered.
+    fn __len__(&self) -> usize {
+        self.pipeline.len()
+    }
+
+    /// Stop the background collection thread.
+    fn stop(&mut self) {
+        if let Some(mut c) = self.collector.take() {
+            c.stop();
         }
     }
 }

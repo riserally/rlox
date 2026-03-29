@@ -1,7 +1,17 @@
 """Multi-Agent PPO (MAPPO): centralized critic, decentralized actors.
 
+Centralized training with decentralized execution (CTDE). Each agent has
+its own actor policy, but a shared centralized critic takes joint observations
+from all agents.
+
 Simplified implementation that works with standard Gymnasium envs
 (treats each env as a single-agent case when n_agents=1).
+
+Reference:
+    C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Baez, et al.,
+    "The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games,"
+    NeurIPS, 2022.
+    https://arxiv.org/abs/2103.01955
 """
 
 from __future__ import annotations
@@ -125,9 +135,12 @@ class MAPPO:
                 for _ in range(n_agents)
             ])
 
-        # Centralized critic takes concatenated observations
+        # Centralized critic — for n_agents=1, input is obs_dim.
+        # For n_agents>1, input would be obs_dim * n_agents (joint obs),
+        # but multi-agent collection is not yet supported by RolloutCollector.
+        critic_input_dim = obs_dim * n_agents
         self.critic = nn.Sequential(
-            nn.Linear(obs_dim * n_agents, 64),
+            nn.Linear(critic_input_dim, 64),
             nn.Tanh(),
             nn.Linear(64, 64),
             nn.Tanh(),
@@ -158,6 +171,13 @@ class MAPPO:
         all_rewards: list[float] = []
         last_metrics: dict[str, float] = {}
 
+        if self.n_agents > 1:
+            raise NotImplementedError(
+                "MAPPO with n_agents > 1 requires a multi-agent collector that "
+                "provides joint observations for the centralized critic. "
+                "Currently only n_agents=1 is supported (equivalent to PPO)."
+            )
+
         # For single-agent, use agent 0's actor as the policy
         policy = self.actors[0]
 
@@ -180,16 +200,8 @@ class MAPPO:
                     new_log_probs, entropy = policy.get_logprob_and_entropy(
                         mb.obs, mb.actions
                     )
-                    # Centralized critic — for n_agents=1, obs is already the
-                    # full state. For n_agents>1, would need joint obs from all
-                    # agents (not yet supported by the single-agent collector).
-                    if self.n_agents == 1:
-                        critic_input = mb.obs
-                    else:
-                        # Reshape to (batch/n_agents, n_agents*obs_dim) for joint obs
-                        batch_per_agent = mb.obs.shape[0] // self.n_agents
-                        critic_input = mb.obs.reshape(batch_per_agent, -1)
-                    values = self.critic(critic_input).squeeze(-1)
+                    # Centralized critic — for n_agents=1, obs IS the full state
+                    values = self.critic(mb.obs).squeeze(-1)
 
                     log_ratio = new_log_probs - mb.log_probs
                     ratio = log_ratio.exp()

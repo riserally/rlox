@@ -3,6 +3,16 @@
 This is a structural scaffold, not a SOTA implementation. The world model
 consists of a simple encoder + GRU dynamics + decoder. The actor-critic
 operates in the latent space using imagination rollouts.
+
+Reference:
+    D. Hafner, J. Pasukonis, J. Ba, T. Lillicrap,
+    "Mastering Diverse Domains through World Models,"
+    arXiv:2301.04104, 2023.
+    https://arxiv.org/abs/2301.04104
+
+See also:
+    DreamerV2: D. Hafner et al., "Mastering Atari with Discrete World Models,"
+    ICLR, 2021. https://arxiv.org/abs/2010.02193
 """
 
 from __future__ import annotations
@@ -174,6 +184,7 @@ class DreamerV3:
         loss = recon_loss + reward_loss
         self.wm_optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        nn.utils.clip_grad_norm_(self.world_model.parameters(), 100.0)
         self.wm_optimizer.step()
 
         return loss.item()
@@ -186,9 +197,14 @@ class DreamerV3:
         batch = self.buffer.sample(self.batch_size, seed=np.random.randint(0, 2**31))
         obs = torch.as_tensor(np.array(batch["obs"]), dtype=torch.float32)
 
+        # Freeze world model during actor-critic training — imagination uses
+        # the dynamics as a fixed simulator, not as a learnable component.
+        for p in self.world_model.parameters():
+            p.requires_grad_(False)
+
         h = self.world_model.encode(obs).detach()
 
-        # Imagination rollout — gradients flow through world model to actor
+        # Imagination rollout
         imagined_h = [h]
         imagined_rewards = []
         imagined_log_probs = []
@@ -199,7 +215,6 @@ class DreamerV3:
             log_prob = dist.log_prob(actions)
             action_onehot = F.one_hot(actions, self.n_actions).float()
 
-            # Let gradients flow through world model for actor learning
             h, _, pred_r = self.world_model.step(h, action_onehot)
             imagined_h.append(h)
             imagined_rewards.append(pred_r)
@@ -233,7 +248,12 @@ class DreamerV3:
         loss = actor_loss + 0.5 * critic_loss
         self.ac_optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        nn.utils.clip_grad_norm_(self.actor_critic.parameters(), 100.0)
         self.ac_optimizer.step()
+
+        # Unfreeze world model for next world model training step
+        for p in self.world_model.parameters():
+            p.requires_grad_(True)
 
         return {
             "actor_loss": actor_loss.item(),

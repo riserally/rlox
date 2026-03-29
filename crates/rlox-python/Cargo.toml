@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license.workspace = true
 publish = false
+description = "Python bindings for rlox via PyO3 — exposes buffers, environments, GAE, KL, and CandleCollector"
 
 [lib]
 name = "_rlox_core"

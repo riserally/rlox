@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>rlox — Documentation</title>
+  <title>rlox — Rust-Accelerated Reinforcement Learning</title>
+  <meta name="description" content="Rust data plane + Python control plane for RL. 3-50x faster than SB3/TorchRL.">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -12,99 +13,286 @@
       background: #1a1a2e;
       color: #e0e0e0;
       min-height: 100vh;
+      padding: 0;
+    }
+
+    /* --- Global Nav --- */
+    .global-nav {
+      background: #0f0f23;
+      border-bottom: 1px solid #2a2a4a;
+      padding: 0.75rem 2rem;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 2rem;
+      gap: 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
+    .global-nav .brand { color: #fff; font-weight: 700; font-size: 1.1rem; text-decoration: none; }
+    .global-nav a { color: #90a4ae; text-decoration: none; font-size: 0.9rem; transition: color 0.15s; }
+    .global-nav a:hover { color: #7c4dff; }
+    .nav-spacer { flex: 1; }
 
-    header {
+    /* --- Hero --- */
+    .hero {
       text-align: center;
-      margin-bottom: 3rem;
+      padding: 4rem 2rem 2rem;
     }
+    .hero h1 { font-size: 3.5rem; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+    .hero .tagline { margin-top: 0.75rem; font-size: 1.25rem; color: #90a4ae; max-width: 600px; margin-left: auto; margin-right: auto; }
 
-    h1 {
-      font-size: 3rem;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.02em;
+    /* --- Metrics --- */
+    .metrics {
+      display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;
+      padding: 2rem; max-width: 800px; margin: 0 auto;
     }
+    .metric { text-align: center; min-width: 140px; }
+    .metric .value { font-size: 2.2rem; font-weight: 700; color: #7c4dff; }
+    .metric .label { font-size: 0.85rem; color: #90a4ae; margin-top: 0.25rem; }
 
-    .tagline {
-      margin-top: 0.5rem;
-      font-size: 1.15rem;
-      color: #90a4ae;
+    /* --- Quickstart --- */
+    .quickstart {
+      max-width: 720px; margin: 1rem auto 2rem; padding: 0 2rem;
     }
+    .quickstart h2 { font-size: 1.5rem; color: #fff; margin-bottom: 1rem; text-align: center; }
+    .quickstart pre {
+      background: #0d1117; border: 1px solid #2a2a4a; border-radius: 8px;
+      padding: 1.25rem 1.5rem; overflow-x: auto; font-size: 0.9rem;
+      line-height: 1.6; color: #c9d1d9;
+    }
+    .quickstart code { font-family: "SF Mono", "Fira Code", monospace; }
+    .comment { color: #6a737d; }
+    .kw { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .fn { color: #d2a8ff; }
 
+    /* --- Comparison --- */
+    .comparison { max-width: 800px; margin: 2rem auto; padding: 0 2rem; }
+    .comparison h2 { font-size: 1.5rem; color: #fff; margin-bottom: 1rem; text-align: center; }
+    .comparison table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .comparison th { background: #16213e; color: #fff; padding: 0.75rem; text-align: left; border: 1px solid #2a2a4a; }
+    .comparison td { padding: 0.75rem; border: 1px solid #2a2a4a; }
+
+    /* --- Algorithms --- */
+    .algorithms { max-width: 960px; margin: 2rem auto; padding: 0 2rem; }
+    .algorithms h2 { font-size: 1.5rem; color: #fff; margin-bottom: 1.5rem; text-align: center; }
+    .algo-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .algo-group { background: #16213e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 1.25rem; }
+    .algo-group h3 { font-size: 0.9rem; color: #7c4dff; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .algo-group ul { list-style: none; }
+    .algo-group li { font-size: 0.9rem; color: #c9d1d9; padding: 0.15rem 0; }
+
+    /* --- Install --- */
+    .install { max-width: 720px; margin: 2rem auto; padding: 0 2rem; }
+    .install h2 { font-size: 1.5rem; color: #fff; margin-bottom: 1rem; text-align: center; }
+    .install pre { background: #0d1117; border: 1px solid #2a2a4a; border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.9rem; color: #c9d1d9; }
+
+    /* --- Cards --- */
     .cards {
-      display: flex;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-      justify-content: center;
-      max-width: 960px;
+      display: flex; gap: 1.25rem; flex-wrap: wrap; justify-content: center;
+      max-width: 960px; margin: 2rem auto; padding: 0 2rem;
     }
-
     .card {
-      background: #16213e;
-      border: 1px solid #2a2a4a;
-      border-radius: 12px;
-      padding: 2rem 1.75rem;
-      width: 280px;
-      text-decoration: none;
-      color: inherit;
+      background: #16213e; border: 1px solid #2a2a4a; border-radius: 10px;
+      padding: 1.5rem; width: 280px; text-decoration: none; color: inherit;
       transition: transform 0.15s ease, border-color 0.15s ease;
     }
+    .card:hover { transform: translateY(-3px); border-color: #7c4dff; }
+    .card h3 { font-size: 1.1rem; color: #fff; margin-bottom: 0.4rem; }
+    .card p { font-size: 0.85rem; color: #90a4ae; line-height: 1.4; }
 
-    .card:hover {
-      transform: translateY(-4px);
-      border-color: #7c4dff;
-    }
-
-    .card h2 {
-      font-size: 1.25rem;
-      color: #ffffff;
-      margin-bottom: 0.6rem;
-    }
-
-    .card p {
-      font-size: 0.95rem;
-      color: #90a4ae;
-      line-height: 1.5;
-    }
-
+    /* --- Footer --- */
     footer {
-      margin-top: 3rem;
-      font-size: 0.85rem;
-      color: #546e7a;
+      text-align: center; padding: 2rem; margin-top: 2rem;
+      font-size: 0.8rem; color: #546e7a; border-top: 1px solid #2a2a4a;
     }
+    footer a { color: #7c4dff; text-decoration: none; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>rlox</h1>
-    <p class="tagline">Rust-accelerated reinforcement learning</p>
-  </header>
 
-  <div class="cards">
-    <a class="card" href="./rust/rlox_core/">
-      <h2>Rust API Reference</h2>
-      <p>Auto-generated API documentation for the core Rust crates.</p>
-    </a>
-    <a class="card" href="./book/">
-      <h2>Architecture &amp; Guides</h2>
-      <p>Design decisions, architecture overview, and contributor guides.</p>
+  <!-- Global Navigation -->
+  <nav class="global-nav">
+    <a href="/rlox/" class="brand">rlox</a>
+    <a href="/rlox/python/">Python Docs</a>
+    <a href="/rlox/python/getting-started/">Getting Started</a>
+    <a href="/rlox/python/examples/">Examples</a>
+    <a href="/rlox/rust/rlox_core/">Rust API</a>
+    <span class="nav-spacer"></span>
+    <a href="https://github.com/riserally/rlox">GitHub</a>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>rlox</h1>
+    <p class="tagline">Rust-accelerated reinforcement learning.<br>3-50x faster than SB3. Zero-copy PyO3 bindings.</p>
+  </section>
+
+  <!-- Key Metrics -->
+  <section class="metrics">
+    <div class="metric">
+      <div class="value">180K</div>
+      <div class="label">SPS with Candle hybrid</div>
+    </div>
+    <div class="metric">
+      <div class="value">147x</div>
+      <div class="label">faster GAE vs NumPy</div>
+    </div>
+    <div class="metric">
+      <div class="value">18</div>
+      <div class="label">algorithms</div>
+    </div>
+    <div class="metric">
+      <div class="value">7</div>
+      <div class="label">Rust crates</div>
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section class="quickstart">
+    <h2>Quick Start</h2>
+    <pre><code><span class="comment"># Install</span>
+pip install rlox
+
+<span class="comment"># Train PPO on CartPole (3 lines)</span>
+<span class="kw">from</span> rlox.trainers <span class="kw">import</span> PPOTrainer
+metrics = PPOTrainer(env=<span class="str">"CartPole-v1"</span>).train(<span class="str">50_000</span>)
+<span class="fn">print</span>(f<span class="str">"Reward: {metrics['mean_reward']:.0f}"</span>)
+
+<span class="comment"># CLI (no Python needed)</span>
+python -m rlox train --algo ppo --env CartPole-v1 --timesteps 100000</code></pre>
+  </section>
+
+  <!-- Why rlox -->
+  <section class="comparison">
+    <h2>Why rlox?</h2>
+    <table>
+      <tr>
+        <th></th><th>vs SB3</th><th>vs CleanRL</th><th>vs RLlib</th><th>vs TRL</th>
+      </tr>
+      <tr>
+        <td><strong>Speed</strong></td>
+        <td>3-50x faster data plane</td>
+        <td>2x faster collection</td>
+        <td>Same (single-node)</td>
+        <td>4-14x faster KL/GRPO</td>
+      </tr>
+      <tr>
+        <td><strong>Scope</strong></td>
+        <td>Same algorithms + offline RL</td>
+        <td>More algorithms</td>
+        <td>Lightweight, no Ray</td>
+        <td>Complementary</td>
+      </tr>
+      <tr>
+        <td><strong>Unique</strong></td>
+        <td>Rust VecEnv + Candle</td>
+        <td>Offline RL + LLM ops</td>
+        <td>Rust buffers + GAE</td>
+        <td>Rust sequence packing</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- Algorithms -->
+  <section class="algorithms">
+    <h2>Algorithms</h2>
+    <div class="algo-grid">
+      <div class="algo-group">
+        <h3>On-Policy</h3>
+        <ul>
+          <li>PPO</li>
+          <li>A2C</li>
+          <li>IMPALA</li>
+          <li>MAPPO</li>
+        </ul>
+      </div>
+      <div class="algo-group">
+        <h3>Off-Policy</h3>
+        <ul>
+          <li>SAC</li>
+          <li>TD3</li>
+          <li>DQN (Rainbow)</li>
+        </ul>
+      </div>
+      <div class="algo-group">
+        <h3>Offline RL</h3>
+        <ul>
+          <li>TD3+BC</li>
+          <li>IQL</li>
+          <li>CQL</li>
+          <li>BC</li>
+        </ul>
+      </div>
+      <div class="algo-group">
+        <h3>LLM Post-Training</h3>
+        <ul>
+          <li>GRPO</li>
+          <li>DPO</li>
+          <li>OnlineDPO</li>
+          <li>BestOfN</li>
+        </ul>
+      </div>
+      <div class="algo-group">
+        <h3>Model-Based</h3>
+        <ul>
+          <li>DreamerV3</li>
+        </ul>
+      </div>
+      <div class="algo-group">
+        <h3>Hybrid</h3>
+        <ul>
+          <li>HybridPPO (Candle)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Installation -->
+  <section class="install">
+    <h2>Installation</h2>
+    <pre><code><span class="comment"># From PyPI</span>
+pip install rlox
+
+<span class="comment"># From source (requires Rust toolchain)</span>
+git clone https://github.com/riserally/rlox.git
+cd rlox && pip install -e ".[dev]"</code></pre>
+  </section>
+
+  <!-- Documentation Cards -->
+  <section class="cards">
+    <a class="card" href="./python/getting-started/">
+      <h3>Getting Started</h3>
+      <p>Installation, first training run, step-by-step tutorial.</p>
     </a>
     <a class="card" href="./python/">
-      <h2>Python API Reference</h2>
-      <p>Python bindings reference built with MkDocs and mkdocstrings.</p>
+      <h3>Python Guide</h3>
+      <p>Complete user guide with 3-level API reference.</p>
+    </a>
+    <a class="card" href="./python/examples/">
+      <h3>Examples</h3>
+      <p>Copy-paste code for every algorithm.</p>
+    </a>
+    <a class="card" href="./rust/rlox_core/">
+      <h3>Rust API</h3>
+      <p>Auto-generated crate documentation.</p>
+    </a>
+    <a class="card" href="./python/tutorials/custom-components/">
+      <h3>Tutorials</h3>
+      <p>Custom networks, exploration, offline RL, Candle hybrid.</p>
     </a>
     <a class="card" href="./blog/">
-      <h2>Blog</h2>
-      <p>Updates, benchmarks, and technical deep-dives by riserally.</p>
+      <h3>Blog</h3>
+      <p>Benchmarks, deep-dives, and release notes.</p>
     </a>
-  </div>
+  </section>
 
-  <footer>rlox documentation</footer>
+  <footer>
+    <a href="https://github.com/riserally/rlox">rlox</a> &mdash; Apache 2.0
+  </footer>
+
 </body>
 </html>

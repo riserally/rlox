@@ -83,6 +83,49 @@ sac = SAC(env_id=env, learning_starts=1000)
 sac.train(total_timesteps=50_000)
 ```
 
+### Multi-Environment Off-Policy Training
+
+All off-policy algorithms support parallel data collection with `n_envs`:
+
+```python
+from rlox.algorithms.sac import SAC
+from rlox.algorithms.td3 import TD3
+from rlox.algorithms.dqn import DQN
+
+# SAC with 4 parallel environments
+sac = SAC(env_id="HalfCheetah-v4", n_envs=4, learning_starts=10_000)
+metrics = sac.train(total_timesteps=1_000_000)
+
+# TD3 with 4 parallel environments
+td3 = TD3(env_id="Pendulum-v1", n_envs=4, learning_starts=1000)
+metrics = td3.train(total_timesteps=50_000)
+
+# DQN with 8 parallel environments
+dqn = DQN(env_id="CartPole-v1", n_envs=8, learning_starts=1000)
+metrics = dqn.train(total_timesteps=100_000)
+```
+
+### Custom Collector with Exploration
+
+```python
+import rlox
+from rlox.algorithms.sac import SAC
+from rlox.off_policy_collector import OffPolicyCollector
+from rlox.exploration import GaussianNoise
+
+# Share buffer between collector and algorithm
+buf = rlox.ReplayBuffer(1_000_000, obs_dim=3, act_dim=1)
+collector = OffPolicyCollector(
+    env_id="Pendulum-v1",
+    n_envs=4,
+    buffer=buf,
+    exploration=GaussianNoise(sigma=0.1, clip=0.3),
+)
+
+sac = SAC(env_id="Pendulum-v1", buffer=buf, collector=collector)
+metrics = sac.train(total_timesteps=50_000)
+```
+
 ### TD3 on Pendulum
 
 ```python

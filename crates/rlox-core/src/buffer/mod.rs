@@ -1,6 +1,7 @@
 pub mod columnar;
 pub mod extra_columns;
 pub mod mmap;
+pub mod offline;
 pub mod priority;
 pub mod provenance;
 pub mod ringbuf;

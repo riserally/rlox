@@ -17,6 +17,10 @@ pub struct RolloutBatch {
     pub rewards: Vec<f64>,
     /// Done flags (0.0 or 1.0): `[n_steps * n_envs]`.
     pub dones: Vec<f64>,
+    /// Log-probabilities of the collected actions: `[n_steps * n_envs]`.
+    pub log_probs: Vec<f64>,
+    /// Value estimates at collection time: `[n_steps * n_envs]`.
+    pub values: Vec<f64>,
     /// GAE advantages: `[n_steps * n_envs]`.
     pub advantages: Vec<f64>,
     /// Discounted returns: `[n_steps * n_envs]`.
@@ -119,6 +123,8 @@ mod tests {
             actions: vec![tag as f32; total * act_dim],
             rewards: vec![tag as f64; total],
             dones: vec![0.0; total],
+            log_probs: vec![-0.5; total],
+            values: vec![0.0; total],
             advantages: vec![tag as f64 * 0.1; total],
             returns: vec![tag as f64 * 0.5; total],
             obs_dim,
@@ -187,6 +193,8 @@ mod tests {
             actions: (0..total * act_dim).map(|i| i as f32 * 0.1).collect(),
             rewards: (0..total).map(|i| i as f64).collect(),
             dones: vec![0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            log_probs: vec![-0.5; total],
+            values: vec![0.0; total],
             advantages: (0..total).map(|i| i as f64 * 0.01).collect(),
             returns: (0..total).map(|i| i as f64 * 0.5).collect(),
             obs_dim,

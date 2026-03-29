@@ -81,6 +81,7 @@ impl AsyncCollector {
                 let mut all_rewards = Vec::with_capacity(total);
                 let mut all_dones = Vec::with_capacity(total);
                 let mut all_values = Vec::with_capacity(total);
+                let mut all_log_probs = Vec::with_capacity(total);
 
                 // Collect n_steps of experience
                 let mut ok = true;
@@ -91,7 +92,7 @@ impl AsyncCollector {
 
                     // Get values and actions from the policy
                     let values = value_fn(&current_obs);
-                    let (actions_flat, _log_probs) = action_fn(&current_obs);
+                    let (actions_flat, log_probs) = action_fn(&current_obs);
 
                     // Convert flat actions to Action enum for stepping
                     let actions: Vec<Action> = match envs.action_space() {
@@ -112,10 +113,11 @@ impl AsyncCollector {
                             .collect(),
                     };
 
-                    // Store current obs, actions, values
+                    // Store current obs, actions, values, log_probs
                     all_obs.extend_from_slice(&current_obs);
                     all_actions.extend_from_slice(&actions_flat);
                     all_values.extend(&values);
+                    all_log_probs.extend(&log_probs);
 
                     // Step environments
                     match envs.step_batch(&actions) {
@@ -188,6 +190,8 @@ impl AsyncCollector {
                     actions: all_actions,
                     rewards: all_rewards,
                     dones: all_dones,
+                    log_probs: all_log_probs,
+                    values: all_values,
                     advantages,
                     returns,
                     obs_dim,

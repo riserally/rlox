@@ -1,4 +1,20 @@
-"""Online DPO: generate candidates, get preferences, run DPO update."""
+"""Online DPO: generate candidates, get preferences, run DPO update.
+
+Extends DPO to the online setting: at each step, generate candidate
+completions from the current policy, query a preference oracle, then
+run a DPO update on the preferred/rejected pair.
+
+Reference:
+    Z. Guo, A. Rashid, B. Suber, S. Sharma, D. Sui, et al.,
+    "Direct Language Model Alignment from Online AI Feedback,"
+    arXiv:2402.04792, 2024.
+    https://arxiv.org/abs/2402.04792
+
+See also:
+    R. Rafailov, A. Sharma, E. Mitchell, C. Manning, S. Ermon, C. Finn,
+    "Direct Preference Optimization: Your Language Model is Secretly a
+    Reward Model," NeurIPS, 2023. https://arxiv.org/abs/2305.18290
+"""
 
 from __future__ import annotations
 

@@ -2,6 +2,34 @@
 
 All notable changes to rlox are documented here.
 
+## [0.3.0] - 2026-03-29
+
+### Added
+- **Offline RL**: TD3+BC, IQL, CQL, BC algorithms with `OfflineDatasetBuffer` (Rust)
+- **Candle Hybrid Collection**: `CandleCollector` (180K SPS on CartPole), `HybridPPO` trainer
+- **OffPolicyCollector**: Reusable multi-env collection for SAC, TD3, DQN (`n_envs` parameter)
+- **`OfflineAlgorithm` base class** with `OfflineDataset` protocol for extensible offline RL
+- **`SharedPolicy`** + weight sync for Candle/PyTorch interop
+- **`RolloutBatch`** extended with `log_probs` and `values` fields
+- **SB3 migration guide** at `docs/tutorials/migration-sb3.md`
+- **API reference** pages with mkdocstrings autodoc
+- **CONTRIBUTING.md** with development setup and guidelines
+- **Cross-navigation** header across all documentation components
+
+### Fixed
+- IMPALA: V-trace now uses computed bootstrap value instead of hardcoded 0.0
+- IMPALA: Auto-detects continuous envs, falls back to GymVecEnv for non-CartPole
+- DreamerV3: World model frozen during actor-critic training (prevents gradient leakage)
+- DreamerV3: Gradient clipping added to both world model and actor-critic updates
+- MAPPO: NotImplementedError for n_agents > 1 (prevents silent dimension mismatch)
+- MAPPO: Simplified critic input for single-agent case
+
+### Improved
+- Landing page redesigned with quickstart, benchmarks, comparison table, algorithm grid
+- Rust crate descriptions and lib.rs doc comments updated
+- 60+ new Python tests (offline RL, LLM algorithms, CandleCollector, HybridPPO)
+- 14 new Rust tests (OfflineDatasetBuffer, CandleCollector)
+
 ## [0.2.0] - 2026-03-16
 
 ### Added

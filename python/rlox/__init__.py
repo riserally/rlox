@@ -44,6 +44,7 @@ from rlox._rlox_core import (
     ReplayBuffer,
     PrioritizedReplayBuffer,
     MmapReplayBuffer,
+    OfflineDatasetBuffer,
     VarLenStore,
     compute_gae,
     compute_gae_batched,
@@ -63,6 +64,7 @@ from rlox._rlox_core import (
     RunningStats,
     pack_sequences,
     ActorCritic,
+    CandleCollector,
 )
 
 # -- Python Layer 1 -----------------------------------------------------------
@@ -99,6 +101,9 @@ from rlox.protocols import (
 
 # -- Exploration ---------------------------------------------------------------
 from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise
+
+# -- Collectors ----------------------------------------------------------------
+from rlox.off_policy_collector import OffPolicyCollector, CollectorProtocol
 
 # -- Builders ------------------------------------------------------------------
 from rlox.builders import PPOBuilder, SACBuilder, DQNBuilder
@@ -141,6 +146,7 @@ __all__ = [
     "ReplayBuffer",
     "PrioritizedReplayBuffer",
     "MmapReplayBuffer",
+    "OfflineDatasetBuffer",
     "VarLenStore",
     "compute_gae",
     "compute_gae_batched",
@@ -160,6 +166,7 @@ __all__ = [
     "RunningStats",
     "pack_sequences",
     "ActorCritic",
+    "CandleCollector",
     # Python Layer 1
     "RolloutBatch",
     "RolloutCollector",

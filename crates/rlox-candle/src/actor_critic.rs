@@ -18,7 +18,7 @@ use crate::mlp::MLP;
 pub struct CandleActorCritic {
     actor: MLP,
     critic: MLP,
-    varmap: VarMap,
+    pub varmap: VarMap,
     optimizer: candle_nn::AdamW,
     device: Device,
     n_actions: usize,

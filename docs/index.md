@@ -66,7 +66,10 @@ graph TD
 | [Getting Started](getting-started.md) | New to rlox | Install, first training run, basic API |
 | [Python Guide](python-guide.md) | All users | Complete API reference with examples |
 | [Examples](examples.md) | All users | Copy-paste code for every algorithm |
+| [Custom Components](tutorials/custom-components.md) | Intermediate | Custom networks, collectors, exploration, losses |
+| [Migrating from SB3](tutorials/migration-sb3.md) | SB3 users | Side-by-side API comparison |
 | [LLM Post-Training](llm-post-training.md) | LLM practitioners | DPO, GRPO, OnlineDPO, BestOfN |
+| [API Reference](api/index.md) | All users | Auto-generated from docstrings |
 | [Benchmarks](benchmark/README.md) | Researchers | Performance comparison vs SB3/TRL |
 | [Math Reference](math-reference.md) | Researchers | GAE, V-trace, GRPO, DPO derivations |
 | [Rust Guide](rust-guide.md) | Contributors | Crate architecture, extending in Rust |
@@ -83,7 +86,11 @@ graph TD
 
 ## Algorithms
 
-- **On-policy**: PPO, A2C, IMPALA, MAPPO
-- **Off-policy**: SAC, TD3, DQN (Double, Dueling, PER, N-step)
+- **On-policy**: PPO, A2C, IMPALA, MAPPO — multi-env via `RolloutCollector`
+- **Off-policy**: SAC, TD3, DQN (Double, Dueling, PER, N-step) — multi-env via `OffPolicyCollector`
+- **Offline RL**: TD3+BC, IQL, CQL, BC — Rust-accelerated `OfflineDatasetBuffer`
 - **Model-based**: DreamerV3
 - **LLM post-training**: GRPO, DPO, OnlineDPO, BestOfN
+- **Hybrid**: HybridPPO — Candle inference + PyTorch training (180K SPS)
+
+All algorithms support custom networks, exploration strategies, and collectors via [protocol-based injection](tutorials/custom-components.md). See the [SB3 migration guide](tutorials/migration-sb3.md) for switching from Stable-Baselines3.

@@ -142,15 +142,26 @@ class IMPALA:
 
     def _actor_loop(self, actor_id: int) -> None:
         """Actor thread: collect experience and enqueue."""
-        env = rlox.VecEnv(
-            n=self.n_envs, seed=self.seed + actor_id * 1000, env_id=self.env_id
-        )
+        # Use native VecEnv for supported envs, GymVecEnv for everything else
+        try:
+            env = rlox.VecEnv(
+                n=self.n_envs, seed=self.seed + actor_id * 1000, env_id=self.env_id
+            )
+        except ValueError:
+            from rlox.gym_vec_env import GymVecEnv
+            env = GymVecEnv(self.env_id, n_envs=self.n_envs)
         obs = env.reset_all()
 
-        # Local policy copy
-        local_policy = DiscretePolicy(
-            obs_dim=self.obs_dim, n_actions=self.n_actions
-        )
+        # Local policy copy — match learner policy type
+        if self._is_discrete:
+            local_policy = DiscretePolicy(
+                obs_dim=self.obs_dim, n_actions=self.n_actions
+            )
+        else:
+            from rlox.policies import ContinuousPolicy
+            local_policy = ContinuousPolicy(
+                obs_dim=self.obs_dim, act_dim=self.n_actions
+            )
 
         while not self._stop_event.is_set():
             # Sync with learner
@@ -167,14 +178,22 @@ class IMPALA:
             with torch.no_grad():
                 for _ in range(self.n_steps):
                     obs_tensor = torch.as_tensor(obs, dtype=torch.float32)
-                    logits = local_policy.actor(obs_tensor)
-                    dist = torch.distributions.Categorical(logits=logits)
-                    actions = dist.sample()
-                    log_probs = dist.log_prob(actions)
+
+                    if self._is_discrete:
+                        logits = local_policy.actor(obs_tensor)
+                        dist = torch.distributions.Categorical(logits=logits)
+                        actions = dist.sample()
+                        log_probs = dist.log_prob(actions)
+                    else:
+                        actions, log_probs = local_policy.get_action_and_logprob(obs_tensor)
+
                     values = local_policy.critic(obs_tensor).squeeze(-1)
 
-                    actions_list = actions.cpu().numpy().astype(np.uint32).tolist()
-                    step_result = env.step_all(actions_list)
+                    if self._is_discrete:
+                        actions_for_env = actions.cpu().numpy().astype(np.uint32).tolist()
+                    else:
+                        actions_for_env = actions.cpu().numpy().astype(np.float32)
+                    step_result = env.step_all(actions_for_env)
 
                     all_obs.append(obs_tensor)
                     all_actions.append(actions)
@@ -194,6 +213,10 @@ class IMPALA:
 
                     obs = step_result["obs"].copy()
 
+                # Compute bootstrap value from final observation
+                final_obs_tensor = torch.as_tensor(obs, dtype=torch.float32)
+                bootstrap_values = local_policy.critic(final_obs_tensor).squeeze(-1)
+
             data = {
                 "obs": torch.stack(all_obs),          # (n_steps, n_envs, obs_dim)
                 "actions": torch.stack(all_actions),    # (n_steps, n_envs)
@@ -201,6 +224,7 @@ class IMPALA:
                 "rewards": torch.stack(all_rewards),
                 "dones": torch.stack(all_dones),
                 "values": torch.stack(all_values),
+                "bootstrap_values": bootstrap_values,   # (n_envs,)
             }
 
             while not self._stop_event.is_set():
@@ -218,16 +242,30 @@ class IMPALA:
         rewards = data["rewards"]
         dones = data["dones"]
         values = data["values"]
+        bootstrap_values = data["bootstrap_values"]  # (n_envs,)
 
         n_steps, n_envs = rewards.shape
 
         # Compute current policy log probs
         obs_flat = obs.reshape(-1, self.obs_dim)
-        actions_flat = actions.reshape(-1)
-        logits = self.policy.actor(obs_flat)
-        dist = torch.distributions.Categorical(logits=logits)
-        pi_log_probs = dist.log_prob(actions_flat).reshape(n_steps, n_envs)
-        entropy = dist.entropy().reshape(n_steps, n_envs)
+        if self._is_discrete:
+            actions_flat = actions.reshape(-1)
+        else:
+            # Continuous: (n_steps, n_envs, act_dim) -> (n_steps*n_envs, act_dim)
+            actions_flat = actions.reshape(-1, self.n_actions)
+
+        if self._is_discrete:
+            logits = self.policy.actor(obs_flat)
+            dist = torch.distributions.Categorical(logits=logits)
+            pi_log_probs = dist.log_prob(actions_flat).reshape(n_steps, n_envs)
+            entropy = dist.entropy().reshape(n_steps, n_envs)
+        else:
+            pi_log_probs_flat, entropy_flat = self.policy.get_logprob_and_entropy(
+                obs_flat, actions_flat
+            )
+            pi_log_probs = pi_log_probs_flat.reshape(n_steps, n_envs)
+            entropy = entropy_flat.reshape(n_steps, n_envs)
+
         new_values = self.policy.critic(obs_flat).squeeze(-1).reshape(n_steps, n_envs)
 
         # V-trace per environment
@@ -240,13 +278,14 @@ class IMPALA:
             env_rewards = rewards[:, env_idx].numpy().astype(np.float32)
             env_values = values[:, env_idx].detach().numpy().astype(np.float32)
             env_dones = dones[:, env_idx].numpy().astype(np.float32)
+            env_bootstrap = float(bootstrap_values[env_idx])
 
             vs, pg_advantages = rlox.compute_vtrace(
                 log_rhos.numpy().astype(np.float32),
                 env_rewards,
                 env_values,
                 env_dones,
-                bootstrap_value=0.0,
+                bootstrap_value=env_bootstrap,
                 gamma=self.gamma,
                 rho_bar=self.rho_bar,
                 c_bar=self.c_bar,

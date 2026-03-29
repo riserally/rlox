@@ -7,6 +7,7 @@ docs_dir: docs
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     - scheme: default
       primary: deep purple
@@ -25,6 +26,7 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.indexes
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -69,8 +71,8 @@ extra_javascript:
 nav:
   - Home: index.md
   - Learn:
-    - RL Introduction: rl-introduction.md
     - Getting Started: getting-started.md
+    - RL Introduction: rl-introduction.md
     - Python User Guide: python-guide.md
     - Examples: examples.md
   - Algorithms:
@@ -79,8 +81,10 @@ nav:
   - Tutorials:
     - Custom Components: tutorials/custom-components.md
     - Custom Rewards & Training Loops: tutorials/custom-rewards-and-training-loops.md
+    - Migrating from SB3: tutorials/migration-sb3.md
   - Benchmarks:
     - Overview: benchmark/README.md
+    - Convergence Results: benchmark/convergence-results.md
     - GAE: benchmark/gae.md
     - Buffer Operations: benchmark/buffer-ops.md
     - Environment Stepping: benchmark/env-stepping.md
@@ -94,6 +98,12 @@ nav:
     - Profiling Report: profiling-report.md
     - Hybrid Collection Plan: hybrid-collection-plan.md
     - Rust Optimization Plan: rust-optimization-plan.md
+  - API Reference:
+    - Overview: api/index.md
+    - Algorithms: api/algorithms.md
+    - Buffers & Primitives: api/buffers.md
+    - Callbacks & Logging: api/callbacks.md
+    - Policies & Networks: api/policies.md
   - Research:
     - Overview: research/README.md
     - PPO: research/01-ppo.md

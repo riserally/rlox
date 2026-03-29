@@ -43,6 +43,8 @@ class SAC:
         actor: nn.Module | None = None,
         critic: nn.Module | None = None,
         buffer: object | None = None,
+        collector: object | None = None,
+        n_envs: int = 1,
     ):
         if isinstance(env_id, str):
             self.env = gym.make(env_id)
@@ -107,6 +109,10 @@ class SAC:
         # Replay buffer — use custom if provided
         self.buffer = buffer if buffer is not None else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
 
+        # Off-policy collector — enables multi-env collection
+        self.collector = collector
+        self.n_envs = n_envs
+
         # Callbacks and logger
         self.callbacks = CallbackList(callbacks)
         self.logger = logger
@@ -117,6 +123,20 @@ class SAC:
             compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
+        # Use OffPolicyCollector for multi-env, or default single-env loop
+        if self.n_envs > 1 and self.collector is None:
+            from rlox.off_policy_collector import OffPolicyCollector
+            self.collector = OffPolicyCollector(
+                env_id=self.env_id,
+                n_envs=self.n_envs,
+                buffer=self.buffer,
+                act_high=self.act_high,
+                seed=getattr(self, 'seed', 42),
+            )
+
+        if self.collector is not None:
+            return self._train_with_collector(total_timesteps)
+
         obs, _ = self.env.reset()
         episode_rewards: list[float] = []
         ep_reward = 0.0
@@ -238,6 +258,47 @@ class SAC:
             "alpha": self.alpha,
             "alpha_loss": alpha_loss_val,
         }
+
+    def _train_with_collector(self, total_timesteps: int) -> dict[str, float]:
+        """Train using OffPolicyCollector for multi-env data collection."""
+        collector = self.collector
+        collector.reset()
+
+        episode_rewards: list[float] = []
+        metrics: dict[str, float] = {}
+
+        self.callbacks.on_training_start()
+
+        def get_action(obs_batch: np.ndarray) -> np.ndarray:
+            if self._global_step < self.learning_starts:
+                return np.random.randn(obs_batch.shape[0], self.act_dim).astype(np.float32) * self.act_high
+            with torch.no_grad():
+                obs_t = torch.as_tensor(obs_batch, dtype=torch.float32)
+                actions, _ = self.actor.sample(obs_t)
+                return (actions.numpy() * self.act_high).astype(np.float32)
+
+        for step in range(total_timesteps):
+            _, _, mean_ep_reward = collector.collect_step(get_action, step, total_timesteps)
+
+            self._global_step += 1
+            should_continue = self.callbacks.on_step(
+                reward=mean_ep_reward, step=self._global_step, algo=self
+            )
+            if not should_continue:
+                break
+
+            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
+                metrics = self._update(step)
+                self.callbacks.on_train_batch(**metrics)
+
+                if self.logger is not None and self._global_step % 1000 == 0:
+                    self.logger.on_train_step(self._global_step, metrics)
+
+        self.callbacks.on_training_end()
+
+        completed = collector._completed_rewards
+        metrics["mean_reward"] = float(np.mean(completed)) if completed else 0.0
+        return metrics
 
     def predict(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
         """Get action from the policy."""

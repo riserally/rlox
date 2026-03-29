@@ -311,7 +311,7 @@ pub struct PyRolloutBatch {
 impl PyRolloutBatch {
     /// Create a new RolloutBatch from flat numpy arrays and shape metadata.
     #[new]
-    #[pyo3(signature = (observations, actions, rewards, dones, advantages, returns, obs_dim, act_dim, n_steps, n_envs))]
+    #[pyo3(signature = (observations, actions, rewards, dones, advantages, returns, obs_dim, act_dim, n_steps, n_envs, log_probs=None, values=None))]
     fn new(
         observations: PyReadonlyArray1<'_, f32>,
         actions: PyReadonlyArray1<'_, f32>,
@@ -323,6 +323,8 @@ impl PyRolloutBatch {
         act_dim: usize,
         n_steps: usize,
         n_envs: usize,
+        log_probs: Option<PyReadonlyArray1<'_, f64>>,
+        values: Option<PyReadonlyArray1<'_, f64>>,
     ) -> PyResult<Self> {
         let obs_slice = observations.as_slice()?;
         let act_slice = actions.as_slice()?;
@@ -357,12 +359,23 @@ impl PyRolloutBatch {
             )));
         }
 
+        let lp = match log_probs {
+            Some(lp) => lp.as_slice()?.to_vec(),
+            None => vec![0.0; expected_flat],
+        };
+        let vals = match values {
+            Some(v) => v.as_slice()?.to_vec(),
+            None => vec![0.0; expected_flat],
+        };
+
         Ok(Self {
             inner: RolloutBatch {
                 observations: obs_slice.to_vec(),
                 actions: act_slice.to_vec(),
                 rewards: rew_slice.to_vec(),
                 dones: don_slice.to_vec(),
+                log_probs: lp,
+                values: vals,
                 advantages: adv_slice.to_vec(),
                 returns: ret_slice.to_vec(),
                 obs_dim,
@@ -391,6 +404,16 @@ impl PyRolloutBatch {
     #[getter]
     fn dones<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
         PyArray1::from_slice(py, &self.inner.dones)
+    }
+
+    #[getter]
+    fn log_probs<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_slice(py, &self.inner.log_probs)
+    }
+
+    #[getter]
+    fn values<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_slice(py, &self.inner.values)
     }
 
     #[getter]

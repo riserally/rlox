@@ -28,6 +28,9 @@ graph TD
         G[ReplayBufferProtocol] --> G1[push]
         G --> G2[sample]
         G --> G3[__len__]
+        H[CollectorProtocol] --> H1[reset]
+        H --> H2[collect_step]
+        H --> H3[n_envs]
     end
 ```
 
@@ -166,7 +169,96 @@ mmap_buf = rlox.MmapReplayBuffer(
 dqn = DQN(env_id="CartPole-v1", buffer=mmap_buf)
 ```
 
-## Example 3: Custom Exploration Strategy
+## Example 3: Multi-Environment Collectors
+
+All off-policy algorithms (SAC, TD3, DQN) support multi-env data collection via `OffPolicyCollector`. You can use the built-in `n_envs` parameter or bring your own collector.
+
+### Quick: Just Set `n_envs`
+
+```python
+from rlox.algorithms.sac import SAC
+from rlox.algorithms.td3 import TD3
+from rlox.algorithms.dqn import DQN
+
+# SAC with 4 parallel environments — collector auto-created
+sac = SAC(env_id="HalfCheetah-v4", n_envs=4, learning_starts=10_000)
+sac.train(total_timesteps=1_000_000)
+
+# Works the same for TD3 and DQN
+td3 = TD3(env_id="Pendulum-v1", n_envs=4)
+dqn = DQN(env_id="CartPole-v1", n_envs=8)
+```
+
+### Custom: Inject Your Own Collector
+
+```python
+import rlox
+from rlox.algorithms.sac import SAC
+from rlox.off_policy_collector import OffPolicyCollector
+from rlox.exploration import GaussianNoise
+
+# Create a shared buffer
+buf = rlox.ReplayBuffer(1_000_000, obs_dim=3, act_dim=1)
+
+# Create collector with custom exploration
+collector = OffPolicyCollector(
+    env_id="Pendulum-v1",
+    n_envs=4,
+    buffer=buf,
+    exploration=GaussianNoise(sigma=0.1, clip=0.3),
+)
+
+# Inject into algorithm — buffer must be shared
+sac = SAC(env_id="Pendulum-v1", buffer=buf, collector=collector)
+sac.train(total_timesteps=50_000)
+```
+
+### Build Your Own Collector
+
+Any class satisfying `CollectorProtocol` can be used:
+
+```python
+from rlox.off_policy_collector import CollectorProtocol
+import numpy as np
+
+class MyCollector:
+    """Custom collector — e.g., for sim-to-real or domain randomization."""
+
+    @property
+    def n_envs(self) -> int:
+        return 1
+
+    def reset(self) -> np.ndarray:
+        # Return initial observations (n_envs, obs_dim)
+        ...
+
+    def collect_step(self, get_action, step, total_steps):
+        # Step envs, store transitions, return (next_obs, rewards, mean_ep_reward)
+        ...
+
+# Protocol check
+assert isinstance(MyCollector(), CollectorProtocol)
+
+# Use with any off-policy algorithm
+sac = SAC(env_id="Pendulum-v1", collector=MyCollector())
+```
+
+```mermaid
+graph LR
+    subgraph Collection
+        C[OffPolicyCollector] --> V[GymVecEnv]
+        C --> E[Exploration Strategy]
+        C --> B[ReplayBuffer]
+    end
+    subgraph Learning
+        A[SAC / TD3 / DQN] --> U[_update]
+        U --> B
+    end
+    A -->|n_envs > 1| C
+    A -->|n_envs = 1| S[Single Env Loop]
+```
+
+## Example 4: Custom Exploration Strategies
 
 ```python
 from rlox.exploration import OUNoise, GaussianNoise, EpsilonGreedy
@@ -181,7 +273,7 @@ noise = GaussianNoise(sigma=0.1, clip=0.3)
 noise = EpsilonGreedy(n_actions=4, eps_start=1.0, eps_end=0.01, decay_fraction=0.2)
 ```
 
-## Example 3: Builder Pattern
+## Example 5: Builder Pattern
 
 ```python
 from rlox.builders import SACBuilder, PPOBuilder, DQNBuilder
@@ -224,7 +316,7 @@ dqn = (DQNBuilder()
     .build())
 ```
 
-## Example 4: Composable Losses
+## Example 6: Composable Losses
 
 ```python
 import torch
@@ -273,7 +365,7 @@ combined = CompositeLoss([
 loss, metrics = combined.compute(obs=obs_batch, actions=action_batch)
 ```
 
-## Example 5: Custom Training Loop with rlox Components
+## Example 7: Custom Training Loop with rlox Components
 
 ```python
 import rlox

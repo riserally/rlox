@@ -237,6 +237,91 @@ metrics = dqn.train(total_timesteps=50_000)
 
 Off-policy algorithms use `rlox.ReplayBuffer` (or `PrioritizedReplayBuffer`) for storage, with Gymnasium for environment stepping.
 
+### Multi-Environment Collection
+
+All off-policy algorithms support parallel data collection via `OffPolicyCollector`. Use `n_envs` for automatic setup, or inject a custom collector:
+
+```python
+# Automatic: pass n_envs to any off-policy algorithm
+sac = SAC(env_id="Pendulum-v1", n_envs=4, learning_starts=5000)
+sac.train(total_timesteps=100_000)  # 4x collection throughput
+
+td3 = TD3(env_id="Pendulum-v1", n_envs=4, learning_starts=5000)
+dqn = DQN(env_id="CartPole-v1", n_envs=8, learning_starts=1000)
+```
+
+```python
+# Manual: create and inject your own collector
+from rlox.off_policy_collector import OffPolicyCollector
+from rlox.exploration import GaussianNoise
+
+buf = rlox.ReplayBuffer(1_000_000, obs_dim=3, act_dim=1)
+collector = OffPolicyCollector(
+    env_id="Pendulum-v1",
+    n_envs=4,
+    buffer=buf,
+    exploration=GaussianNoise(sigma=0.1),
+)
+sac = SAC(env_id="Pendulum-v1", buffer=buf, collector=collector)
+sac.train(total_timesteps=100_000)
+```
+
+The collector uses `GymVecEnv` internally and batch-inserts transitions via `push_batch` for efficiency. When `n_envs=1` (default), algorithms use the original single-env loop with zero overhead.
+
+### Offline RL (TD3+BC, IQL, CQL, BC)
+
+Train from static datasets without environment interaction. All offline algorithms
+use `OfflineDatasetBuffer` (Rust-accelerated) and extend `OfflineAlgorithm` base class.
+
+```python
+import rlox
+from rlox.algorithms.td3_bc import TD3BC
+
+# Load dataset (D4RL, Minari, or custom numpy arrays)
+buf = rlox.OfflineDatasetBuffer(
+    obs.ravel(), next_obs.ravel(), actions.ravel(),
+    rewards, terminated, truncated, normalize=True,
+)
+print(buf.stats())  # {'n_transitions': ..., 'n_episodes': ..., 'mean_return': ...}
+
+# TD3+BC: TD3 with behavioral cloning regularization
+algo = TD3BC(dataset=buf, obs_dim=17, act_dim=6, alpha=2.5)
+algo.train(n_gradient_steps=100_000)
+```
+
+```python
+# IQL: Implicit Q-Learning (avoids OOD action queries)
+from rlox.algorithms.iql import IQL
+algo = IQL(dataset=buf, obs_dim=17, act_dim=6, expectile=0.7)
+```
+
+```python
+# CQL: Conservative Q-Learning (penalizes OOD Q-values)
+from rlox.algorithms.cql import CQL
+algo = CQL(dataset=buf, obs_dim=17, act_dim=6, cql_alpha=5.0)
+```
+
+```python
+# BC: Behavioral Cloning (supervised learning on demonstrations)
+from rlox.algorithms.bc import BC
+algo = BC(dataset=buf, obs_dim=17, act_dim=6)
+```
+
+### Candle Hybrid Collection
+
+`HybridPPO` runs policy inference entirely in Rust using Candle — zero Python
+dispatch overhead during data collection. Collection takes only ~27% of wall
+time vs ~50-60% with standard PyTorch inference.
+
+```python
+from rlox.algorithms.hybrid_ppo import HybridPPO
+
+ppo = HybridPPO(env_id="CartPole-v1", n_envs=16, hidden=64)
+metrics = ppo.train(total_timesteps=100_000)
+print(ppo.timing_summary())
+# {'collection_pct': 27.0, 'training_pct': 73.0}
+```
+
 ### Inference with `predict()`
 
 All algorithms provide a `predict()` method for evaluation:

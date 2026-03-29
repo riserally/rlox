@@ -6,6 +6,7 @@ use pyo3::types::PyDict;
 use rlox_core::buffer::columnar::ExperienceTable;
 use rlox_core::buffer::extra_columns::ColumnHandle;
 use rlox_core::buffer::mmap::MmapReplayBuffer;
+use rlox_core::buffer::offline::OfflineDatasetBuffer;
 use rlox_core::buffer::priority::PrioritizedReplayBuffer;
 use rlox_core::buffer::ringbuf::ReplayBuffer;
 use rlox_core::buffer::varlen::VarLenStore;
@@ -543,5 +544,184 @@ impl PyVarLenStore {
             return Err(PyRuntimeError::new_err("index out of range"));
         }
         Ok(PyArray1::from_slice(py, self.inner.get(index)))
+    }
+}
+
+// ---------- OfflineDatasetBuffer ----------
+
+/// Read-only offline dataset buffer for offline RL.
+///
+/// Loaded once from numpy arrays or D4RL datasets. Supports uniform
+/// transition sampling and trajectory subsequence sampling.
+///
+/// Args:
+///     obs: (N, obs_dim) float32
+///     next_obs: (N, obs_dim) float32
+///     actions: (N, act_dim) float32
+///     rewards: (N,) float32
+///     terminated: (N,) bool/uint8
+///     truncated: (N,) bool/uint8
+///     normalize: whether to compute normalization stats (default False)
+#[pyclass(name = "OfflineDatasetBuffer")]
+pub struct PyOfflineDatasetBuffer {
+    inner: OfflineDatasetBuffer,
+}
+
+#[pymethods]
+impl PyOfflineDatasetBuffer {
+    #[new]
+    #[pyo3(signature = (obs, next_obs, actions, rewards, terminated, truncated, normalize=false))]
+    fn new(
+        obs: PyReadonlyArray1<'_, f32>,
+        next_obs: PyReadonlyArray1<'_, f32>,
+        actions: PyReadonlyArray1<'_, f32>,
+        rewards: PyReadonlyArray1<'_, f32>,
+        terminated: PyReadonlyArray1<'_, u8>,
+        truncated: PyReadonlyArray1<'_, u8>,
+        normalize: bool,
+    ) -> PyResult<Self> {
+        let rew_slice = rewards.as_slice()?;
+        let obs_slice = obs.as_slice()?;
+        let act_slice = actions.as_slice()?;
+        let n = rew_slice.len();
+        let obs_len = obs_slice.len();
+        let act_len = act_slice.len();
+
+        if n == 0 {
+            return Err(PyRuntimeError::new_err("Dataset must have at least 1 transition"));
+        }
+        if obs_len % n != 0 {
+            return Err(PyRuntimeError::new_err(format!(
+                "obs length {} not divisible by n_transitions {}", obs_len, n
+            )));
+        }
+
+        let obs_dim = obs_len / n;
+        let act_dim = act_len / n;
+
+        let mut buf = OfflineDatasetBuffer::from_arrays(
+            obs.as_slice()?.to_vec(),
+            next_obs.as_slice()?.to_vec(),
+            actions.as_slice()?.to_vec(),
+            rewards.as_slice()?.to_vec(),
+            terminated.as_slice()?.to_vec(),
+            truncated.as_slice()?.to_vec(),
+            obs_dim,
+            act_dim,
+        ).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        if normalize {
+            buf.compute_normalization();
+        }
+
+        Ok(Self { inner: buf })
+    }
+
+    /// Sample i.i.d. transitions.
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py.allow_threads(|| self.inner.sample(batch_size, seed));
+
+        let dict = PyDict::new(py);
+        let obs_dim = batch.obs_dim;
+        let act_dim = batch.act_dim;
+
+        // Return 2D arrays for obs/next_obs/actions
+        let obs_arr = PyArray1::from_vec(py, batch.obs);
+        let obs_2d = obs_arr.reshape([batch_size, obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("obs", obs_2d)?;
+
+        let next_obs_arr = PyArray1::from_vec(py, batch.next_obs);
+        let next_obs_2d = next_obs_arr.reshape([batch_size, obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("next_obs", next_obs_2d)?;
+
+        if act_dim > 1 {
+            let act_arr = PyArray1::from_vec(py, batch.actions);
+            let act_2d = act_arr.reshape([batch_size, act_dim])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            dict.set_item("actions", act_2d)?;
+        } else {
+            dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
+        }
+
+        dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
+        dict.set_item("terminated", PyArray1::from_vec(py, batch.terminated.iter().map(|&x| x as f32).collect::<Vec<_>>()))?;
+
+        Ok(dict)
+    }
+
+    /// Sample contiguous trajectory subsequences (for Decision Transformer).
+    #[pyo3(signature = (batch_size, seq_len, seed))]
+    fn sample_trajectories<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seq_len: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py.allow_threads(|| self.inner.sample_trajectories(batch_size, seq_len, seed));
+
+        let dict = PyDict::new(py);
+        let obs_dim = batch.obs_dim;
+        let act_dim = batch.act_dim;
+
+        let obs_arr = PyArray1::from_vec(py, batch.obs);
+        let obs_3d = obs_arr.reshape([batch_size, seq_len, obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("obs", obs_3d)?;
+
+        let act_arr = PyArray1::from_vec(py, batch.actions);
+        let act_3d = act_arr.reshape([batch_size, seq_len, act_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("actions", act_3d)?;
+
+        let rew_arr = PyArray1::from_vec(py, batch.rewards);
+        dict.set_item("rewards", rew_arr.reshape([batch_size, seq_len])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+
+        let rtg_arr = PyArray1::from_vec(py, batch.returns_to_go);
+        dict.set_item("returns_to_go", rtg_arr.reshape([batch_size, seq_len])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+
+        let ts_arr = PyArray1::from_vec(py, batch.timesteps);
+        dict.set_item("timesteps", ts_arr.reshape([batch_size, seq_len])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+
+        let mask_arr = PyArray1::from_vec(py, batch.mask);
+        dict.set_item("mask", mask_arr.reshape([batch_size, seq_len])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+
+        Ok(dict)
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Number of episodes in the dataset.
+    fn n_episodes(&self) -> usize {
+        self.inner.n_episodes()
+    }
+
+    /// Dataset statistics as a dict.
+    fn stats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let s = self.inner.stats();
+        let dict = PyDict::new(py);
+        dict.set_item("n_transitions", s.n_transitions)?;
+        dict.set_item("n_episodes", s.n_episodes)?;
+        dict.set_item("obs_dim", s.obs_dim)?;
+        dict.set_item("act_dim", s.act_dim)?;
+        dict.set_item("mean_return", s.mean_return)?;
+        dict.set_item("std_return", s.std_return)?;
+        dict.set_item("min_return", s.min_return)?;
+        dict.set_item("max_return", s.max_return)?;
+        dict.set_item("mean_episode_length", s.mean_episode_length)?;
+        Ok(dict)
     }
 }

@@ -6,9 +6,9 @@ After completing 14 Rust latency optimizations, 5 Python quick wins, algorithm b
 
 ---
 
-## P0 — Production-Blocking (Fix Before Release)
+## P0 — Production-Blocking (Fix Before Release) — ALL DONE
 
-### P0.1: IMPALA V-trace ignores episode boundaries
+### P0.1: IMPALA V-trace ignores episode boundaries — DONE
 
 **File:** `python/rlox/algorithms/impala.py` lines 230-248
 
@@ -140,50 +140,29 @@ if self.max_grad_norm > 0:
 
 ## P1 — High Impact (Fix for Research Paper)
 
-### P1.1: Add tests for 6 untested algorithms
+### P1.1: Add tests for 6 untested algorithms — DONE
 
-**Files:** New test files in `tests/python/`
+**Test files added:**
+- `tests/python/test_algorithm_bug_fixes.py` — 13 tests for IMPALA, DreamerV3, MAPPO
+- `tests/python/test_llm_algorithms.py` — 34 tests for DPO, OnlineDPO, BestOfN, GRPO, MmapReplayBuffer
 
-| Algorithm | Test File | Key Tests |
-|-----------|----------|-----------|
-| IMPALA | `test_impala.py` | CartPole convergence, done boundary handling |
-| MAPPO | `test_mappo.py` | Single-agent convergence, multi-agent critic shape |
-| DreamerV3 | `test_dreamer.py` | Actor loss decreases, gradient flow through WM |
-| DPO | `test_dpo_training.py` | Loss decreases on preference pair |
-| OnlineDPO | `test_online_dpo.py` | Loss on correct device, basic training step |
-| BestOfN | `test_best_of_n.py` | Selection correctness |
-
-**Effort:** Medium (1-2 days)
+| Algorithm | Tests | Coverage |
+|-----------|-------|----------|
+| IMPALA | Bootstrap value, continuous env, training | V-trace episode boundaries, GymVecEnv fallback |
+| MAPPO | Single-agent training, multi-agent guard, critic dim | NotImplementedError for n_agents>1 |
+| DreamerV3 | WM frozen during AC, unfrozen after, full training | Gradient isolation verified |
+| DPO | 8 tests: gradients, ref unchanged, loss math, callbacks, checkpoint, clipping | Beta values, step counting |
+| OnlineDPO | 5 tests: loss, gradients, preference fn, swap, clipping | Stochastic generation |
+| BestOfN | 5 tests: shape, selection, n=1, no grad, various n | Reward-based selection |
+| GRPO | 9 tests: metrics, gradients, group_size=1, eval, multi-epoch, callbacks, early stop, checkpoint, KL=0 | Full lifecycle |
+| MmapReplayBuffer | 7 tests: push, sample hot, spill to cold, deterministic, hot+cold, close, DQN integration | Hot/cold tiering |
 
 ---
 
-### P1.2: Expose MmapReplayBuffer to Python
+### P1.2: Expose MmapReplayBuffer to Python — DONE
 
-**File:** `crates/rlox-python/src/buffer.rs` (add new struct)
-
-**Current state:** `MmapReplayBuffer` in `crates/rlox-core/src/buffer/mmap.rs` is fully implemented and tested (hot/cold tiering, spill-to-disk, cross-tier sampling). NOT exposed to Python.
-
-**Fix:** Add `PyMmapReplayBuffer` with same API as `PyReplayBuffer`:
-```rust
-#[pyclass(name = "MmapReplayBuffer")]
-pub struct PyMmapReplayBuffer {
-    inner: MmapReplayBuffer,
-}
-
-#[pymethods]
-impl PyMmapReplayBuffer {
-    #[new]
-    fn new(hot_capacity: usize, cold_capacity: usize, obs_dim: usize, act_dim: usize, path: &str) -> Self { ... }
-    fn push(...) -> PyResult<()> { ... }
-    fn sample(...) -> PyResult<Bound<'py, PyDict>> { ... }
-}
-```
-
-Register in `lib.rs`, add type stubs, add to `__init__.py`.
-
-**Testing:** Python test with Atari-scale obs_dim (84*84*4).
-
-**Effort:** Medium
+Already exposed via PyO3 in `crates/rlox-python/src/buffer.rs` (lines 421-510).
+Available as `rlox.MmapReplayBuffer` in `__init__.py`. Python integration tests added.
 
 ---
 

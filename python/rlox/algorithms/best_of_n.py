@@ -1,4 +1,20 @@
-"""Best-of-N sampling: generate N candidates, score, return best."""
+"""Best-of-N sampling: generate N candidates, score, return best.
+
+A simple but effective inference-time alignment strategy. For each prompt,
+generate N completions, score them with a reward model, and return the
+highest-scoring completion. No training required.
+
+Reference:
+    Y. Nakano, J. Hilton, S. Balaji, J. Wu, et al.,
+    "WebGPT: Browser-assisted question-answering with human feedback,"
+    arXiv:2112.09332, 2021.
+    https://arxiv.org/abs/2112.09332
+
+See also:
+    A. Gao, J. Schulman, J. Hilton,
+    "Scaling Laws for Reward Model Overoptimization,"
+    ICML, 2023. https://arxiv.org/abs/2210.10760
+"""
 
 from __future__ import annotations
 

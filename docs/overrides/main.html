@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block announce %}
+<style>
+  .rlox-nav { background: #0f0f23; padding: 6px 16px; font-size: 0.85rem; text-align: center; border-bottom: 1px solid #2a2a4a; }
+  .rlox-nav a { color: #90a4ae; text-decoration: none; margin: 0 12px; }
+  .rlox-nav a:hover { color: #7c4dff; }
+  .rlox-nav .brand { color: #fff; font-weight: 700; }
+</style>
+<div class="rlox-nav">
+  <a href="/rlox/" class="brand">rlox</a>
+  <a href="/rlox/python/">Python Docs</a>
+  <a href="/rlox/rust/rlox_core/">Rust API</a>
+  <a href="/rlox/python/examples/">Examples</a>
+  <a href="/rlox/blog/">Blog</a>
+  <a href="https://github.com/riserally/rlox">GitHub</a>
+</div>
+{% endblock %}

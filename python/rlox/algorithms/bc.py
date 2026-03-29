@@ -69,14 +69,19 @@ class BC(OfflineAlgorithm):
 
         if continuous:
             self.policy = nn.Sequential(
-                nn.Linear(obs_dim, hidden), nn.ReLU(),
-                nn.Linear(hidden, hidden), nn.ReLU(),
-                nn.Linear(hidden, act_dim), nn.Tanh(),
+                nn.Linear(obs_dim, hidden),
+                nn.ReLU(),
+                nn.Linear(hidden, hidden),
+                nn.ReLU(),
+                nn.Linear(hidden, act_dim),
+                nn.Tanh(),
             )
         else:
             self.policy = nn.Sequential(
-                nn.Linear(obs_dim, hidden), nn.ReLU(),
-                nn.Linear(hidden, hidden), nn.ReLU(),
+                nn.Linear(obs_dim, hidden),
+                nn.ReLU(),
+                nn.Linear(hidden, hidden),
+                nn.ReLU(),
                 nn.Linear(hidden, act_dim),
             )
 

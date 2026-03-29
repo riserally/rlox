@@ -79,6 +79,7 @@ class HybridPPO:
 
         # Detect env spaces
         import gymnasium as gym
+
         tmp = gym.make(env_id)
         obs_dim = int(np.prod(tmp.observation_space.shape))
         n_actions = int(tmp.action_space.n)
@@ -89,7 +90,9 @@ class HybridPPO:
         self._hidden = hidden
 
         # PyTorch policy (for training backward pass)
-        self.policy = DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions, hidden=hidden)
+        self.policy = DiscretePolicy(
+            obs_dim=obs_dim, n_actions=n_actions, hidden=hidden
+        )
         self.optimizer = torch.optim.Adam(
             self.policy.parameters(), lr=self.config.learning_rate, eps=1e-5
         )
@@ -132,8 +135,9 @@ class HybridPPO:
         for p in self.policy.parameters():
             numel = p.numel()
             p.data.copy_(
-                torch.from_numpy(candle_weights[offset:offset + numel].copy())
-                .reshape(p.shape)
+                torch.from_numpy(
+                    candle_weights[offset : offset + numel].copy()
+                ).reshape(p.shape)
             )
             offset += numel
 
@@ -206,9 +210,7 @@ class HybridPPO:
             mean_ep_reward = float(batch_dict["rewards"].sum()) / cfg.n_envs
             all_rewards.append(mean_ep_reward)
 
-            self.callbacks.on_rollout_end(
-                mean_reward=mean_ep_reward, update=update
-            )
+            self.callbacks.on_rollout_end(mean_reward=mean_ep_reward, update=update)
 
             # === TRAINING: PyTorch backward pass ===
             t2 = time.perf_counter()
@@ -231,8 +233,13 @@ class HybridPPO:
                         mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
                     loss, metrics = self.loss_fn(
-                        self.policy, mb_obs, mb_actions, mb_log_probs,
-                        mb_adv, mb_returns, mb_values,
+                        self.policy,
+                        mb_obs,
+                        mb_actions,
+                        mb_log_probs,
+                        mb_adv,
+                        mb_returns,
+                        mb_values,
                     )
 
                     self.optimizer.zero_grad(set_to_none=True)
@@ -270,10 +277,14 @@ class HybridPPO:
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         )
         last_metrics["collection_time_pct"] = (
-            self._collection_time / (self._collection_time + self._training_time + 1e-9) * 100
+            self._collection_time
+            / (self._collection_time + self._training_time + 1e-9)
+            * 100
         )
         last_metrics["training_time_pct"] = (
-            self._training_time / (self._collection_time + self._training_time + 1e-9) * 100
+            self._training_time
+            / (self._collection_time + self._training_time + 1e-9)
+            * 100
         )
         return last_metrics
 

@@ -19,7 +19,6 @@ import copy
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from rlox.callbacks import Callback
@@ -110,7 +109,9 @@ class CQL(OfflineAlgorithm):
 
         # SAC entropy tuning
         self.auto_entropy = auto_entropy
-        self.target_entropy = target_entropy if target_entropy is not None else -float(act_dim)
+        self.target_entropy = (
+            target_entropy if target_entropy is not None else -float(act_dim)
+        )
         if auto_entropy:
             self.log_alpha = torch.zeros(1, requires_grad=True)
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=learning_rate)
@@ -155,18 +156,28 @@ class CQL(OfflineAlgorithm):
         random_actions = torch.FloatTensor(
             batch_size * self.n_random_actions, self.act_dim
         ).uniform_(-1, 1)
-        obs_rep = obs.unsqueeze(1).expand(-1, self.n_random_actions, -1).reshape(
-            -1, obs.shape[-1]
+        obs_rep = (
+            obs.unsqueeze(1)
+            .expand(-1, self.n_random_actions, -1)
+            .reshape(-1, obs.shape[-1])
         )
 
-        q1_rand = self.critic1(obs_rep, random_actions).reshape(batch_size, self.n_random_actions)
-        q2_rand = self.critic2(obs_rep, random_actions).reshape(batch_size, self.n_random_actions)
+        q1_rand = self.critic1(obs_rep, random_actions).reshape(
+            batch_size, self.n_random_actions
+        )
+        q2_rand = self.critic2(obs_rep, random_actions).reshape(
+            batch_size, self.n_random_actions
+        )
 
         # Sample policy actions
         with torch.no_grad():
             policy_actions, policy_log_probs = self.actor.sample(obs_rep)
-        q1_policy = self.critic1(obs_rep, policy_actions).reshape(batch_size, self.n_random_actions)
-        q2_policy = self.critic2(obs_rep, policy_actions).reshape(batch_size, self.n_random_actions)
+        q1_policy = self.critic1(obs_rep, policy_actions).reshape(
+            batch_size, self.n_random_actions
+        )
+        q2_policy = self.critic2(obs_rep, policy_actions).reshape(
+            batch_size, self.n_random_actions
+        )
 
         # CQL loss: logsumexp(Q) - E_D[Q]
         cat_q1 = torch.cat([q1_rand, q1_policy], dim=1)
@@ -207,7 +218,9 @@ class CQL(OfflineAlgorithm):
         # Entropy alpha update
         alpha_loss_val = 0.0
         if self.auto_entropy:
-            alpha_loss = -(self.log_alpha * (log_prob.detach() + self.target_entropy)).mean()
+            alpha_loss = -(
+                self.log_alpha * (log_prob.detach() + self.target_entropy)
+            ).mean()
             self.alpha_optimizer.zero_grad(set_to_none=True)
             alpha_loss.backward()
             self.alpha_optimizer.step()

@@ -34,8 +34,10 @@ class _ValueNetwork(nn.Module):
     def __init__(self, obs_dim: int, hidden: int = 256):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(obs_dim, hidden), nn.ReLU(),
-            nn.Linear(hidden, hidden), nn.ReLU(),
+            nn.Linear(obs_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
             nn.Linear(hidden, 1),
         )
 
@@ -49,8 +51,10 @@ class _GaussianPolicy(nn.Module):
     def __init__(self, obs_dim: int, act_dim: int, hidden: int = 256):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(obs_dim, hidden), nn.ReLU(),
-            nn.Linear(hidden, hidden), nn.ReLU(),
+            nn.Linear(obs_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
             nn.Linear(hidden, act_dim),
         )
 
@@ -58,7 +62,9 @@ class _GaussianPolicy(nn.Module):
         return torch.tanh(self.net(obs))
 
 
-def _expectile_loss(pred: torch.Tensor, target: torch.Tensor, tau: float) -> torch.Tensor:
+def _expectile_loss(
+    pred: torch.Tensor, target: torch.Tensor, tau: float
+) -> torch.Tensor:
     """Asymmetric L2 loss: L_τ(u) = |τ - 1(u < 0)| * u²."""
     diff = pred - target
     weight = torch.where(diff < 0, tau, 1.0 - tau)
@@ -126,8 +132,12 @@ class IQL(OfflineAlgorithm):
         self.q_optimizer = torch.optim.Adam(
             list(self.q1.parameters()) + list(self.q2.parameters()), lr=learning_rate
         )
-        self.v_optimizer = torch.optim.Adam(self.value_fn.parameters(), lr=learning_rate)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=learning_rate)
+        self.v_optimizer = torch.optim.Adam(
+            self.value_fn.parameters(), lr=learning_rate
+        )
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(), lr=learning_rate
+        )
 
     def _update(self, batch: dict[str, np.ndarray]) -> dict[str, float]:
         obs = torch.as_tensor(batch["obs"], dtype=torch.float32)
@@ -183,7 +193,11 @@ class IQL(OfflineAlgorithm):
             weights = weights.clamp(max=100.0)  # Prevent overflow
 
         pi = self.actor(obs)
-        target_actions = actions.squeeze(-1) if actions.dim() > 1 and actions.shape[-1] == 1 else actions
+        target_actions = (
+            actions.squeeze(-1)
+            if actions.dim() > 1 and actions.shape[-1] == 1
+            else actions
+        )
         if pi.shape != target_actions.shape:
             target_actions = target_actions.reshape(pi.shape)
         actor_loss = (weights * (pi - target_actions).pow(2).mean(dim=-1)).mean()

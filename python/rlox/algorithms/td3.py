@@ -52,7 +52,11 @@ class TD3:
             self.env_id = env_id
         else:
             self.env = env_id
-            self.env_id = getattr(env_id.spec, "id", "custom") if hasattr(env_id, "spec") and env_id.spec else "custom"
+            self.env_id = (
+                getattr(env_id.spec, "id", "custom")
+                if hasattr(env_id, "spec") and env_id.spec
+                else "custom"
+            )
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
@@ -74,7 +78,11 @@ class TD3:
         self.act_high = act_high
 
         # Networks — use custom if provided, otherwise default MLP
-        self.actor = actor if actor is not None else DeterministicPolicy(obs_dim, act_dim, hidden, act_high)
+        self.actor = (
+            actor
+            if actor is not None
+            else DeterministicPolicy(obs_dim, act_dim, hidden, act_high)
+        )
         self.actor_target = copy.deepcopy(self.actor)
         if critic is not None:
             self.critic1 = critic
@@ -85,12 +93,22 @@ class TD3:
         self.critic1_target = copy.deepcopy(self.critic1)
         self.critic2_target = copy.deepcopy(self.critic2)
 
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=learning_rate)
-        self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(), lr=learning_rate)
-        self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(), lr=learning_rate)
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(), lr=learning_rate
+        )
+        self.critic1_optimizer = torch.optim.Adam(
+            self.critic1.parameters(), lr=learning_rate
+        )
+        self.critic2_optimizer = torch.optim.Adam(
+            self.critic2.parameters(), lr=learning_rate
+        )
 
         # Replay buffer — use custom if provided
-        self.buffer = buffer if buffer is not None else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
+        self.buffer = (
+            buffer
+            if buffer is not None
+            else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
+        )
 
         # Off-policy collector — enables multi-env collection
         self.collector = collector
@@ -119,18 +137,20 @@ class TD3:
 
         if compile:
             from rlox.compile import compile_policy
+
             compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         # Use OffPolicyCollector for multi-env, or default single-env loop
         if self.n_envs > 1 and self.collector is None:
             from rlox.off_policy_collector import OffPolicyCollector
+
             self.collector = OffPolicyCollector(
                 env_id=self.env_id,
                 n_envs=self.n_envs,
                 buffer=self.buffer,
                 act_high=self.act_high,
-                seed=getattr(self, 'seed', 42),
+                seed=getattr(self, "seed", 42),
             )
 
         if self.collector is not None:
@@ -192,7 +212,9 @@ class TD3:
 
         self.callbacks.on_training_end()
 
-        metrics["mean_reward"] = float(np.mean(episode_rewards)) if episode_rewards else 0.0
+        metrics["mean_reward"] = (
+            float(np.mean(episode_rewards)) if episode_rewards else 0.0
+        )
         return metrics
 
     def _update(self, step: int, update_count: int) -> dict[str, float]:
@@ -210,11 +232,15 @@ class TD3:
             # Target policy smoothing
             noise = torch.randn_like(actions) * self.target_noise
             noise = noise.clamp(-self.noise_clip, self.noise_clip)
-            next_actions = (self.actor_target(next_obs) + noise).clamp(-self.act_high, self.act_high)
+            next_actions = (self.actor_target(next_obs) + noise).clamp(
+                -self.act_high, self.act_high
+            )
 
             q1_next = self.critic1_target(next_obs, next_actions).squeeze(-1)
             q2_next = self.critic2_target(next_obs, next_actions).squeeze(-1)
-            target_q = rewards + self.gamma * (1.0 - terminated) * torch.min(q1_next, q2_next)
+            target_q = rewards + self.gamma * (1.0 - terminated) * torch.min(
+                q1_next, q2_next
+            )
 
         # Critic updates
         q1 = self.critic1(obs, actions).squeeze(-1)
@@ -262,15 +288,21 @@ class TD3:
 
         def get_action(obs_batch: np.ndarray) -> np.ndarray:
             if self._global_step < self.learning_starts:
-                return (np.random.randn(obs_batch.shape[0], self.act_dim) * self.act_high).astype(np.float32)
+                return (
+                    np.random.randn(obs_batch.shape[0], self.act_dim) * self.act_high
+                ).astype(np.float32)
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs_batch, dtype=torch.float32)
                 actions = self.actor(obs_t).numpy()
                 noise = np.random.randn(*actions.shape) * self.exploration_noise
-                return np.clip(actions + noise, -self.act_high, self.act_high).astype(np.float32)
+                return np.clip(actions + noise, -self.act_high, self.act_high).astype(
+                    np.float32
+                )
 
         for step in range(total_timesteps):
-            _, _, mean_ep_reward = collector.collect_step(get_action, step, total_timesteps)
+            _, _, mean_ep_reward = collector.collect_step(
+                get_action, step, total_timesteps
+            )
 
             self._global_step += 1
             should_continue = self.callbacks.on_step(

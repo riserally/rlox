@@ -289,7 +289,12 @@ impl PyCandleCollector {
 
         // Create Candle policy
         let ac = rlox_candle::actor_critic::CandleActorCritic::new(
-            obs_dim, n_actions, hidden, lr, candle_core::Device::Cpu, seed,
+            obs_dim,
+            n_actions,
+            hidden,
+            lr,
+            candle_core::Device::Cpu,
+            seed,
         )
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         let shared = SharedPolicy::new(ac);
@@ -309,7 +314,13 @@ impl PyCandleCollector {
 
         // Start collector
         let collector = AsyncCollector::start(
-            vec_env, n_steps, gamma, gae_lambda, pipeline.sender(), value_fn, action_fn,
+            vec_env,
+            n_steps,
+            gamma,
+            gae_lambda,
+            pipeline.sender(),
+            value_fn,
+            action_fn,
         );
 
         Ok(Self {
@@ -325,9 +336,9 @@ impl PyCandleCollector {
     /// Returns a dict with numpy arrays: observations, actions, rewards,
     /// dones, log_probs, values, advantages, returns, plus shape metadata.
     fn recv<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let batch = py.allow_threads(|| {
-            self.pipeline.recv()
-        }).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let batch = py
+            .allow_threads(|| self.pipeline.recv())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let dict = PyDict::new(py);
         dict.set_item("observations", PyArray1::from_vec(py, batch.observations))?;
@@ -383,7 +394,8 @@ impl PyCandleCollector {
     ///
     /// Use this to initialize PyTorch parameters from Candle's random init.
     fn get_weights<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
-        let w = self.shared
+        let w = self
+            .shared
             .get_weights()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(PyArray1::from_vec(py, w))

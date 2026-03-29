@@ -56,7 +56,11 @@ class DQN:
             self.env_id = env_id
         else:
             self.env = env_id
-            self.env_id = getattr(env_id.spec, "id", "custom") if hasattr(env_id, "spec") and env_id.spec else "custom"
+            self.env_id = (
+                getattr(env_id.spec, "id", "custom")
+                if hasattr(env_id, "spec") and env_id.spec
+                else "custom"
+            )
         self.gamma = gamma
         self.batch_size = batch_size
         self.learning_starts = learning_starts
@@ -128,16 +132,21 @@ class DQN:
 
         if compile:
             from rlox.compile import compile_policy
+
             compile_policy(self)
 
     def _get_epsilon(self, step: int, total_timesteps: int) -> float:
-        fraction = min(1.0, step / max(1, int(total_timesteps * self.exploration_fraction)))
+        fraction = min(
+            1.0, step / max(1, int(total_timesteps * self.exploration_fraction))
+        )
         return self.exploration_initial_eps + fraction * (
             self.exploration_final_eps - self.exploration_initial_eps
         )
 
     def _store_transition(self, obs, action, reward, next_obs, terminated, truncated):
-        self._n_step_buffer.append((obs, action, reward, next_obs, terminated, truncated))
+        self._n_step_buffer.append(
+            (obs, action, reward, next_obs, terminated, truncated)
+        )
         if len(self._n_step_buffer) < self.n_step:
             return
 
@@ -175,11 +184,12 @@ class DQN:
         # Use OffPolicyCollector for multi-env, or default single-env loop
         if self.n_envs > 1 and self.collector is None:
             from rlox.off_policy_collector import OffPolicyCollector
+
             self.collector = OffPolicyCollector(
                 env_id=self.env_id,
                 n_envs=self.n_envs,
                 buffer=self.buffer,
-                seed=getattr(self, 'seed', 42),
+                seed=getattr(self, "seed", 42),
             )
 
         if self.collector is not None:
@@ -217,7 +227,9 @@ class DQN:
                         _, _, r, _, done, trunc = self._n_step_buffer[i]
                         R = r + self.gamma * R * (1.0 - float(done or trunc))
                     first_obs_b, first_action_b, _, _, _, _ = self._n_step_buffer[0]
-                    _, _, _, last_next_obs_b, last_done_b, last_trunc_b = self._n_step_buffer[-1]
+                    _, _, _, last_next_obs_b, last_done_b, last_trunc_b = (
+                        self._n_step_buffer[-1]
+                    )
                     if self.prioritized:
                         self.buffer.push(
                             np.asarray(first_obs_b, dtype=np.float32),
@@ -266,7 +278,9 @@ class DQN:
 
         self.callbacks.on_training_end()
 
-        metrics["mean_reward"] = float(np.mean(episode_rewards)) if episode_rewards else 0.0
+        metrics["mean_reward"] = (
+            float(np.mean(episode_rewards)) if episode_rewards else 0.0
+        )
         return metrics
 
     def _update(self, step: int, total_timesteps: int) -> dict[str, float]:
@@ -293,11 +307,15 @@ class DQN:
             if self.double_dqn:
                 # Use online network for action selection
                 next_actions = self.q_network(next_obs).argmax(dim=-1)
-                next_q = self.target_network(next_obs).gather(1, next_actions.unsqueeze(1)).squeeze(1)
+                next_q = (
+                    self.target_network(next_obs)
+                    .gather(1, next_actions.unsqueeze(1))
+                    .squeeze(1)
+                )
             else:
                 next_q = self.target_network(next_obs).max(dim=-1).values
 
-            target_q = rewards + self.gamma ** self.n_step * (1.0 - terminated) * next_q
+            target_q = rewards + self.gamma**self.n_step * (1.0 - terminated) * next_q
 
         td_error = q - target_q
         loss = (weights * td_error.pow(2)).mean()
@@ -348,7 +366,9 @@ class DQN:
             return np.where(random_mask, random_actions, greedy)
 
         for step in range(total_timesteps):
-            _, _, mean_ep_reward = collector.collect_step(get_action, step, total_timesteps)
+            _, _, mean_ep_reward = collector.collect_step(
+                get_action, step, total_timesteps
+            )
 
             self._global_step += 1
             should_continue = self.callbacks.on_step(

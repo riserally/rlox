@@ -153,7 +153,9 @@ class GRPO:
         for _epoch in range(n_epochs):
             metrics = self.train_step(prompts)
             should_continue = self.callbacks.on_step(
-                reward=metrics.get("mean_reward", 0.0), step=self._global_step, algo=self
+                reward=metrics.get("mean_reward", 0.0),
+                step=self._global_step,
+                algo=self,
             )
             if not should_continue:
                 break

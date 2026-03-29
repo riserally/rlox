@@ -119,6 +119,7 @@ class IMPALA:
             self.policy = DiscretePolicy(obs_dim=self.obs_dim, n_actions=self.n_actions)
         else:
             from rlox.policies import ContinuousPolicy
+
             self.policy = ContinuousPolicy(obs_dim=self.obs_dim, act_dim=self.n_actions)
         self.optimizer = torch.optim.RMSprop(
             self.policy.parameters(), lr=learning_rate, eps=1e-5
@@ -135,10 +136,7 @@ class IMPALA:
     def _get_policy_snapshot(self) -> dict:
         """Get a copy of the current policy parameters."""
         with self._policy_lock:
-            return {
-                k: v.clone().detach()
-                for k, v in self.policy.state_dict().items()
-            }
+            return {k: v.clone().detach() for k, v in self.policy.state_dict().items()}
 
     def _actor_loop(self, actor_id: int) -> None:
         """Actor thread: collect experience and enqueue."""
@@ -149,6 +147,7 @@ class IMPALA:
             )
         except ValueError:
             from rlox.gym_vec_env import GymVecEnv
+
             env = GymVecEnv(self.env_id, n_envs=self.n_envs)
         obs = env.reset_all()
 
@@ -159,6 +158,7 @@ class IMPALA:
             )
         else:
             from rlox.policies import ContinuousPolicy
+
             local_policy = ContinuousPolicy(
                 obs_dim=self.obs_dim, act_dim=self.n_actions
             )
@@ -185,12 +185,16 @@ class IMPALA:
                         actions = dist.sample()
                         log_probs = dist.log_prob(actions)
                     else:
-                        actions, log_probs = local_policy.get_action_and_logprob(obs_tensor)
+                        actions, log_probs = local_policy.get_action_and_logprob(
+                            obs_tensor
+                        )
 
                     values = local_policy.critic(obs_tensor).squeeze(-1)
 
                     if self._is_discrete:
-                        actions_for_env = actions.cpu().numpy().astype(np.uint32).tolist()
+                        actions_for_env = (
+                            actions.cpu().numpy().astype(np.uint32).tolist()
+                        )
                     else:
                         actions_for_env = actions.cpu().numpy().astype(np.float32)
                     step_result = env.step_all(actions_for_env)
@@ -200,16 +204,12 @@ class IMPALA:
                     all_log_probs.append(log_probs)
                     all_values.append(values)
                     all_rewards.append(
-                        torch.as_tensor(
-                            step_result["rewards"].astype(np.float32)
-                        )
+                        torch.as_tensor(step_result["rewards"].astype(np.float32))
                     )
                     terminated = step_result["terminated"].astype(bool)
                     truncated = step_result["truncated"].astype(bool)
                     dones = terminated | truncated
-                    all_dones.append(
-                        torch.as_tensor(dones.astype(np.float32))
-                    )
+                    all_dones.append(torch.as_tensor(dones.astype(np.float32)))
 
                     obs = step_result["obs"].copy()
 
@@ -218,13 +218,13 @@ class IMPALA:
                 bootstrap_values = local_policy.critic(final_obs_tensor).squeeze(-1)
 
             data = {
-                "obs": torch.stack(all_obs),          # (n_steps, n_envs, obs_dim)
-                "actions": torch.stack(all_actions),    # (n_steps, n_envs)
+                "obs": torch.stack(all_obs),  # (n_steps, n_envs, obs_dim)
+                "actions": torch.stack(all_actions),  # (n_steps, n_envs)
                 "mu_log_probs": torch.stack(all_log_probs),  # behavior log probs
                 "rewards": torch.stack(all_rewards),
                 "dones": torch.stack(all_dones),
                 "values": torch.stack(all_values),
-                "bootstrap_values": bootstrap_values,   # (n_envs,)
+                "bootstrap_values": bootstrap_values,  # (n_envs,)
             }
 
             while not self._stop_event.is_set():
@@ -236,7 +236,7 @@ class IMPALA:
 
     def _learner_step(self, data: dict) -> dict[str, float]:
         """Apply V-trace corrected gradient update."""
-        obs = data["obs"]          # (n_steps, n_envs, obs_dim)
+        obs = data["obs"]  # (n_steps, n_envs, obs_dim)
         actions = data["actions"]  # (n_steps, n_envs)
         mu_log_probs = data["mu_log_probs"]
         rewards = data["rewards"]
@@ -295,9 +295,10 @@ class IMPALA:
             pg_adv_tensor = torch.as_tensor(pg_advantages, dtype=torch.float32)
 
             # Policy gradient loss
-            total_policy_loss = total_policy_loss - (
-                pi_log_probs[:, env_idx] * pg_adv_tensor.detach()
-            ).mean()
+            total_policy_loss = (
+                total_policy_loss
+                - (pi_log_probs[:, env_idx] * pg_adv_tensor.detach()).mean()
+            )
 
             # Value loss
             total_value_loss = total_value_loss + F.mse_loss(
@@ -308,7 +309,11 @@ class IMPALA:
         total_value_loss = total_value_loss / n_envs
         entropy_loss = entropy.mean()
 
-        loss = total_policy_loss + self.vf_coef * total_value_loss - self.ent_coef * entropy_loss
+        loss = (
+            total_policy_loss
+            + self.vf_coef * total_value_loss
+            - self.ent_coef * entropy_loss
+        )
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -353,12 +358,8 @@ class IMPALA:
 
                 self._global_step += 1
 
-                self.callbacks.on_rollout_end(
-                    mean_reward=reward, update=update
-                )
-                self.callbacks.on_train_batch(
-                    loss=sum(metrics.values()), **metrics
-                )
+                self.callbacks.on_rollout_end(mean_reward=reward, update=update)
+                self.callbacks.on_train_batch(loss=sum(metrics.values()), **metrics)
 
                 should_continue = self.callbacks.on_step(
                     reward=reward, step=self._global_step, algo=self

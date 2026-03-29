@@ -588,11 +588,14 @@ impl PyOfflineDatasetBuffer {
         let act_len = act_slice.len();
 
         if n == 0 {
-            return Err(PyRuntimeError::new_err("Dataset must have at least 1 transition"));
+            return Err(PyRuntimeError::new_err(
+                "Dataset must have at least 1 transition",
+            ));
         }
         if obs_len % n != 0 {
             return Err(PyRuntimeError::new_err(format!(
-                "obs length {} not divisible by n_transitions {}", obs_len, n
+                "obs length {} not divisible by n_transitions {}",
+                obs_len, n
             )));
         }
 
@@ -608,7 +611,8 @@ impl PyOfflineDatasetBuffer {
             truncated.as_slice()?.to_vec(),
             obs_dim,
             act_dim,
-        ).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         if normalize {
             buf.compute_normalization();
@@ -632,18 +636,21 @@ impl PyOfflineDatasetBuffer {
 
         // Return 2D arrays for obs/next_obs/actions
         let obs_arr = PyArray1::from_vec(py, batch.obs);
-        let obs_2d = obs_arr.reshape([batch_size, obs_dim])
+        let obs_2d = obs_arr
+            .reshape([batch_size, obs_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("obs", obs_2d)?;
 
         let next_obs_arr = PyArray1::from_vec(py, batch.next_obs);
-        let next_obs_2d = next_obs_arr.reshape([batch_size, obs_dim])
+        let next_obs_2d = next_obs_arr
+            .reshape([batch_size, obs_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("next_obs", next_obs_2d)?;
 
         if act_dim > 1 {
             let act_arr = PyArray1::from_vec(py, batch.actions);
-            let act_2d = act_arr.reshape([batch_size, act_dim])
+            let act_2d = act_arr
+                .reshape([batch_size, act_dim])
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             dict.set_item("actions", act_2d)?;
         } else {
@@ -651,7 +658,17 @@ impl PyOfflineDatasetBuffer {
         }
 
         dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
-        dict.set_item("terminated", PyArray1::from_vec(py, batch.terminated.iter().map(|&x| x as f32).collect::<Vec<_>>()))?;
+        dict.set_item(
+            "terminated",
+            PyArray1::from_vec(
+                py,
+                batch
+                    .terminated
+                    .iter()
+                    .map(|&x| x as f32)
+                    .collect::<Vec<_>>(),
+            ),
+        )?;
 
         Ok(dict)
     }
@@ -672,30 +689,48 @@ impl PyOfflineDatasetBuffer {
         let act_dim = batch.act_dim;
 
         let obs_arr = PyArray1::from_vec(py, batch.obs);
-        let obs_3d = obs_arr.reshape([batch_size, seq_len, obs_dim])
+        let obs_3d = obs_arr
+            .reshape([batch_size, seq_len, obs_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("obs", obs_3d)?;
 
         let act_arr = PyArray1::from_vec(py, batch.actions);
-        let act_3d = act_arr.reshape([batch_size, seq_len, act_dim])
+        let act_3d = act_arr
+            .reshape([batch_size, seq_len, act_dim])
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         dict.set_item("actions", act_3d)?;
 
         let rew_arr = PyArray1::from_vec(py, batch.rewards);
-        dict.set_item("rewards", rew_arr.reshape([batch_size, seq_len])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+        dict.set_item(
+            "rewards",
+            rew_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
 
         let rtg_arr = PyArray1::from_vec(py, batch.returns_to_go);
-        dict.set_item("returns_to_go", rtg_arr.reshape([batch_size, seq_len])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+        dict.set_item(
+            "returns_to_go",
+            rtg_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
 
         let ts_arr = PyArray1::from_vec(py, batch.timesteps);
-        dict.set_item("timesteps", ts_arr.reshape([batch_size, seq_len])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+        dict.set_item(
+            "timesteps",
+            ts_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
 
         let mask_arr = PyArray1::from_vec(py, batch.mask);
-        dict.set_item("mask", mask_arr.reshape([batch_size, seq_len])
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?)?;
+        dict.set_item(
+            "mask",
+            mask_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
 
         Ok(dict)
     }

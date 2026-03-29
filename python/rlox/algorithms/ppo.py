@@ -127,6 +127,7 @@ class PPO:
 
         if compile:
             from rlox.compile import compile_policy
+
             compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
@@ -152,9 +153,7 @@ class PPO:
             mean_ep_reward = batch.rewards.sum().item() / cfg.n_envs
             all_rewards.append(mean_ep_reward)
 
-            self.callbacks.on_rollout_end(
-                mean_reward=mean_ep_reward, update=update
-            )
+            self.callbacks.on_rollout_end(mean_reward=mean_ep_reward, update=update)
 
             for _epoch in range(cfg.n_epochs):
                 for mb in batch.sample_minibatches(cfg.batch_size, shuffle=True):
@@ -181,9 +180,7 @@ class PPO:
                     last_metrics = metrics
 
                     self._global_step += 1
-                    self.callbacks.on_train_batch(
-                        loss=loss.item(), **last_metrics
-                    )
+                    self.callbacks.on_train_batch(loss=loss.item(), **last_metrics)
 
             # Step callback (per rollout, not per env step)
             should_continue = self.callbacks.on_step(

@@ -124,16 +124,20 @@ class MAPPO:
 
         if is_discrete:
             n_actions = int(action_space.n)
-            self.actors = nn.ModuleList([
-                DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions)
-                for _ in range(n_agents)
-            ])
+            self.actors = nn.ModuleList(
+                [
+                    DiscretePolicy(obs_dim=obs_dim, n_actions=n_actions)
+                    for _ in range(n_agents)
+                ]
+            )
         else:
             act_dim = int(np.prod(action_space.shape))
-            self.actors = nn.ModuleList([
-                ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
-                for _ in range(n_agents)
-            ])
+            self.actors = nn.ModuleList(
+                [
+                    ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
+                    for _ in range(n_agents)
+                ]
+            )
 
         # Centralized critic — for n_agents=1, input is obs_dim.
         # For n_agents>1, input would be obs_dim * n_agents (joint obs),
@@ -188,9 +192,7 @@ class MAPPO:
             mean_ep_reward = batch.rewards.sum().item() / self.n_envs
             all_rewards.append(mean_ep_reward)
 
-            self.callbacks.on_rollout_end(
-                mean_reward=mean_ep_reward, update=update
-            )
+            self.callbacks.on_rollout_end(mean_reward=mean_ep_reward, update=update)
 
             for _epoch in range(self.n_epochs):
                 for mb in batch.sample_minibatches(self.batch_size, shuffle=True):
@@ -235,9 +237,7 @@ class MAPPO:
                     }
 
                     self._global_step += 1
-                    self.callbacks.on_train_batch(
-                        loss=loss.item(), **last_metrics
-                    )
+                    self.callbacks.on_train_batch(loss=loss.item(), **last_metrics)
 
             # Step callback (per rollout)
             should_continue = self.callbacks.on_step(

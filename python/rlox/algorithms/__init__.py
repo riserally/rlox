@@ -36,8 +36,17 @@ from rlox.algorithms.dreamer import DreamerV3
 from rlox.algorithms.impala import IMPALA
 
 __all__ = [
-    "PPO", "PPOConfig", "A2C", "GRPO", "DPO",
-    "SAC", "TD3", "DQN",
-    "OnlineDPO", "BestOfN",
-    "MAPPO", "DreamerV3", "IMPALA",
+    "PPO",
+    "PPOConfig",
+    "A2C",
+    "GRPO",
+    "DPO",
+    "SAC",
+    "TD3",
+    "DQN",
+    "OnlineDPO",
+    "BestOfN",
+    "MAPPO",
+    "DreamerV3",
+    "IMPALA",
 ]

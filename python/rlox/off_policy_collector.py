@@ -28,9 +28,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 import gymnasium as gym
 import numpy as np
-import torch
 
-import rlox
 from rlox.gym_vec_env import GymVecEnv
 
 
@@ -120,7 +118,9 @@ class OffPolicyCollector:
         self.is_continuous = not isinstance(probe.action_space, gym.spaces.Discrete)
         if self.is_continuous:
             self.act_dim = int(np.prod(probe.action_space.shape))
-            self.act_high = act_high if act_high is not None else float(probe.action_space.high[0])
+            self.act_high = (
+                act_high if act_high is not None else float(probe.action_space.high[0])
+            )
         else:
             self.act_dim = 1
             self.act_high = 1.0
@@ -198,7 +198,7 @@ class OffPolicyCollector:
 
         # Store in buffer
         if self.buffer is not None:
-            if self._n_envs > 1 and hasattr(self.buffer, 'push_batch'):
+            if self._n_envs > 1 and hasattr(self.buffer, "push_batch"):
                 obs_flat = obs.reshape(-1).astype(np.float32)
                 next_obs_flat = next_obs.reshape(-1).astype(np.float32)
                 actions_flat = actions.reshape(-1).astype(np.float32)
@@ -206,14 +206,20 @@ class OffPolicyCollector:
                 term_u8 = terminated.astype(np.uint8)
                 trunc_u8 = truncated.astype(np.uint8)
                 self.buffer.push_batch(
-                    obs_flat, next_obs_flat, actions_flat,
-                    rewards_f32, term_u8, trunc_u8,
+                    obs_flat,
+                    next_obs_flat,
+                    actions_flat,
+                    rewards_f32,
+                    term_u8,
+                    trunc_u8,
                 )
             else:
                 for i in range(self._n_envs):
                     self.buffer.push(
                         obs[i].astype(np.float32),
-                        actions[i].astype(np.float32) if actions.ndim > 1 else np.array([actions[i]], dtype=np.float32),
+                        actions[i].astype(np.float32)
+                        if actions.ndim > 1
+                        else np.array([actions[i]], dtype=np.float32),
                         float(rewards[i]),
                         bool(terminated[i]),
                         bool(truncated[i]),

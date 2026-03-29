@@ -9,9 +9,9 @@
 //!
 //! Designed for D4RL/Minari-scale datasets (1M+ transitions).
 
+use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use rand::Rng;
 
 use crate::error::RloxError;
 
@@ -44,12 +44,12 @@ pub struct OfflineBatch {
 /// A batch of contiguous trajectory subsequences.
 #[derive(Debug, Clone)]
 pub struct TrajectoryBatch {
-    pub obs: Vec<f32>,         // [batch_size * seq_len * obs_dim]
-    pub actions: Vec<f32>,     // [batch_size * seq_len * act_dim]
-    pub rewards: Vec<f32>,     // [batch_size * seq_len]
+    pub obs: Vec<f32>,           // [batch_size * seq_len * obs_dim]
+    pub actions: Vec<f32>,       // [batch_size * seq_len * act_dim]
+    pub rewards: Vec<f32>,       // [batch_size * seq_len]
     pub returns_to_go: Vec<f32>, // [batch_size * seq_len]
-    pub timesteps: Vec<u32>,   // [batch_size * seq_len]
-    pub mask: Vec<u8>,         // [batch_size * seq_len] (1 = valid, 0 = padding)
+    pub timesteps: Vec<u32>,     // [batch_size * seq_len]
+    pub mask: Vec<u8>,           // [batch_size * seq_len] (1 = valid, 0 = padding)
     pub seq_len: usize,
     pub obs_dim: usize,
     pub act_dim: usize,
@@ -117,7 +117,11 @@ impl OfflineDatasetBuffer {
         if terminated.len() != n || truncated.len() != n {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("terminated/truncated length = {}", n),
-                got: format!("terminated={}, truncated={}", terminated.len(), truncated.len()),
+                got: format!(
+                    "terminated={}, truncated={}",
+                    terminated.len(),
+                    truncated.len()
+                ),
             });
         }
 
@@ -218,10 +222,15 @@ impl OfflineDatasetBuffer {
 
         // Reward mean and std
         let r_mean = self.rewards.iter().map(|&r| r as f64).sum::<f64>() / n as f64;
-        let r_var = self.rewards.iter().map(|&r| {
-            let d = r as f64 - r_mean;
-            d * d
-        }).sum::<f64>() / n as f64;
+        let r_var = self
+            .rewards
+            .iter()
+            .map(|&r| {
+                let d = r as f64 - r_mean;
+                d * d
+            })
+            .sum::<f64>()
+            / n as f64;
         self.reward_mean = Some(r_mean as f32);
         self.reward_std = Some((r_var.sqrt().max(1e-8)) as f32);
     }
@@ -352,7 +361,10 @@ impl OfflineDatasetBuffer {
         };
 
         let std_return = if n_eps > 1 {
-            let var: f32 = returns.iter().map(|&r| (r - mean_return).powi(2)).sum::<f32>()
+            let var: f32 = returns
+                .iter()
+                .map(|&r| (r - mean_return).powi(2))
+                .sum::<f32>()
                 / (n_eps - 1) as f32;
             var.sqrt()
         } else {
@@ -386,7 +398,12 @@ impl OfflineDatasetBuffer {
 mod tests {
     use super::*;
 
-    fn make_test_dataset(n: usize, obs_dim: usize, act_dim: usize, ep_len: usize) -> OfflineDatasetBuffer {
+    fn make_test_dataset(
+        n: usize,
+        obs_dim: usize,
+        act_dim: usize,
+        ep_len: usize,
+    ) -> OfflineDatasetBuffer {
         let mut rewards = vec![1.0f32; n];
         let mut terminated = vec![0u8; n];
         let truncated = vec![0u8; n];
@@ -407,7 +424,8 @@ mod tests {
             truncated,
             obs_dim,
             act_dim,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[test]
@@ -465,13 +483,23 @@ mod tests {
             terminated[i] = 1;
         }
         let buf = OfflineDatasetBuffer::from_arrays(
-            obs.clone(), obs, vec![0.0; n], vec![1.0; n],
-            terminated, vec![0; n], obs_dim, 1,
-        ).unwrap();
+            obs.clone(),
+            obs,
+            vec![0.0; n],
+            vec![1.0; n],
+            terminated,
+            vec![0; n],
+            obs_dim,
+            1,
+        )
+        .unwrap();
 
         let b1 = buf.sample(32, 42);
         let b2 = buf.sample(32, 99);
-        assert_ne!(b1.obs, b2.obs, "Different seeds should produce different samples");
+        assert_ne!(
+            b1.obs, b2.obs,
+            "Different seeds should produce different samples"
+        );
     }
 
     #[test]
@@ -484,7 +512,10 @@ mod tests {
         let batch = buf.sample(32, 42);
         // Normalized obs should have roughly zero mean
         let mean: f32 = batch.obs.iter().sum::<f32>() / batch.obs.len() as f32;
-        assert!(mean.abs() < 1.0, "Normalized mean should be near 0, got {mean}");
+        assert!(
+            mean.abs() < 1.0,
+            "Normalized mean should be near 0, got {mean}"
+        );
     }
 
     #[test]
@@ -508,7 +539,10 @@ mod tests {
         // Each trajectory comes from ep_len=5 episode, so at most 5 valid
         for b in 0..4 {
             let valid: usize = (0..10).map(|t| batch.mask[b * 10 + t] as usize).sum();
-            assert!(valid <= 5, "Valid mask count should be <= ep_len=5, got {valid}");
+            assert!(
+                valid <= 5,
+                "Valid mask count should be <= ep_len=5, got {valid}"
+            );
             assert!(valid > 0, "Should have at least 1 valid step");
         }
     }
@@ -525,7 +559,8 @@ mod tests {
                 assert!(
                     batch.returns_to_go[t] <= prev_rtg + 1e-5,
                     "RTG should be non-increasing, got {} after {}",
-                    batch.returns_to_go[t], prev_rtg
+                    batch.returns_to_go[t],
+                    prev_rtg
                 );
                 prev_rtg = batch.returns_to_go[t];
             }
@@ -546,9 +581,8 @@ mod tests {
 
     #[test]
     fn test_empty_dataset_error() {
-        let result = OfflineDatasetBuffer::from_arrays(
-            vec![], vec![], vec![], vec![], vec![], vec![], 4, 1,
-        );
+        let result =
+            OfflineDatasetBuffer::from_arrays(vec![], vec![], vec![], vec![], vec![], vec![], 4, 1);
         // Empty is technically valid (0 transitions)
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
@@ -557,13 +591,14 @@ mod tests {
     #[test]
     fn test_mismatched_lengths_error() {
         let result = OfflineDatasetBuffer::from_arrays(
-            vec![0.0; 40],  // 10 * 4
+            vec![0.0; 40], // 10 * 4
             vec![0.0; 40],
-            vec![0.0; 10],  // 10 * 1
+            vec![0.0; 10], // 10 * 1
             vec![0.0; 10],
-            vec![0; 5],     // WRONG: should be 10
+            vec![0; 5], // WRONG: should be 10
             vec![0; 10],
-            4, 1,
+            4,
+            1,
         );
         assert!(result.is_err());
     }
@@ -575,9 +610,9 @@ mod tests {
         let obs_dim = 2;
         let act_dim = 1;
         let mut terminated = vec![0u8; n];
-        terminated[4] = 1;   // episode 1: steps 0-4
-        terminated[12] = 1;  // episode 2: steps 5-12
-        terminated[24] = 1;  // episode 3: steps 13-24
+        terminated[4] = 1; // episode 1: steps 0-4
+        terminated[12] = 1; // episode 2: steps 5-12
+        terminated[24] = 1; // episode 3: steps 13-24
 
         let buf = OfflineDatasetBuffer::from_arrays(
             vec![0.0; n * obs_dim],
@@ -588,7 +623,8 @@ mod tests {
             vec![0; n],
             obs_dim,
             act_dim,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(buf.n_episodes(), 3);
         assert_eq!(buf.episode_lengths, vec![5, 8, 12]);

@@ -51,7 +51,11 @@ class SAC:
             self.env_id = env_id
         else:
             self.env = env_id
-            self.env_id = getattr(env_id.spec, "id", "custom") if hasattr(env_id, "spec") and env_id.spec else "custom"
+            self.env_id = (
+                getattr(env_id.spec, "id", "custom")
+                if hasattr(env_id, "spec") and env_id.spec
+                else "custom"
+            )
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
@@ -78,7 +82,11 @@ class SAC:
         self.act_high = act_high
 
         # Networks — use custom if provided, otherwise default MLP
-        self.actor = actor if actor is not None else SquashedGaussianPolicy(obs_dim, act_dim, hidden)
+        self.actor = (
+            actor
+            if actor is not None
+            else SquashedGaussianPolicy(obs_dim, act_dim, hidden)
+        )
         if critic is not None:
             self.critic1 = critic
             self.critic2 = copy.deepcopy(critic)
@@ -88,9 +96,15 @@ class SAC:
         self.critic1_target = copy.deepcopy(self.critic1)
         self.critic2_target = copy.deepcopy(self.critic2)
 
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=learning_rate)
-        self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(), lr=learning_rate)
-        self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(), lr=learning_rate)
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(), lr=learning_rate
+        )
+        self.critic1_optimizer = torch.optim.Adam(
+            self.critic1.parameters(), lr=learning_rate
+        )
+        self.critic2_optimizer = torch.optim.Adam(
+            self.critic2.parameters(), lr=learning_rate
+        )
 
         # Entropy tuning
         self.auto_entropy = auto_entropy
@@ -107,7 +121,11 @@ class SAC:
             self.alpha = 0.2
 
         # Replay buffer — use custom if provided
-        self.buffer = buffer if buffer is not None else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
+        self.buffer = (
+            buffer
+            if buffer is not None
+            else rlox.ReplayBuffer(buffer_size, obs_dim, act_dim)
+        )
 
         # Off-policy collector — enables multi-env collection
         self.collector = collector
@@ -120,18 +138,20 @@ class SAC:
 
         if compile:
             from rlox.compile import compile_policy
+
             compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         # Use OffPolicyCollector for multi-env, or default single-env loop
         if self.n_envs > 1 and self.collector is None:
             from rlox.off_policy_collector import OffPolicyCollector
+
             self.collector = OffPolicyCollector(
                 env_id=self.env_id,
                 n_envs=self.n_envs,
                 buffer=self.buffer,
                 act_high=self.act_high,
-                seed=getattr(self, 'seed', 42),
+                seed=getattr(self, "seed", 42),
             )
 
         if self.collector is not None:
@@ -191,7 +211,9 @@ class SAC:
 
         self.callbacks.on_training_end()
 
-        metrics["mean_reward"] = float(np.mean(episode_rewards)) if episode_rewards else 0.0
+        metrics["mean_reward"] = (
+            float(np.mean(episode_rewards)) if episode_rewards else 0.0
+        )
         return metrics
 
     def _update(self, step: int) -> dict[str, float]:
@@ -241,7 +263,9 @@ class SAC:
         # Alpha update
         alpha_loss_val = 0.0
         if self.auto_entropy:
-            alpha_loss = -(self.log_alpha * (log_prob.detach() + self.target_entropy)).mean()
+            alpha_loss = -(
+                self.log_alpha * (log_prob.detach() + self.target_entropy)
+            ).mean()
             self.alpha_optimizer.zero_grad(set_to_none=True)
             alpha_loss.backward()
             self.alpha_optimizer.step()
@@ -271,14 +295,19 @@ class SAC:
 
         def get_action(obs_batch: np.ndarray) -> np.ndarray:
             if self._global_step < self.learning_starts:
-                return np.random.randn(obs_batch.shape[0], self.act_dim).astype(np.float32) * self.act_high
+                return (
+                    np.random.randn(obs_batch.shape[0], self.act_dim).astype(np.float32)
+                    * self.act_high
+                )
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs_batch, dtype=torch.float32)
                 actions, _ = self.actor.sample(obs_t)
                 return (actions.numpy() * self.act_high).astype(np.float32)
 
         for step in range(total_timesteps):
-            _, _, mean_ep_reward = collector.collect_step(get_action, step, total_timesteps)
+            _, _, mean_ep_reward = collector.collect_step(
+                get_action, step, total_timesteps
+            )
 
             self._global_step += 1
             should_continue = self.callbacks.on_step(

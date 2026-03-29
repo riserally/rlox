@@ -59,9 +59,12 @@ class A2C:
             obs_dim = int(np.prod(tmp.observation_space.shape))
             is_discrete = isinstance(tmp.action_space, gym.spaces.Discrete)
             if is_discrete:
-                self.policy = DiscretePolicy(obs_dim=obs_dim, n_actions=int(tmp.action_space.n))
+                self.policy = DiscretePolicy(
+                    obs_dim=obs_dim, n_actions=int(tmp.action_space.n)
+                )
             else:
                 from rlox.policies import ContinuousPolicy
+
                 act_dim = int(np.prod(tmp.action_space.shape))
                 self.policy = ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
             tmp.close()
@@ -84,6 +87,7 @@ class A2C:
 
         if compile:
             from rlox.compile import compile_policy
+
             compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
@@ -107,7 +111,9 @@ class A2C:
             returns = batch.returns
 
             if self.normalize_advantages:
-                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                advantages = (advantages - advantages.mean()) / (
+                    advantages.std() + 1e-8
+                )
 
             log_probs, entropy = self.policy.get_logprob_and_entropy(obs, actions)
             values = self.policy.get_value(obs)
@@ -116,7 +122,9 @@ class A2C:
             value_loss = 0.5 * ((values - returns) ** 2).mean()
             entropy_loss = entropy.mean()
 
-            loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss
+            loss = (
+                policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss
+            )
 
             self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -138,9 +146,13 @@ class A2C:
                 break
 
             if self.logger is not None:
-                self.logger.on_train_step(update, {**last_metrics, "mean_reward": mean_ep_reward})
+                self.logger.on_train_step(
+                    update, {**last_metrics, "mean_reward": mean_ep_reward}
+                )
 
         self.callbacks.on_training_end()
 
-        last_metrics["mean_reward"] = float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
+        last_metrics["mean_reward"] = (
+            float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
+        )
         return last_metrics

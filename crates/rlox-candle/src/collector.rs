@@ -59,17 +59,19 @@ impl SharedPolicy {
     /// The buffer must contain all parameters in the same order as
     /// `CandleActorCritic`'s VarMap, flattened and concatenated.
     pub fn sync_weights(&self, flat_params: &[f32]) -> Result<(), rlox_nn::NNError> {
-        let mut policy = self.inner.write().map_err(|e| {
-            rlox_nn::NNError::Backend(format!("Failed to acquire write lock: {e}"))
-        })?;
+        let mut policy = self
+            .inner
+            .write()
+            .map_err(|e| rlox_nn::NNError::Backend(format!("Failed to acquire write lock: {e}")))?;
         load_flat_params(&mut policy, flat_params)
     }
 
     /// Extract weights as a flat f32 buffer (for PyTorch initialization).
     pub fn get_weights(&self) -> Result<Vec<f32>, rlox_nn::NNError> {
-        let policy = self.inner.read().map_err(|e| {
-            rlox_nn::NNError::Backend(format!("Failed to acquire read lock: {e}"))
-        })?;
+        let policy = self
+            .inner
+            .read()
+            .map_err(|e| rlox_nn::NNError::Backend(format!("Failed to acquire read lock: {e}")))?;
         extract_flat_params(&policy)
     }
 }
@@ -254,8 +256,7 @@ mod tests {
         // Run async collector with Candle callbacks
         let pipe = Pipeline::new(4);
         let tx = pipe.sender();
-        let mut collector =
-            AsyncCollector::start(vec_env, 16, 0.99, 0.95, tx, value_fn, action_fn);
+        let mut collector = AsyncCollector::start(vec_env, 16, 0.99, 0.95, tx, value_fn, action_fn);
 
         // Should receive a batch with log_probs and values
         let batch = pipe.recv().unwrap();

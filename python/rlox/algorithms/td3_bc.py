@@ -14,11 +14,9 @@ Reference:
 from __future__ import annotations
 
 import copy
-from typing import Any
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from rlox.callbacks import Callback
@@ -97,9 +95,15 @@ class TD3BC(OfflineAlgorithm):
         self.critic1_target = copy.deepcopy(self.critic1)
         self.critic2_target = copy.deepcopy(self.critic2)
 
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=learning_rate)
-        self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(), lr=learning_rate)
-        self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(), lr=learning_rate)
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(), lr=learning_rate
+        )
+        self.critic1_optimizer = torch.optim.Adam(
+            self.critic1.parameters(), lr=learning_rate
+        )
+        self.critic2_optimizer = torch.optim.Adam(
+            self.critic2.parameters(), lr=learning_rate
+        )
 
         self._update_count = 0
 
@@ -123,7 +127,9 @@ class TD3BC(OfflineAlgorithm):
             )
             q1_next = self.critic1_target(next_obs, next_actions).squeeze(-1)
             q2_next = self.critic2_target(next_obs, next_actions).squeeze(-1)
-            target_q = rewards + self.gamma * (1.0 - terminated) * torch.min(q1_next, q2_next)
+            target_q = rewards + self.gamma * (1.0 - terminated) * torch.min(
+                q1_next, q2_next
+            )
 
         q1 = self.critic1(obs, actions).squeeze(-1)
         q2 = self.critic2(obs, actions).squeeze(-1)

@@ -299,7 +299,7 @@ impl OfflineDatasetBuffer {
             let ep_len = self.episode_lengths[ep_idx];
 
             // Random start within episode
-            let max_start = if ep_len > seq_len { ep_len - seq_len } else { 0 };
+            let max_start = ep_len.saturating_sub(seq_len);
             let start_offset = rng.gen_range(0..=max_start);
             let actual_len = seq_len.min(ep_len - start_offset);
 
@@ -312,7 +312,7 @@ impl OfflineDatasetBuffer {
                 }
             }
 
-            for t in 0..actual_len {
+            for (t, rtg_val) in rtg.iter().enumerate() {
                 let src_idx = ep_start + start_offset + t;
                 let dst_idx = b * seq_len + t;
 
@@ -321,7 +321,7 @@ impl OfflineDatasetBuffer {
                 actions[dst_idx * a..(dst_idx + 1) * a]
                     .copy_from_slice(&self.actions[src_idx * a..(src_idx + 1) * a]);
                 rewards[dst_idx] = self.rewards[src_idx];
-                returns_to_go[dst_idx] = rtg[t];
+                returns_to_go[dst_idx] = *rtg_val;
                 timesteps[dst_idx] = (start_offset + t) as u32;
                 mask[dst_idx] = 1;
             }

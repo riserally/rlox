@@ -66,7 +66,7 @@ pub fn pack_sequences(
                 bin.sequence_starts.push(bin.used);
                 bin.tokens.extend_from_slice(seq);
                 bin.attention_mask
-                    .extend(std::iter::repeat(1u32).take(seq_len));
+                    .extend(std::iter::repeat_n(1u32, seq_len));
                 for j in 0..seq_len {
                     bin.position_ids.push(j as u32);
                 }
@@ -87,7 +87,7 @@ pub fn pack_sequences(
             bin.sequence_starts.push(0);
             bin.tokens.extend_from_slice(seq);
             bin.attention_mask
-                .extend(std::iter::repeat(1u32).take(seq_len));
+                .extend(std::iter::repeat_n(1u32, seq_len));
             for j in 0..seq_len {
                 bin.position_ids.push(j as u32);
             }

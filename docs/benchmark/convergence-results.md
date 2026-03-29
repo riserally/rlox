@@ -32,7 +32,19 @@
 | SAC | Hopper-v4 | ~82 | ~100 | TBD |
 | TD3 | HalfCheetah-v4 | TBD | ~101 | TBD |
 
+## Candle Hybrid Collection Benchmark
+
+Measured on Apple M-series, CartPole-v1, 16 envs, 200K timesteps:
+
+| Method | SPS | Collection % | Training % | Speedup |
+|--------|-----|-------------|------------|---------|
+| Standard PPO (PyTorch) | 31,849 | ~50% | ~50% | 1.0x |
+| **Hybrid PPO (Candle)** | **48,243** | **28.5%** | **71.5%** | **1.51x** |
+
+The Candle hybrid approach eliminates Python dispatch overhead during collection,
+shifting the bottleneck entirely to the PyTorch training backward pass.
+
 !!! info
-    Full results with learning curves, IQM statistics, and multi-seed
+    Full convergence results with learning curves, IQM statistics, and multi-seed
     confidence intervals will be published after benchmark completion.
     Results will be uploaded to `gs://rkox-bench-results/convergence-*/`.

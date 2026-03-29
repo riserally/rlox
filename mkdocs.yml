@@ -42,9 +42,10 @@ plugins:
           paths:
             - python
           options:
-            show_source: true
+            show_source: false
             show_root_heading: true
             members_order: source
+            show_signature_annotations: true
 
 markdown_extensions:
   - pymdownx.highlight:

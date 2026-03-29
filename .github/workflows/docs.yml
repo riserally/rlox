@@ -67,6 +67,7 @@ jobs:
           cp -r site _site/python
           cp -r blog/public _site/blog
           cp docs-landing/index.html _site/index.html
+          cp docs-landing/rlox_logo.png _site/rlox_logo.png
 
       - uses: actions/upload-pages-artifact@v3
         with:

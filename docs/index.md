@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/rlox_logo.png" alt="rlox logo" width="350">
+</p>
+
 # rlox — Rust-Accelerated Reinforcement Learning
 
 <p align="center">

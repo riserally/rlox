@@ -34,12 +34,18 @@
 
 ## Candle Hybrid Collection Benchmark
 
-Measured on Apple M-series, CartPole-v1, 16 envs, 200K timesteps:
+Measured on Apple M-series, CartPole-v1, PPO (n_steps=128, n_epochs=4, hidden=64):
 
-| Method | SPS | Collection % | Training % | Speedup |
-|--------|-----|-------------|------------|---------|
-| Standard PPO (PyTorch) | 31,849 | ~50% | ~50% | 1.0x |
-| **Hybrid PPO (Candle)** | **48,243** | **28.5%** | **71.5%** | **1.51x** |
+| n_envs | Hybrid SPS | Standard SPS | Speedup | Collection % |
+|--------|-----------|-------------|---------|-------------|
+| 4 | 32,460 | 18,779 | **1.73x** | 45.6% |
+| 8 | 40,020 | 23,037 | **1.74x** | 41.2% |
+| 16 | 47,863 | 32,204 | **1.49x** | 30.7% |
+| 32 | 53,721 | 42,748 | **1.26x** | 23.4% |
+
+The speedup is strongest at lower env counts (4-8 envs: 1.7x) where per-step
+Python dispatch overhead (~113us) dominates. With more envs, PyTorch's BLAS
+amortizes the overhead, narrowing the gap.
 
 The Candle hybrid approach eliminates Python dispatch overhead during collection,
 shifting the bottleneck entirely to the PyTorch training backward pass.

@@ -62,6 +62,7 @@ from rlox._rlox_core import (
     compute_batch_token_kl_schulman_f32,
     DPOPair,
     RunningStats,
+    RunningStatsVec,
     pack_sequences,
     ActorCritic,
     CandleCollector,
@@ -76,7 +77,7 @@ from rlox.policies import ContinuousPolicy, DiscretePolicy
 from rlox.vec_normalize import VecNormalize
 
 # -- Configs -------------------------------------------------------------------
-from rlox.config import PPOConfig, SACConfig, DQNConfig
+from rlox.config import PPOConfig, SACConfig, DQNConfig, A2CConfig, TD3Config
 
 # -- Callbacks -----------------------------------------------------------------
 from rlox.callbacks import (
@@ -137,7 +138,7 @@ from rlox.hub import push_to_hub, load_from_hub
 # -- Compile -------------------------------------------------------------------
 from rlox.compile import compile_policy
 
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 
 __all__ = [
     # Rust primitives
@@ -166,6 +167,7 @@ __all__ = [
     "compute_batch_token_kl_schulman_f32",
     "DPOPair",
     "RunningStats",
+    "RunningStatsVec",
     "pack_sequences",
     "ActorCritic",
     "CandleCollector",
@@ -181,6 +183,8 @@ __all__ = [
     "PPOConfig",
     "SACConfig",
     "DQNConfig",
+    "A2CConfig",
+    "TD3Config",
     # Callbacks
     "Callback",
     "CallbackList",

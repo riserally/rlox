@@ -169,6 +169,8 @@ class TestConfigsHaveFromDictAndToDict:
         rlox.PPOConfig,
         rlox.SACConfig,
         rlox.DQNConfig,
+        rlox.A2CConfig,
+        rlox.TD3Config,
     ]
 
     REQUIRED_METHODS = ["from_dict", "to_dict", "merge", "from_yaml", "to_yaml"]

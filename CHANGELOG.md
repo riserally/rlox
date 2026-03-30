@@ -2,9 +2,18 @@
 
 All notable changes to rlox are documented here.
 
-## [0.3.0] - 2026-03-29
+## [0.3.0] - 2026-03-30
 
 ### Added
+- **VecNormalize environment wrapper** — obs/reward normalization at the
+  environment boundary (SB3 architecture), replacing collector-level normalization
+- **RunningStatsVec** — per-dimension Welford statistics in Rust (PyO3 exposed)
+- **Native Pendulum-v1** — Rust environment with continuous action space
+- **Polymorphic VecEnv.step_all** — accepts discrete (Vec<u32>) and continuous
+  (ndarray float32) actions
+- **VecEnv.action_space property** — typed dict for Python-side detection
+- **VecEnv protocol** — formal protocol in `protocols.py`
+- **A2CConfig, TD3Config** — dataclass configs with validation and YAML support
 - **Offline RL**: TD3+BC, IQL, CQL, BC algorithms with `OfflineDatasetBuffer` (Rust)
 - **Candle Hybrid Collection**: `CandleCollector` (180K SPS on CartPole), `HybridPPO` trainer
 - **OffPolicyCollector**: Reusable multi-env collection for SAC, TD3, DQN (`n_envs` parameter)
@@ -15,8 +24,21 @@ All notable changes to rlox are documented here.
 - **API reference** pages with mkdocstrings autodoc
 - **CONTRIBUTING.md** with development setup and guidelines
 - **Cross-navigation** header across all documentation components
+- Python 3.13 added to CI test matrix
 
 ### Fixed
+- **Truncation bootstrap** — truncated episodes now bootstrap V(terminal_obs)
+  instead of treating as deaths (value=0). Critical for MuJoCo time limits.
+- **Per-dimension obs normalization** — replaced scalar mean/std with per-dim
+  tracking, preserving observation structure across different scales
+- **Return-based reward normalization** — std of discounted returns (SB3
+  convention) instead of std of raw rewards
+- **Train/collect obs mismatch** — consistent normalization during collection
+  and training
+- **A2C advantage normalization default** — changed to False, preventing gradient
+  explosion with small batches (n_steps=5, batch=40)
+- **log_std init** — 0.0 (std=1.0) matching SB3, was -0.5
+- **GCS upload path** — absolute paths in convergence benchmark scripts
 - IMPALA: V-trace now uses computed bootstrap value instead of hardcoded 0.0
 - IMPALA: Auto-detects continuous envs, falls back to GymVecEnv for non-CartPole
 - DreamerV3: World model frozen during actor-critic training (prevents gradient leakage)
@@ -24,11 +46,16 @@ All notable changes to rlox are documented here.
 - MAPPO: NotImplementedError for n_agents > 1 (prevents silent dimension mismatch)
 - MAPPO: Simplified critic input for single-agent case
 
+### Changed
+- Normalization moved from `RolloutCollector` to `VecNormalize` wrapper
+- PPO auto-wraps env with VecNormalize when normalize flags set
+- EvalCallback freezes normalization stats during evaluation
+
 ### Improved
 - Landing page redesigned with quickstart, benchmarks, comparison table, algorithm grid
 - Rust crate descriptions and lib.rs doc comments updated
-- 60+ new Python tests (offline RL, LLM algorithms, CandleCollector, HybridPPO)
-- 14 new Rust tests (OfflineDatasetBuffer, CandleCollector)
+- 80+ new Python tests (convergence fixes, VecNormalize, Pendulum, offline RL)
+- 30+ new Rust tests (RunningStatsVec, Pendulum, OfflineDatasetBuffer)
 
 ## [0.2.0] - 2026-03-16
 

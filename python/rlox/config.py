@@ -194,6 +194,164 @@ class SACConfig:
 
 
 @dataclass
+class A2CConfig:
+    """Configuration for A2C (Advantage Actor-Critic) training.
+
+    A2C uses a single gradient step per rollout (no clipping, no epochs).
+    Typically paired with short rollouts (n_steps=5) and RMSprop.
+
+    Attributes
+    ----------
+    learning_rate : float
+        RMSprop learning rate (default 7e-4).
+    n_steps : int
+        Rollout length per update (default 5).
+    gamma : float
+        Discount factor (default 0.99).
+    gae_lambda : float
+        GAE lambda (default 1.0, equivalent to full n-step returns).
+    vf_coef : float
+        Value function loss coefficient (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.01).
+    max_grad_norm : float
+        Gradient clipping threshold (default 0.5).
+    normalize_advantages : bool
+        Normalize advantages per batch (default False).
+    n_envs : int
+        Number of parallel environments (default 8).
+    hidden : int
+        Hidden layer width (default 64).
+    """
+
+    learning_rate: float = 7e-4
+    n_steps: int = 5
+    gamma: float = 0.99
+    gae_lambda: float = 1.0
+    vf_coef: float = 0.5
+    ent_coef: float = 0.01
+    max_grad_norm: float = 0.5
+    normalize_advantages: bool = False
+    n_envs: int = 8
+    hidden: int = 64
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("n_steps", self.n_steps, 1)
+        _validate_min("n_envs", self.n_envs, 1)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> A2CConfig:
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> A2CConfig:
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    def merge(self, overrides: dict[str, Any]) -> A2CConfig:
+        d = asdict(self)
+        d.update(overrides)
+        return A2CConfig.from_dict(d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+
+@dataclass
+class TD3Config:
+    """Configuration for TD3 (Twin Delayed DDPG) training.
+
+    Deterministic policy with target policy smoothing and delayed updates.
+
+    Attributes
+    ----------
+    learning_rate : float
+        Adam learning rate for both actor and critic (default 3e-4).
+    buffer_size : int
+        Replay buffer capacity (default 1M).
+    batch_size : int
+        Minibatch size (default 256).
+    tau : float
+        Polyak averaging coefficient for target networks (default 0.005).
+    gamma : float
+        Discount factor (default 0.99).
+    learning_starts : int
+        Random exploration steps before training (default 1000).
+    policy_delay : int
+        Actor update frequency relative to critic (default 2).
+    target_noise : float
+        Noise added to target actions for smoothing (default 0.2).
+    noise_clip : float
+        Clipping range for target noise (default 0.5).
+    exploration_noise : float
+        Std of Gaussian exploration noise (default 0.1).
+    hidden : int
+        Hidden layer width (default 256).
+    n_envs : int
+        Number of parallel environments (default 1).
+    """
+
+    learning_rate: float = 3e-4
+    buffer_size: int = 1_000_000
+    batch_size: int = 256
+    tau: float = 0.005
+    gamma: float = 0.99
+    learning_starts: int = 1000
+    policy_delay: int = 2
+    target_noise: float = 0.2
+    noise_clip: float = 0.5
+    exploration_noise: float = 0.1
+    hidden: int = 256
+    n_envs: int = 1
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("buffer_size", self.buffer_size, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+        _validate_min("policy_delay", self.policy_delay, 1)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> TD3Config:
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> TD3Config:
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    def merge(self, overrides: dict[str, Any]) -> TD3Config:
+        d = asdict(self)
+        d.update(overrides)
+        return TD3Config.from_dict(d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+
+@dataclass
 class DQNConfig:
     """Configuration for DQN training with Rainbow extensions.
 

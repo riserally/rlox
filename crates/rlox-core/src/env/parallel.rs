@@ -50,6 +50,10 @@ impl VecEnv {
         self.envs.len()
     }
 
+    pub fn action_space(&self) -> &ActionSpace {
+        &self.action_space
+    }
+
     /// Step all environments in parallel using Rayon.
     ///
     /// If an environment is done after stepping, it is automatically reset
@@ -455,5 +459,94 @@ mod terminal_obs_tests {
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pendulum_vec_env_tests {
+    use super::*;
+    use crate::env::builtins::Pendulum;
+    use crate::seed::derive_seed;
+
+    fn make_pendulum_vec_env(n: usize, seed: u64) -> VecEnv {
+        let envs: Vec<Box<dyn RLEnv>> = (0..n)
+            .map(|i| {
+                let s = derive_seed(seed, i);
+                Box::new(Pendulum::new(Some(s))) as Box<dyn RLEnv>
+            })
+            .collect();
+        VecEnv::new(envs)
+    }
+
+    #[test]
+    fn pendulum_vec_env_step_continuous_actions() {
+        let mut venv = make_pendulum_vec_env(4, 42);
+        let actions: Vec<Action> = (0..4)
+            .map(|i| Action::Continuous(vec![(i as f32 - 1.5) * 0.5]))
+            .collect();
+        let batch = venv.step_all(&actions).unwrap();
+        assert_eq!(batch.obs.len(), 4);
+        assert_eq!(batch.rewards.len(), 4);
+        for obs in &batch.obs {
+            assert_eq!(obs.len(), 3, "Pendulum obs should have 3 dims");
+        }
+    }
+
+    #[test]
+    fn pendulum_vec_env_step_flat() {
+        let mut venv = make_pendulum_vec_env(4, 42);
+        let actions: Vec<Action> = (0..4)
+            .map(|_| Action::Continuous(vec![0.5]))
+            .collect();
+        let batch = venv.step_all_flat(&actions).unwrap();
+        assert!(batch.obs.is_empty());
+        assert_eq!(batch.obs_flat.len(), 4 * 3);
+        assert_eq!(batch.obs_dim, 3);
+    }
+
+    #[test]
+    fn pendulum_vec_env_auto_reset() {
+        let mut venv = make_pendulum_vec_env(2, 42);
+        // Step 300 times — past the 200 truncation limit
+        for _ in 0..300 {
+            let actions: Vec<Action> = (0..2)
+                .map(|_| Action::Continuous(vec![1.0]))
+                .collect();
+            let batch = venv.step_all(&actions).unwrap();
+            assert_eq!(batch.obs.len(), 2);
+        }
+    }
+
+    #[test]
+    fn pendulum_vec_env_action_space() {
+        let venv = make_pendulum_vec_env(2, 42);
+        match venv.action_space() {
+            ActionSpace::Box { low, high, shape } => {
+                assert_eq!(shape, &[1]);
+                assert_eq!(low, &[-2.0]);
+                assert_eq!(high, &[2.0]);
+            }
+            other => panic!("Expected Box action space, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn pendulum_vec_env_determinism() {
+        let run = || {
+            let mut venv = make_pendulum_vec_env(8, 42);
+            venv.reset_all(Some(42)).unwrap();
+            let actions: Vec<Action> = (0..8)
+                .map(|i| Action::Continuous(vec![(i as f32) * 0.25 - 1.0]))
+                .collect();
+            let mut all_rewards = Vec::new();
+            for _ in 0..50 {
+                let batch = venv.step_all(&actions).unwrap();
+                all_rewards.extend(batch.rewards);
+            }
+            all_rewards
+        };
+        let r1 = run();
+        let r2 = run();
+        assert_eq!(r1, r2);
     }
 }

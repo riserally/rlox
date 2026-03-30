@@ -325,3 +325,413 @@ mod tests {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Pendulum-v1
+// ---------------------------------------------------------------------------
+
+// Pendulum-v1 constants (matching Gymnasium)
+const PENDULUM_GRAVITY: f64 = 10.0;
+const PENDULUM_MASS: f64 = 1.0;
+const PENDULUM_LENGTH: f64 = 1.0;
+const PENDULUM_DT: f64 = 0.05;
+const PENDULUM_MAX_VEL: f64 = 8.0;
+const PENDULUM_MAX_TORQUE: f64 = 2.0;
+const PENDULUM_MAX_STEPS: u32 = 200;
+
+/// Normalize an angle to `[-pi, pi]`.
+#[inline]
+fn angle_normalize(x: f64) -> f64 {
+    // Equivalent to ((x + pi) % (2*pi)) - pi, handling negative values.
+    ((x + PI) % (2.0 * PI) + 2.0 * PI) % (2.0 * PI) - PI
+}
+
+/// Pendulum-v1 environment, a faithful port of Gymnasium's Pendulum.
+///
+/// State: `[theta, angular_velocity]`
+/// Observation: `[cos(theta), sin(theta), angular_velocity]` (3-dim)
+/// Action: torque in `[-2.0, 2.0]` (1-dim continuous)
+pub struct Pendulum {
+    /// Internal state: [theta, angular_velocity]
+    theta: f64,
+    vel: f64,
+    rng: ChaCha8Rng,
+    steps: u32,
+    action_space: ActionSpace,
+    obs_space: ObsSpace,
+    done: bool,
+}
+
+impl Pendulum {
+    pub fn new(seed: Option<u64>) -> Self {
+        let seed = seed.unwrap_or(0);
+        let rng = rng_from_seed(seed);
+
+        let mut env = Pendulum {
+            theta: 0.0,
+            vel: 0.0,
+            rng,
+            steps: 0,
+            action_space: ActionSpace::Box {
+                low: vec![-PENDULUM_MAX_TORQUE as f32],
+                high: vec![PENDULUM_MAX_TORQUE as f32],
+                shape: vec![1],
+            },
+            obs_space: ObsSpace::Box {
+                low: vec![-1.0, -1.0, -PENDULUM_MAX_VEL as f32],
+                high: vec![1.0, 1.0, PENDULUM_MAX_VEL as f32],
+                shape: vec![3],
+            },
+            done: true,
+        };
+        let _ = env.reset(Some(seed));
+        env
+    }
+
+    #[inline]
+    fn obs(&self) -> Observation {
+        Observation::Flat(vec![
+            self.theta.cos() as f32,
+            self.theta.sin() as f32,
+            self.vel as f32,
+        ])
+    }
+}
+
+impl RLEnv for Pendulum {
+    fn step(&mut self, action: &Action) -> Result<Transition, RloxError> {
+        if self.done {
+            return Err(RloxError::EnvError(
+                "Environment is done. Call reset() before stepping.".into(),
+            ));
+        }
+
+        let torque = match action {
+            Action::Continuous(vals) if vals.len() == 1 => {
+                (vals[0] as f64).clamp(-PENDULUM_MAX_TORQUE, PENDULUM_MAX_TORQUE)
+            }
+            _ => {
+                return Err(RloxError::InvalidAction(
+                    "Pendulum expects a Continuous action with 1 element".into(),
+                ));
+            }
+        };
+
+        let theta = self.theta;
+        let vel = self.vel;
+
+        // Reward: -(theta^2 + 0.1*vel^2 + 0.001*torque^2)
+        let norm_theta = angle_normalize(theta);
+        let reward = -(norm_theta * norm_theta
+            + 0.1 * vel * vel
+            + 0.001 * torque * torque);
+
+        // Dynamics
+        let g = PENDULUM_GRAVITY;
+        let m = PENDULUM_MASS;
+        let l = PENDULUM_LENGTH;
+        let dt = PENDULUM_DT;
+
+        let new_vel = vel
+            + (3.0 * g / (2.0 * l) * theta.sin()
+                + 3.0 / (m * l * l) * torque)
+                * dt;
+        let new_vel = new_vel.clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
+        let new_theta = theta + new_vel * dt;
+
+        self.theta = new_theta;
+        self.vel = new_vel;
+        self.steps += 1;
+
+        // Pendulum never terminates, only truncates at max steps
+        let truncated = self.steps >= PENDULUM_MAX_STEPS;
+        self.done = truncated;
+
+        Ok(Transition {
+            obs: self.obs(),
+            reward,
+            terminated: false,
+            truncated,
+            info: HashMap::new(),
+        })
+    }
+
+    fn reset(&mut self, seed: Option<u64>) -> Result<Observation, RloxError> {
+        if let Some(s) = seed {
+            self.rng = rng_from_seed(s);
+        }
+
+        // Gymnasium initializes theta in [-pi, pi], vel in [-1, 1]
+        self.theta = self.rng.random_range(-PI..PI);
+        self.vel = self.rng.random_range(-1.0..1.0);
+        self.steps = 0;
+        self.done = false;
+
+        Ok(self.obs())
+    }
+
+    fn action_space(&self) -> &ActionSpace {
+        &self.action_space
+    }
+
+    fn obs_space(&self) -> &ObsSpace {
+        &self.obs_space
+    }
+
+    fn render(&self) -> Option<String> {
+        Some(format!(
+            "Pendulum | step={} | theta={:.4} vel={:.4}",
+            self.steps, self.theta, self.vel
+        ))
+    }
+}
+
+#[cfg(test)]
+mod pendulum_tests {
+    use super::*;
+
+    #[test]
+    fn pendulum_reset_produces_valid_obs() {
+        let env = Pendulum::new(Some(42));
+        let obs = env.obs();
+        let s = obs.as_slice();
+        assert_eq!(s.len(), 3);
+        // cos and sin should be in [-1, 1]
+        assert!(s[0] >= -1.0 && s[0] <= 1.0, "cos(theta) out of range: {}", s[0]);
+        assert!(s[1] >= -1.0 && s[1] <= 1.0, "sin(theta) out of range: {}", s[1]);
+        // vel should be in [-8, 8]
+        assert!(s[2].abs() <= 8.0, "vel out of range: {}", s[2]);
+    }
+
+    #[test]
+    fn pendulum_step_known_state() {
+        // Start from a known state and verify dynamics
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+
+        // Record initial state
+        let theta0 = env.theta;
+        let vel0 = env.vel;
+
+        // Apply zero torque
+        let t = env.step(&Action::Continuous(vec![0.0])).unwrap();
+
+        // Manually compute expected dynamics with zero torque
+        let g = PENDULUM_GRAVITY;
+        let l = PENDULUM_LENGTH;
+        let dt = PENDULUM_DT;
+
+        let expected_vel = (vel0
+            + (3.0 * g / (2.0 * l) * theta0.sin()) * dt)
+            .clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
+        let expected_theta = theta0 + expected_vel * dt;
+
+        assert!(
+            (env.theta - expected_theta).abs() < 1e-10,
+            "theta mismatch: got {}, expected {}",
+            env.theta,
+            expected_theta
+        );
+        assert!(
+            (env.vel - expected_vel).abs() < 1e-10,
+            "vel mismatch: got {}, expected {}",
+            env.vel,
+            expected_vel
+        );
+
+        // Verify reward: -(norm_theta^2 + 0.1*vel0^2 + 0.001*0^2)
+        let norm_theta = angle_normalize(theta0);
+        let expected_reward =
+            -(norm_theta * norm_theta + 0.1 * vel0 * vel0);
+        assert!(
+            (t.reward - expected_reward).abs() < 1e-10,
+            "reward mismatch: got {}, expected {}",
+            t.reward,
+            expected_reward
+        );
+
+        assert!(!t.terminated);
+        assert!(!t.truncated);
+    }
+
+    #[test]
+    fn pendulum_step_with_torque() {
+        let mut env = Pendulum::new(Some(7));
+        env.reset(Some(7)).unwrap();
+
+        let theta0 = env.theta;
+        let vel0 = env.vel;
+        let torque = 1.5_f32;
+
+        let t = env.step(&Action::Continuous(vec![torque])).unwrap();
+
+        let g = PENDULUM_GRAVITY;
+        let m = PENDULUM_MASS;
+        let l = PENDULUM_LENGTH;
+        let dt = PENDULUM_DT;
+
+        let expected_vel = (vel0
+            + (3.0 * g / (2.0 * l) * theta0.sin()
+                + 3.0 / (m * l * l) * torque as f64)
+                * dt)
+            .clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
+        let expected_theta = theta0 + expected_vel * dt;
+
+        assert!(
+            (env.theta - expected_theta).abs() < 1e-10,
+            "theta: got {}, expected {}",
+            env.theta,
+            expected_theta
+        );
+        assert!(
+            (env.vel - expected_vel).abs() < 1e-10,
+            "vel: got {}, expected {}",
+            env.vel,
+            expected_vel
+        );
+
+        let norm_theta = angle_normalize(theta0);
+        let expected_reward = -(norm_theta * norm_theta
+            + 0.1 * vel0 * vel0
+            + 0.001 * (torque as f64) * (torque as f64));
+        assert!(
+            (t.reward - expected_reward).abs() < 1e-10,
+            "reward: got {}, expected {}",
+            t.reward,
+            expected_reward
+        );
+    }
+
+    #[test]
+    fn pendulum_torque_clamped() {
+        // Torque beyond [-2, 2] should be clamped
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+
+        let theta0 = env.theta;
+        let vel0 = env.vel;
+
+        // Pass torque of 10.0 — should be clamped to 2.0
+        env.step(&Action::Continuous(vec![10.0])).unwrap();
+
+        let g = PENDULUM_GRAVITY;
+        let m = PENDULUM_MASS;
+        let l = PENDULUM_LENGTH;
+        let dt = PENDULUM_DT;
+        let clamped_torque = PENDULUM_MAX_TORQUE;
+
+        let expected_vel = (vel0
+            + (3.0 * g / (2.0 * l) * theta0.sin()
+                + 3.0 / (m * l * l) * clamped_torque)
+                * dt)
+            .clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
+
+        assert!(
+            (env.vel - expected_vel).abs() < 1e-10,
+            "torque clamping failed: vel={}, expected={}",
+            env.vel,
+            expected_vel
+        );
+    }
+
+    #[test]
+    fn pendulum_truncates_at_200() {
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+
+        for i in 0..200 {
+            let t = env.step(&Action::Continuous(vec![0.0])).unwrap();
+            if i < 199 {
+                assert!(!t.truncated, "should not truncate at step {}", i + 1);
+            } else {
+                assert!(t.truncated, "should truncate at step 200");
+                assert!(!t.terminated);
+            }
+        }
+
+        // Stepping after truncation should error
+        let result = env.step(&Action::Continuous(vec![0.0]));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn pendulum_never_terminates() {
+        // Pendulum only truncates, never terminates
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+
+        for _ in 0..200 {
+            let t = env.step(&Action::Continuous(vec![0.0])).unwrap();
+            assert!(!t.terminated);
+        }
+    }
+
+    #[test]
+    fn pendulum_observation_bounds() {
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+
+        for _ in 0..200 {
+            let t = env.step(&Action::Continuous(vec![2.0])).unwrap();
+            let s = t.obs.as_slice();
+            assert!(s[0] >= -1.0 && s[0] <= 1.0, "cos out of [-1,1]: {}", s[0]);
+            assert!(s[1] >= -1.0 && s[1] <= 1.0, "sin out of [-1,1]: {}", s[1]);
+            assert!(
+                s[2].abs() <= PENDULUM_MAX_VEL as f32 + 1e-6,
+                "vel out of [-8,8]: {}",
+                s[2]
+            );
+            if t.truncated {
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn pendulum_seeded_determinism() {
+        let run = |seed: u64| -> Vec<f64> {
+            let mut env = Pendulum::new(Some(seed));
+            let mut rewards = Vec::new();
+            for _ in 0..100 {
+                let t = env.step(&Action::Continuous(vec![1.0])).unwrap();
+                rewards.push(t.reward);
+            }
+            rewards
+        };
+
+        let r1 = run(123);
+        let r2 = run(123);
+        assert_eq!(r1, r2);
+
+        let r3 = run(456);
+        assert_ne!(r1, r3);
+    }
+
+    #[test]
+    fn pendulum_invalid_action_discrete() {
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+        let result = env.step(&Action::Discrete(0));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn pendulum_invalid_action_wrong_dim() {
+        let mut env = Pendulum::new(Some(42));
+        env.reset(Some(42)).unwrap();
+        let result = env.step(&Action::Continuous(vec![1.0, 2.0]));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn angle_normalize_basic() {
+        assert!((angle_normalize(0.0)).abs() < 1e-10);
+        // PI wraps to -PI (both represent the same angle)
+        assert!((angle_normalize(PI) - (-PI)).abs() < 1e-10);
+        assert!((angle_normalize(-PI) - (-PI)).abs() < 1e-10);
+        // 2*PI should wrap to 0
+        assert!((angle_normalize(2.0 * PI)).abs() < 1e-10);
+        // 3*PI should wrap to -PI
+        assert!((angle_normalize(3.0 * PI) - (-PI)).abs() < 1e-10);
+    }
+}

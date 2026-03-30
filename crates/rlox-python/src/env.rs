@@ -1,11 +1,11 @@
-use numpy::{PyArray1, PyArray2};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use rlox_core::env::builtins::CartPole;
+use rlox_core::env::builtins::{CartPole, Pendulum};
 use rlox_core::env::parallel::VecEnv;
-use rlox_core::env::spaces::Action;
+use rlox_core::env::spaces::{Action, ActionSpace};
 use rlox_core::env::{RLEnv, Transition};
 use rlox_core::error::RloxError;
 use rlox_core::seed::derive_seed;
@@ -81,45 +81,83 @@ impl PyVecEnv {
         let env_name = env_id.unwrap_or("CartPole-v1");
         let master_seed = seed.unwrap_or(0);
 
-        match env_name {
-            "CartPole-v1" | "CartPole" => {
-                let envs: Vec<Box<dyn RLEnv>> = (0..n)
-                    .map(|i| {
-                        let s = derive_seed(master_seed, i);
-                        Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
-                    })
-                    .collect();
-                Ok(PyVecEnv {
-                    inner: VecEnv::new(envs),
+        let envs: Vec<Box<dyn RLEnv>> = match env_name {
+            "CartPole-v1" | "CartPole" => (0..n)
+                .map(|i| {
+                    let s = derive_seed(master_seed, i);
+                    Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
                 })
+                .collect(),
+            "Pendulum-v1" | "Pendulum" => (0..n)
+                .map(|i| {
+                    let s = derive_seed(master_seed, i);
+                    Box::new(Pendulum::new(Some(s))) as Box<dyn RLEnv>
+                })
+                .collect(),
+            unknown => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown env_id '{}'. Supported native env IDs: \
+                     [\"CartPole-v1\", \"CartPole\", \"Pendulum-v1\", \"Pendulum\"]. \
+                     For Gymnasium environments, use GymVecEnv instead.",
+                    unknown,
+                )));
             }
-            unknown => Err(PyValueError::new_err(format!(
-                "Unknown env_id '{}'. Supported native env IDs: \
-                 [\"CartPole-v1\", \"CartPole\"]. \
-                 For Gymnasium environments, use GymVecEnv instead.",
-                unknown,
-            ))),
-        }
+        };
+
+        Ok(PyVecEnv {
+            inner: VecEnv::new(envs),
+        })
     }
 
     fn num_envs(&self) -> usize {
         self.inner.num_envs()
     }
 
-    /// Step all envs. `actions` is a list/array of integer actions.
+    /// The action space of the underlying environments.
+    ///
+    /// Returns a dict, e.g.:
+    ///   {"type": "discrete", "n": 2}
+    ///   {"type": "box", "shape": [1], "low": [-2.0], "high": [2.0]}
+    #[getter]
+    fn action_space<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        match self.inner.action_space() {
+            ActionSpace::Discrete(n) => {
+                dict.set_item("type", "discrete")?;
+                dict.set_item("n", *n)?;
+            }
+            ActionSpace::Box { low, high, shape } => {
+                dict.set_item("type", "box")?;
+                dict.set_item("shape", shape.clone())?;
+                dict.set_item("low", low.clone())?;
+                dict.set_item("high", high.clone())?;
+            }
+            ActionSpace::MultiDiscrete(nvec) => {
+                dict.set_item("type", "multi_discrete")?;
+                dict.set_item("nvec", nvec.clone())?;
+            }
+        }
+        Ok(dict)
+    }
+
+    /// Step all envs with the given actions.
+    ///
+    /// Accepts:
+    /// - `list[int]` or `np.ndarray[u32]`: discrete actions (backward compat)
+    /// - `np.ndarray[f32]` 2D `(n_envs, action_dim)`: continuous actions
+    /// - `np.ndarray[f32]` 1D `(n_envs,)`: single-dim continuous actions
     fn step_all<'py>(
         &mut self,
         py: Python<'py>,
-        actions: Vec<u32>,
+        actions: PyObject,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let actions: Vec<Action> = actions.into_iter().map(Action::Discrete).collect();
+        let actions = parse_actions(py, &actions, self.inner.num_envs())?;
         let batch = self.inner.step_all_flat(&actions).map_err(rlox_err_to_py)?;
 
         let n = self.inner.num_envs();
         let obs_dim = batch.obs_dim;
 
         let dict = PyDict::new(py);
-        // Use flat obs directly — single copy, no per-env Vec overhead
         let obs_flat = PyArray1::from_vec(py, batch.obs_flat);
         let obs_array = obs_flat
             .call_method1("reshape", ((n, obs_dim),))
@@ -167,6 +205,62 @@ impl PyVecEnv {
         PyArray2::from_vec2(py, &vecs)
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to create obs array: {}", e)))
     }
+}
+
+/// Parse a Python actions object into a `Vec<Action>`.
+///
+/// Supports three input formats:
+/// 1. `Vec<u32>` (list or 1D int array) -> discrete actions
+/// 2. 2D `ndarray[f32]` of shape `(n_envs, action_dim)` -> continuous actions
+/// 3. 1D `ndarray[f32]` of shape `(n_envs,)` -> single-dim continuous actions
+fn parse_actions(py: Python<'_>, obj: &PyObject, n_envs: usize) -> PyResult<Vec<Action>> {
+    // Try discrete first (backward compat): Vec<u32> from list or 1D int array
+    if let Ok(discrete) = obj.extract::<Vec<u32>>(py) {
+        return Ok(discrete.into_iter().map(Action::Discrete).collect());
+    }
+
+    // Try 2D f32 array: (n_envs, action_dim)
+    if let Ok(arr2d) = obj.extract::<PyReadonlyArray2<f32>>(py) {
+        let shape = arr2d.shape();
+        if shape[0] != n_envs {
+            return Err(PyValueError::new_err(format!(
+                "actions 2D array has {} rows but VecEnv has {} envs",
+                shape[0], n_envs
+            )));
+        }
+        let array = arr2d.as_array();
+        let actions: Vec<Action> = (0..n_envs)
+            .map(|i| {
+                let row = array.row(i);
+                Action::Continuous(row.to_vec())
+            })
+            .collect();
+        return Ok(actions);
+    }
+
+    // Try 1D f32 array: (n_envs,) -> single-dim continuous
+    if let Ok(arr1d) = obj.extract::<PyReadonlyArray1<f32>>(py) {
+        let slice = arr1d.as_slice().map_err(|e| {
+            PyRuntimeError::new_err(format!("Failed to read 1D f32 array: {}", e))
+        })?;
+        if slice.len() != n_envs {
+            return Err(PyValueError::new_err(format!(
+                "actions 1D array has {} elements but VecEnv has {} envs",
+                slice.len(),
+                n_envs
+            )));
+        }
+        let actions: Vec<Action> = slice
+            .iter()
+            .map(|&v| Action::Continuous(vec![v]))
+            .collect();
+        return Ok(actions);
+    }
+
+    Err(PyTypeError::new_err(
+        "actions must be a list[int], np.ndarray[u32] (discrete), \
+         np.ndarray[f32] 2D (continuous), or np.ndarray[f32] 1D (single-dim continuous)",
+    ))
 }
 
 /// Python-facing wrapper for a Gymnasium environment.

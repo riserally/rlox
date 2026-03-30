@@ -5,7 +5,7 @@ policy evaluation (PyTorch). It collects ``n_steps`` of experience from
 ``n_envs`` parallel environments and computes GAE advantages, returning
 a flat :class:`~rlox.batch.RolloutBatch` ready for SGD.
 
-For Rust-native environments (CartPole), the collector uses ``rlox.VecEnv``
+For Rust-native environments (CartPole, Pendulum), the collector uses ``rlox.VecEnv``
 for maximum throughput. For all other Gymnasium environments, it falls back
 to :class:`~rlox.gym_vec_env.GymVecEnv`.
 
@@ -26,7 +26,7 @@ from rlox.batch import RolloutBatch
 from rlox.gym_vec_env import GymVecEnv
 
 # Environments with native Rust implementations
-_NATIVE_ENV_IDS = frozenset({"CartPole-v1", "CartPole"})
+_NATIVE_ENV_IDS = frozenset({"CartPole-v1", "CartPole", "Pendulum-v1", "Pendulum"})
 
 
 class RolloutCollector:
@@ -89,15 +89,27 @@ class RolloutCollector:
         self.reward_fn = reward_fn
 
         # Allow caller to provide a pre-built env (e.g. VecNormalize wrapper)
+        _is_native = False
         if env is not None:
             self.env = env
+            _is_native = env_id in _NATIVE_ENV_IDS
         elif env_id in _NATIVE_ENV_IDS:
-            self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
+            try:
+                self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
+                _is_native = True
+            except (ValueError, RuntimeError):
+                # Rust side doesn't support this env yet; fall back to Gymnasium
+                self.env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
         else:
             self.env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
 
-        if env_id in _NATIVE_ENV_IDS:
-            self._is_discrete = True
+        if _is_native:
+            # Query the Rust VecEnv's action_space property
+            action_space_info = getattr(self.env, "action_space", None)
+            if isinstance(action_space_info, dict):
+                self._is_discrete = action_space_info.get("type") == "discrete"
+            else:
+                self._is_discrete = True  # fallback for older Rust builds
         else:
             import gymnasium as gym
 
@@ -138,7 +150,7 @@ class RolloutCollector:
             if self._is_discrete:
                 step_result = self.env.step_all(actions_np.astype(np.uint32).tolist())
             else:
-                step_result = self.env.step_all(actions_np)
+                step_result = self.env.step_all(actions_np.astype(np.float32))
 
             obs_np = self._obs  # pre-step observations for reward_fn
             raw_rewards = step_result["rewards"]

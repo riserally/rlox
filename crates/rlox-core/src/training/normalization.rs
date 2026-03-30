@@ -81,6 +81,168 @@ impl Default for RunningStats {
     }
 }
 
+/// Per-dimension online running statistics using Welford's algorithm.
+///
+/// Maintains independent mean/variance accumulators for each dimension,
+/// enabling proper per-feature observation normalization as in SB3's
+/// `RunningMeanStd`.
+pub struct RunningStatsVec {
+    dim: usize,
+    count: u64,
+    mean: Vec<f64>,
+    m2: Vec<f64>,
+}
+
+impl RunningStatsVec {
+    /// Create a new accumulator for vectors of the given dimensionality.
+    pub fn new(dim: usize) -> Self {
+        Self {
+            dim,
+            count: 0,
+            mean: vec![0.0; dim],
+            m2: vec![0.0; dim],
+        }
+    }
+
+    /// Update with a single sample of length `dim` (Welford per dimension).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `values.len() != dim`.
+    #[inline]
+    pub fn update(&mut self, values: &[f64]) {
+        assert_eq!(
+            values.len(),
+            self.dim,
+            "expected {} dimensions, got {}",
+            self.dim,
+            values.len()
+        );
+        self.count += 1;
+        let n = self.count as f64;
+        for i in 0..self.dim {
+            let delta = values[i] - self.mean[i];
+            self.mean[i] += delta / n;
+            let delta2 = values[i] - self.mean[i];
+            self.m2[i] += delta * delta2;
+        }
+    }
+
+    /// Update with a flat batch of `batch_size` samples, each of `dim` dimensions.
+    ///
+    /// `data` must have length `batch_size * dim`, laid out as
+    /// `[sample0_dim0, sample0_dim1, ..., sample1_dim0, ...]`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `data.len() != batch_size * dim`.
+    #[inline]
+    pub fn batch_update(&mut self, data: &[f64], batch_size: usize) {
+        assert_eq!(
+            data.len(),
+            batch_size * self.dim,
+            "expected {} elements (batch_size={} * dim={}), got {}",
+            batch_size * self.dim,
+            batch_size,
+            self.dim,
+            data.len()
+        );
+        for sample in data.chunks_exact(self.dim) {
+            self.update(sample);
+        }
+    }
+
+    /// Return the current per-dimension mean vector.
+    #[inline]
+    pub fn mean(&self) -> Vec<f64> {
+        self.mean.clone()
+    }
+
+    /// Return the per-dimension population variance vector.
+    #[inline]
+    pub fn var(&self) -> Vec<f64> {
+        if self.count < 1 {
+            return vec![0.0; self.dim];
+        }
+        let n = self.count as f64;
+        self.m2.iter().map(|&m| m / n).collect()
+    }
+
+    /// Return the per-dimension population standard deviation vector.
+    #[inline]
+    pub fn std(&self) -> Vec<f64> {
+        self.var().iter().map(|&v| v.sqrt()).collect()
+    }
+
+    /// Normalize a single sample: `(values - mean) / max(std, 1e-8)` per dimension.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `values.len() != dim`.
+    #[inline]
+    pub fn normalize(&self, values: &[f64]) -> Vec<f64> {
+        assert_eq!(
+            values.len(),
+            self.dim,
+            "expected {} dimensions, got {}",
+            self.dim,
+            values.len()
+        );
+        let std = self.std();
+        values
+            .iter()
+            .zip(self.mean.iter())
+            .zip(std.iter())
+            .map(|((&v, &m), &s)| (v - m) / s.max(1e-8))
+            .collect()
+    }
+
+    /// Normalize a flat batch of `batch_size` samples.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `data.len() != batch_size * dim`.
+    #[inline]
+    pub fn normalize_batch(&self, data: &[f64], batch_size: usize) -> Vec<f64> {
+        assert_eq!(
+            data.len(),
+            batch_size * self.dim,
+            "expected {} elements (batch_size={} * dim={}), got {}",
+            batch_size * self.dim,
+            batch_size,
+            self.dim,
+            data.len()
+        );
+        let std = self.std();
+        let mut out = Vec::with_capacity(data.len());
+        for sample in data.chunks_exact(self.dim) {
+            for i in 0..self.dim {
+                out.push((sample[i] - self.mean[i]) / std[i].max(1e-8));
+            }
+        }
+        out
+    }
+
+    /// Number of samples seen so far.
+    #[inline]
+    pub fn count(&self) -> u64 {
+        self.count
+    }
+
+    /// Dimensionality of the tracked vectors.
+    #[inline]
+    pub fn dim(&self) -> usize {
+        self.dim
+    }
+
+    /// Reset all accumulated statistics, keeping the dimensionality.
+    pub fn reset(&mut self) {
+        self.count = 0;
+        self.mean.fill(0.0);
+        self.m2.fill(0.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +360,224 @@ mod tests {
         assert_eq!(stats.count(), 8);
     }
 
+    // -----------------------------------------------------------------------
+    // RunningStatsVec tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn stats_vec_new_is_empty() {
+        let stats = RunningStatsVec::new(3);
+        assert_eq!(stats.count(), 0);
+        assert_eq!(stats.dim(), 3);
+        assert_eq!(stats.mean(), vec![0.0; 3]);
+        assert_eq!(stats.var(), vec![0.0; 3]);
+    }
+
+    #[test]
+    fn stats_vec_single_sample() {
+        let mut stats = RunningStatsVec::new(3);
+        stats.update(&[1.0, 2.0, 3.0]);
+        assert_eq!(stats.count(), 1);
+        assert_eq!(stats.mean(), vec![1.0, 2.0, 3.0]);
+        // Variance of a single sample is 0
+        assert_eq!(stats.var(), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn stats_vec_known_values_per_dim() {
+        // Dim 0: [2, 4, 4, 4, 5, 5, 7, 9] -> mean=5.0, var=4.0
+        // Dim 1: [1, 1, 1, 1, 1, 1, 1, 1] -> mean=1.0, var=0.0
+        let mut stats = RunningStatsVec::new(2);
+        let samples: &[&[f64]] = &[
+            &[2.0, 1.0],
+            &[4.0, 1.0],
+            &[4.0, 1.0],
+            &[4.0, 1.0],
+            &[5.0, 1.0],
+            &[5.0, 1.0],
+            &[7.0, 1.0],
+            &[9.0, 1.0],
+        ];
+        for s in samples {
+            stats.update(s);
+        }
+        assert_eq!(stats.count(), 8);
+        let mean = stats.mean();
+        assert!((mean[0] - 5.0).abs() < 1e-10, "dim0 mean: {}", mean[0]);
+        assert!((mean[1] - 1.0).abs() < 1e-10, "dim1 mean: {}", mean[1]);
+        let var = stats.var();
+        assert!((var[0] - 4.0).abs() < 1e-10, "dim0 var: {}", var[0]);
+        assert!(var[1].abs() < 1e-10, "dim1 var: {}", var[1]);
+        let std = stats.std();
+        assert!((std[0] - 2.0).abs() < 1e-10, "dim0 std: {}", std[0]);
+        assert!(std[1].abs() < 1e-10, "dim1 std: {}", std[1]);
+    }
+
+    #[test]
+    fn stats_vec_batch_update_matches_sequential() {
+        let mut seq = RunningStatsVec::new(3);
+        let mut batch = RunningStatsVec::new(3);
+
+        let data = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        for sample in data.chunks(3) {
+            seq.update(sample);
+        }
+        batch.batch_update(&data, 3);
+
+        assert_eq!(seq.count(), batch.count());
+        for i in 0..3 {
+            assert!(
+                (seq.mean()[i] - batch.mean()[i]).abs() < 1e-10,
+                "dim {i} mean mismatch"
+            );
+            assert!(
+                (seq.var()[i] - batch.var()[i]).abs() < 1e-10,
+                "dim {i} var mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn stats_vec_normalize_produces_z_scores() {
+        let mut stats = RunningStatsVec::new(2);
+        // Dim 0: [2, 4, 4, 4, 5, 5, 7, 9] -> mean=5, std=2
+        // Dim 1: [10, 20, 30, 40, 50, 60, 70, 80] -> mean=45, std=~22.36
+        let dim0 = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0];
+        let dim1 = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0];
+        for i in 0..8 {
+            stats.update(&[dim0[i], dim1[i]]);
+        }
+
+        // Normalizing the mean should give ~0
+        let z = stats.normalize(&[5.0, 45.0]);
+        assert!(z[0].abs() < 1e-10, "z[0] should be ~0, got {}", z[0]);
+        assert!(z[1].abs() < 1e-10, "z[1] should be ~0, got {}", z[1]);
+
+        // Normalizing mean+std should give ~1
+        let std = stats.std();
+        let z2 = stats.normalize(&[5.0 + std[0], 45.0 + std[1]]);
+        assert!(
+            (z2[0] - 1.0).abs() < 1e-10,
+            "z2[0] should be ~1, got {}",
+            z2[0]
+        );
+        assert!(
+            (z2[1] - 1.0).abs() < 1e-10,
+            "z2[1] should be ~1, got {}",
+            z2[1]
+        );
+    }
+
+    #[test]
+    fn stats_vec_normalize_with_zero_std_clamps() {
+        let mut stats = RunningStatsVec::new(2);
+        stats.update(&[5.0, 3.0]);
+        stats.update(&[5.0, 3.0]);
+        // Both dims have zero variance
+        let z = stats.normalize(&[6.0, 4.0]);
+        assert!(z[0].is_finite(), "dim0 normalize must be finite");
+        assert!(z[1].is_finite(), "dim1 normalize must be finite");
+        // (6 - 5) / max(0, 1e-8) = 1e8
+        assert!((z[0] - 1e8).abs() < 1.0, "dim0: {}", z[0]);
+    }
+
+    #[test]
+    fn stats_vec_normalize_batch() {
+        let mut stats = RunningStatsVec::new(2);
+        stats.update(&[0.0, 0.0]);
+        stats.update(&[10.0, 20.0]);
+        // mean=[5, 10], var=[25, 100], std=[5, 10]
+
+        let data = [5.0, 10.0, 10.0, 20.0]; // 2 samples
+        let out = stats.normalize_batch(&data, 2);
+        assert!(out[0].abs() < 1e-10, "sample0 dim0 should be 0");
+        assert!(out[1].abs() < 1e-10, "sample0 dim1 should be 0");
+        assert!((out[2] - 1.0).abs() < 1e-10, "sample1 dim0 should be 1");
+        assert!((out[3] - 1.0).abs() < 1e-10, "sample1 dim1 should be 1");
+    }
+
+    #[test]
+    fn stats_vec_reset_clears_state() {
+        let mut stats = RunningStatsVec::new(2);
+        stats.update(&[1.0, 2.0]);
+        stats.update(&[3.0, 4.0]);
+        stats.reset();
+        assert_eq!(stats.count(), 0);
+        assert_eq!(stats.dim(), 2);
+        assert_eq!(stats.mean(), vec![0.0, 0.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected 3 dimensions, got 2")]
+    fn stats_vec_update_wrong_dim_panics() {
+        let mut stats = RunningStatsVec::new(3);
+        stats.update(&[1.0, 2.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected 6 elements")]
+    fn stats_vec_batch_update_wrong_len_panics() {
+        let mut stats = RunningStatsVec::new(3);
+        stats.batch_update(&[1.0, 2.0, 3.0, 4.0], 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected 2 dimensions, got 3")]
+    fn stats_vec_normalize_wrong_dim_panics() {
+        let stats = RunningStatsVec::new(2);
+        stats.normalize(&[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn stats_vec_large_stream_numerically_stable() {
+        let mut stats = RunningStatsVec::new(2);
+        let base = 1_000_000.0f64;
+        for i in 0..10_000 {
+            let v = i as f64 * 0.001;
+            stats.update(&[base + v, -base - v]);
+        }
+        let expected_mean = base + 5.0 - 0.001 / 2.0;
+        let mean = stats.mean();
+        assert!(
+            (mean[0] - expected_mean).abs() < 0.01,
+            "dim0 mean imprecise: got {}, expected ~{expected_mean}",
+            mean[0]
+        );
+        assert!(
+            (mean[1] + expected_mean).abs() < 0.01,
+            "dim1 mean imprecise: got {}, expected ~{}",
+            mean[1],
+            -expected_mean
+        );
+    }
+
+    #[test]
+    fn stats_vec_hopper_like_multi_scale() {
+        // Simulate Hopper-like observations: dim0 in [-1,1], dim1 in [-10,10]
+        let mut stats = RunningStatsVec::new(2);
+        for i in 0..1000 {
+            let t = i as f64 / 999.0;
+            let pos = -1.0 + 2.0 * t; // [-1, 1]
+            let vel = -10.0 + 20.0 * t; // [-10, 10]
+            stats.update(&[pos, vel]);
+        }
+        let std = stats.std();
+        // The stds should reflect the different scales
+        assert!(
+            std[1] > std[0] * 5.0,
+            "velocity std ({}) should be much larger than position std ({})",
+            std[1],
+            std[0]
+        );
+        // Normalizing should bring both dims to similar scale
+        let z = stats.normalize(&[0.5, 5.0]);
+        assert!(
+            z[0].abs() < 5.0 && z[1].abs() < 5.0,
+            "normalized values should be moderate z-scores, got {:?}",
+            z
+        );
+    }
+
     mod proptests {
         use super::*;
         use proptest::prelude::*;
@@ -256,6 +636,84 @@ mod tests {
                     stats.update(v);
                 }
                 prop_assert_eq!(stats.count() as usize, values.len());
+            }
+
+            #[test]
+            fn stats_vec_per_dim_mean_matches_naive(
+                dim in 1usize..8,
+                n_samples in 2usize..50,
+            ) {
+                // Generate deterministic data from dim and n_samples
+                let mut data = Vec::with_capacity(n_samples * dim);
+                for s in 0..n_samples {
+                    for d in 0..dim {
+                        data.push((s as f64) * 0.1 + (d as f64) * 10.0);
+                    }
+                }
+
+                let mut stats = RunningStatsVec::new(dim);
+                stats.batch_update(&data, n_samples);
+
+                // Compute naive per-dim mean
+                for d in 0..dim {
+                    let sum: f64 = (0..n_samples).map(|s| data[s * dim + d]).sum();
+                    let naive_mean = sum / n_samples as f64;
+                    prop_assert!(
+                        (stats.mean()[d] - naive_mean).abs() < 1e-8,
+                        "dim {d}: running mean {} != naive mean {}",
+                        stats.mean()[d], naive_mean
+                    );
+                }
+            }
+
+            #[test]
+            fn stats_vec_variance_non_negative(
+                dim in 1usize..6,
+                n_samples in 2usize..50,
+            ) {
+                let mut data = Vec::with_capacity(n_samples * dim);
+                for s in 0..n_samples {
+                    for d in 0..dim {
+                        data.push((s as f64) * 0.7 - (d as f64) * 3.0);
+                    }
+                }
+
+                let mut stats = RunningStatsVec::new(dim);
+                stats.batch_update(&data, n_samples);
+
+                for d in 0..dim {
+                    prop_assert!(
+                        stats.var()[d] >= 0.0,
+                        "dim {d} variance must be non-negative, got {}",
+                        stats.var()[d]
+                    );
+                }
+            }
+
+            #[test]
+            fn stats_vec_normalize_roundtrip_z_mean_zero(
+                dim in 1usize..6,
+                n_samples in 5usize..50,
+            ) {
+                let mut data = Vec::with_capacity(n_samples * dim);
+                for s in 0..n_samples {
+                    for d in 0..dim {
+                        data.push((s as f64) * 1.3 + (d as f64) * 7.0);
+                    }
+                }
+
+                let mut stats = RunningStatsVec::new(dim);
+                stats.batch_update(&data, n_samples);
+
+                // Normalizing the mean vector should give zeros
+                let z = stats.normalize(&stats.mean());
+                for d in 0..dim {
+                    prop_assert!(
+                        z[d].abs() < 1e-8,
+                        "normalize(mean)[{d}] should be ~0, got {}",
+                        z[d]
+                    );
+                }
             }
         }
     }

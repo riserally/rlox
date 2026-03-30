@@ -35,7 +35,7 @@ class A2C:
         vf_coef: float = 0.5,
         ent_coef: float = 0.01,
         max_grad_norm: float = 0.5,
-        normalize_advantages: bool = True,
+        normalize_advantages: bool = False,
         policy: nn.Module | None = None,
         logger: LoggerCallback | None = None,
         callbacks: list[Callback] | None = None,

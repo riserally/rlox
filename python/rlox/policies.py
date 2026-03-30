@@ -124,7 +124,7 @@ class ContinuousPolicy(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden, 1),
         )
-        self.log_std = nn.Parameter(torch.full((act_dim,), -0.5))
+        self.log_std = nn.Parameter(torch.zeros(act_dim))
 
         # Orthogonal init with sqrt(2) gain for hidden layers
         self.apply(lambda m: _orthogonal_init(m, gain=np.sqrt(2)))

@@ -13,7 +13,7 @@ use buffer::{
 use env::{PyCartPole, PyGymEnv, PyVecEnv};
 use llm::PyDPOPair;
 use nn::{PyActorCritic, PyCandleCollector};
-use training::{PyPipeline, PyRolloutBatch, PyRunningStats};
+use training::{PyPipeline, PyRolloutBatch, PyRunningStats, PyRunningStatsVec};
 
 #[pymodule]
 fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -28,6 +28,7 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVarLenStore>()?;
     m.add_class::<PyDPOPair>()?;
     m.add_class::<PyRunningStats>()?;
+    m.add_class::<PyRunningStatsVec>()?;
     m.add_class::<PyActorCritic>()?;
     m.add_class::<PyCandleCollector>()?;
     m.add_class::<PyRolloutBatch>()?;

@@ -5,7 +5,7 @@ use pyo3::types::PyDict;
 
 use rlox_core::pipeline::channel::{Pipeline, RolloutBatch};
 use rlox_core::training::gae;
-use rlox_core::training::normalization::RunningStats;
+use rlox_core::training::normalization::{RunningStats, RunningStatsVec};
 use rlox_core::training::packing;
 use rlox_core::training::vtrace;
 
@@ -189,6 +189,123 @@ impl PyRunningStats {
 
     fn count(&self) -> u64 {
         self.inner.count()
+    }
+
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+}
+
+/// Python-facing RunningStatsVec (per-dimension Welford's algorithm).
+#[pyclass(name = "RunningStatsVec")]
+pub struct PyRunningStatsVec {
+    inner: RunningStatsVec,
+}
+
+#[pymethods]
+impl PyRunningStatsVec {
+    #[new]
+    fn new(dim: usize) -> Self {
+        Self {
+            inner: RunningStatsVec::new(dim),
+        }
+    }
+
+    /// Update with a single sample (1-D array of length `dim`).
+    fn update(&mut self, values: PyReadonlyArray1<'_, f64>) -> PyResult<()> {
+        let slice = values.as_slice()?;
+        if slice.len() != self.inner.dim() {
+            return Err(PyValueError::new_err(format!(
+                "expected {} dimensions, got {}",
+                self.inner.dim(),
+                slice.len()
+            )));
+        }
+        self.inner.update(slice);
+        Ok(())
+    }
+
+    /// Update with a flat batch: array of length `batch_size * dim`.
+    fn batch_update(
+        &mut self,
+        data: PyReadonlyArray1<'_, f64>,
+        batch_size: usize,
+    ) -> PyResult<()> {
+        let slice = data.as_slice()?;
+        if slice.len() != batch_size * self.inner.dim() {
+            return Err(PyValueError::new_err(format!(
+                "expected {} elements (batch_size={} * dim={}), got {}",
+                batch_size * self.inner.dim(),
+                batch_size,
+                self.inner.dim(),
+                slice.len()
+            )));
+        }
+        self.inner.batch_update(slice, batch_size);
+        Ok(())
+    }
+
+    /// Return the per-dimension mean as a numpy array.
+    fn mean<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_vec(py, self.inner.mean())
+    }
+
+    /// Return the per-dimension population variance as a numpy array.
+    fn var<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_vec(py, self.inner.var())
+    }
+
+    /// Return the per-dimension standard deviation as a numpy array.
+    fn std<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        PyArray1::from_vec(py, self.inner.std())
+    }
+
+    /// Normalize a single sample: `(values - mean) / max(std, 1e-8)`.
+    fn normalize<'py>(
+        &self,
+        py: Python<'py>,
+        values: PyReadonlyArray1<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let slice = values.as_slice()?;
+        if slice.len() != self.inner.dim() {
+            return Err(PyValueError::new_err(format!(
+                "expected {} dimensions, got {}",
+                self.inner.dim(),
+                slice.len()
+            )));
+        }
+        Ok(PyArray1::from_vec(py, self.inner.normalize(slice)))
+    }
+
+    /// Normalize a flat batch: array of length `batch_size * dim`.
+    fn normalize_batch<'py>(
+        &self,
+        py: Python<'py>,
+        data: PyReadonlyArray1<'py, f64>,
+        batch_size: usize,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let slice = data.as_slice()?;
+        if slice.len() != batch_size * self.inner.dim() {
+            return Err(PyValueError::new_err(format!(
+                "expected {} elements (batch_size={} * dim={}), got {}",
+                batch_size * self.inner.dim(),
+                batch_size,
+                self.inner.dim(),
+                slice.len()
+            )));
+        }
+        Ok(PyArray1::from_vec(
+            py,
+            self.inner.normalize_batch(slice, batch_size),
+        ))
+    }
+
+    fn count(&self) -> u64 {
+        self.inner.count()
+    }
+
+    fn dim(&self) -> usize {
+        self.inner.dim()
     }
 
     fn reset(&mut self) {

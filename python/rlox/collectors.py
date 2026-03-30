@@ -26,6 +26,45 @@ from rlox.gym_vec_env import GymVecEnv
 _NATIVE_ENV_IDS = frozenset({"CartPole-v1", "CartPole"})
 
 
+class _RunningMeanStd:
+    """Welford's online mean/variance tracker (per-dimension).
+
+    Pure-Python fallback used for reward return normalization.
+    For observation normalization, prefer ``rlox.RunningStatsVec`` (Rust)
+    when available.
+    """
+
+    def __init__(self, shape: int) -> None:
+        self.mean = np.zeros(shape, dtype=np.float64)
+        self.var = np.ones(shape, dtype=np.float64)
+        self.count: float = 1e-4
+
+    def update(self, batch: np.ndarray) -> None:
+        batch = np.asarray(batch, dtype=np.float64)
+        if batch.ndim == 1:
+            batch = batch[np.newaxis]
+        batch_mean = batch.mean(axis=0)
+        batch_var = batch.var(axis=0)
+        batch_count = batch.shape[0]
+        self._update_from_moments(batch_mean, batch_var, batch_count)
+
+    def _update_from_moments(
+        self,
+        batch_mean: np.ndarray,
+        batch_var: np.ndarray,
+        batch_count: int,
+    ) -> None:
+        delta = batch_mean - self.mean
+        total = self.count + batch_count
+        new_mean = self.mean + delta * batch_count / total
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        m2 = m_a + m_b + delta**2 * self.count * batch_count / total
+        self.mean = new_mean
+        self.var = m2 / total
+        self.count = total
+
+
 class RolloutCollector:
     """Collect on-policy rollout data from vectorized environments.
 
@@ -50,9 +89,10 @@ class RolloutCollector:
     gae_lambda : float
         Lambda parameter for GAE bias-variance tradeoff.
     normalize_rewards : bool
-        If True, divide rewards by running standard deviation.
+        If True, divide rewards by running standard deviation of discounted
+        returns (SB3-style return-based normalization).
     normalize_obs : bool
-        If True, standardise observations using running statistics.
+        If True, standardise observations using per-dimension running statistics.
     reward_fn : Callable or None
         Optional reward shaping function ``(obs, actions, rewards) -> rewards``.
         Applied to raw rewards before storing.
@@ -99,22 +139,46 @@ class RolloutCollector:
 
         self._obs: np.ndarray | None = None  # (n_envs, obs_dim)
 
+        # Bug 2 fix: return-based reward normalization (SB3-style)
         if normalize_rewards:
-            self._reward_stats = rlox.RunningStats()
+            self._return_estimate = np.zeros(n_envs, dtype=np.float64)
+            self._return_var_stats = _RunningMeanStd(shape=1)
+
+        # Bug 1 fix: per-dimension observation normalization
         if normalize_obs:
-            self._obs_stats = rlox.RunningStats()
+            # Determine obs_dim from environment
+            if env_id in _NATIVE_ENV_IDS:
+                # CartPole obs_dim is always 4
+                obs_dim = 4
+            else:
+                obs_dim = int(np.prod(self.env.observation_space.shape))
+            try:
+                self._obs_stats = rlox.RunningStatsVec(obs_dim)
+                self._obs_stats_is_rust = True
+            except AttributeError:
+                # RunningStatsVec not yet available in Rust; use Python fallback
+                self._obs_stats = _RunningMeanStd(shape=obs_dim)
+                self._obs_stats_is_rust = False
 
     def _maybe_normalize_obs(self, obs_tensor: torch.Tensor) -> torch.Tensor:
         if not self.normalize_obs:
             return obs_tensor
-        # Update stats per element
-        flat = obs_tensor.detach().cpu().numpy().ravel().astype(np.float64)
-        self._obs_stats.batch_update(flat)
-        mean = self._obs_stats.mean()
-        std = self._obs_stats.std()
-        if std < 1e-8:
-            std = 1.0
-        return (obs_tensor - mean) / std
+        # Update stats per dimension
+        flat = obs_tensor.detach().cpu().numpy().astype(np.float64)
+        if self._obs_stats_is_rust:
+            batch_size = flat.shape[0] if flat.ndim > 1 else 1
+            self._obs_stats.batch_update(flat.ravel(), batch_size)
+            mean = self._obs_stats.mean()  # np.ndarray of shape (obs_dim,)
+            std = self._obs_stats.std()  # np.ndarray of shape (obs_dim,)
+        else:
+            self._obs_stats.update(flat)
+            mean = self._obs_stats.mean
+            std = np.sqrt(self._obs_stats.var)
+        # Replace near-zero std with 1.0 per dimension
+        std = np.where(std < 1e-8, 1.0, std)
+        mean_t = torch.as_tensor(mean, dtype=torch.float32, device=obs_tensor.device)
+        std_t = torch.as_tensor(std, dtype=torch.float32, device=obs_tensor.device)
+        return (obs_tensor - mean_t) / std_t
 
     @torch.no_grad()
     def collect(self, policy: nn.Module, n_steps: int) -> RolloutBatch:
@@ -153,26 +217,48 @@ class RolloutCollector:
             if self.reward_fn is not None:
                 raw_rewards = self.reward_fn(obs_np, actions_np, raw_rewards)
 
-            all_obs.append(obs_tensor)
+            # Bug 4 fix: store normalized obs (obs_input), not raw (obs_tensor)
+            all_obs.append(obs_input)
             all_actions.append(actions)
             all_log_probs.append(log_probs)
             all_values.append(values)
-            all_rewards.append(
-                torch.as_tensor(raw_rewards.astype(np.float32), device=self.device)
-            )
 
             terminated = step_result["terminated"].astype(bool)
             truncated = step_result["truncated"].astype(bool)
             dones = terminated | truncated
-            all_dones.append(
-                torch.as_tensor(dones.astype(np.float32), device=self.device)
+
+            # Bug 3 fix: truncation bootstrap
+            # When truncated but not terminated, add gamma * V(terminal_obs) to reward
+            # so GAE doesn't treat the episode boundary as a death.
+            terminal_obs_list = step_result.get("terminal_obs")
+            for i in range(self.n_envs):
+                if truncated[i] and not terminated[i] and terminal_obs_list is not None:
+                    term_obs = terminal_obs_list[i]
+                    if term_obs is not None:
+                        term_obs_t = torch.as_tensor(
+                            term_obs, dtype=torch.float32, device=self.device
+                        ).unsqueeze(0)
+                        term_obs_input = self._maybe_normalize_obs(term_obs_t)
+                        term_val = policy.get_value(term_obs_input).item()
+                        raw_rewards[i] += self.gamma * term_val
+
+            all_rewards.append(
+                torch.as_tensor(raw_rewards.astype(np.float32), device=self.device)
             )
+            # Bug 3 fix: pass only terminated (not dones) to GAE
+            all_dones.append(
+                torch.as_tensor(terminated.astype(np.float32), device=self.device)
+            )
+
+            # Bug 2 fix: update return estimates and reset on episode end
+            if self.normalize_rewards:
+                self._return_estimate = (
+                    self._return_estimate * self.gamma + raw_rewards.astype(np.float64)
+                )
+                self._return_estimate[dones] = 0.0
 
             # Next observations
             next_obs = step_result["obs"].copy()
-
-            # For value bootstrapping on terminal envs, use terminal_obs
-            # (the actual last observation before auto-reset)
             self._obs = next_obs
 
         # Bootstrap value for GAE
@@ -187,13 +273,13 @@ class RolloutCollector:
         values_stacked = torch.stack(all_values)  # (n_steps, n_envs)
         dones_stacked = torch.stack(all_dones)  # (n_steps, n_envs)
 
+        # Bug 2 fix: return-based reward normalization
         if self.normalize_rewards:
-            r_np = rewards_stacked.cpu().numpy().astype(np.float64)
-            self._reward_stats.batch_update(r_np.ravel())
-            std = self._reward_stats.std()
-            if std < 1e-8:
-                std = 1.0
-            rewards_stacked = rewards_stacked / std
+            self._return_var_stats.update(
+                self._return_estimate.reshape(-1, 1)
+            )
+            ret_std = np.sqrt(self._return_var_stats.var[0] + 1e-8)
+            rewards_stacked = rewards_stacked / float(ret_std)
 
         # Transpose to (n_envs, n_steps) env-major, flatten contiguously
         rewards_flat = (

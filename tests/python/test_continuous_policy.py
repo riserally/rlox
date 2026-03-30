@@ -70,8 +70,8 @@ class TestContinuousPolicy:
         torch.testing.assert_close(entropy, expected_ent)
 
     def test_log_std_init(self, policy: ContinuousPolicy) -> None:
-        """log_std should be initialized to -0.5."""
-        expected = torch.full((2,), -0.5)
+        """log_std should be initialized to 0.0 (std=1.0, matching SB3)."""
+        expected = torch.zeros(2)
         torch.testing.assert_close(policy.log_std.data, expected)
 
     def test_single_obs(self) -> None:

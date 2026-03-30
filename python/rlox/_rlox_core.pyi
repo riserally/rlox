@@ -470,6 +470,62 @@ class RunningStats:
         """Return the total number of values seen."""
         ...
 
+class RunningStatsVec:
+    """Per-dimension Welford's online algorithm for running mean and variance.
+
+    Tracks independent statistics for each dimension of a vector-valued input,
+    enabling proper per-feature observation normalization (matching SB3's
+    ``RunningMeanStd``).
+
+    Parameters
+    ----------
+    dim : int
+        Number of dimensions (features) to track.
+
+    Example
+    -------
+    >>> stats = RunningStatsVec(dim=11)  # e.g. Hopper obs_dim
+    >>> stats.batch_update(obs_flat, batch_size=2048)
+    >>> normalized = stats.normalize(single_obs)
+    """
+    def __init__(self, dim: int) -> None: ...
+    def update(self, values: npt.NDArray[np.float64]) -> None:
+        """Update with a single sample (1-D array of length ``dim``)."""
+        ...
+    def batch_update(
+        self, data: npt.NDArray[np.float64], batch_size: int
+    ) -> None:
+        """Update with a flat batch of shape ``(batch_size * dim,)``."""
+        ...
+    def mean(self) -> npt.NDArray[np.float64]:
+        """Return per-dimension running mean as array of shape ``(dim,)``."""
+        ...
+    def var(self) -> npt.NDArray[np.float64]:
+        """Return per-dimension population variance as array of shape ``(dim,)``."""
+        ...
+    def std(self) -> npt.NDArray[np.float64]:
+        """Return per-dimension standard deviation as array of shape ``(dim,)``."""
+        ...
+    def normalize(
+        self, values: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
+        """Normalize a single sample: ``(values - mean) / max(std, 1e-8)``."""
+        ...
+    def normalize_batch(
+        self, data: npt.NDArray[np.float64], batch_size: int
+    ) -> npt.NDArray[np.float64]:
+        """Normalize a flat batch of shape ``(batch_size * dim,)``."""
+        ...
+    def count(self) -> int:
+        """Return the total number of samples seen."""
+        ...
+    def dim(self) -> int:
+        """Return the dimensionality."""
+        ...
+    def reset(self) -> None:
+        """Reset all statistics, keeping the dimensionality."""
+        ...
+
 # ---------------------------------------------------------------------------
 # Phase 4: LLM Post-Training
 # ---------------------------------------------------------------------------

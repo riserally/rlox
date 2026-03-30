@@ -343,7 +343,6 @@ def _run_a2c(
         actions = batch.actions
         advantages = batch.advantages
         returns = batch.returns
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         log_probs, entropy = policy.get_logprob_and_entropy(batch_obs, actions)
         values = policy.get_value(batch_obs)
@@ -618,7 +617,7 @@ class _ContinuousActorCritic(nn.Module):
             nn.Linear(h, h), nn.Tanh(),
             nn.Linear(h, act_dim),
         )
-        self.actor_logstd = nn.Parameter(torch.full((act_dim,), -0.5))
+        self.actor_logstd = nn.Parameter(torch.zeros(act_dim))
 
         self.critic = nn.Sequential(
             nn.Linear(obs_dim, h), nn.Tanh(),

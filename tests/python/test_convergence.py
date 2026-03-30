@@ -27,8 +27,8 @@ def _evaluate_ppo_greedy(agent, env_id: str, n_episodes: int, seed: int) -> floa
         while not done:
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
-                dist, _ = agent.policy(obs_t)
-                action = dist.probs.argmax(dim=-1).item()
+                logits = agent.policy.actor(obs_t)
+                action = logits.argmax(dim=-1).item()
             obs, reward, terminated, truncated, _ = env.step(int(action))
             ep_return += float(reward)
             done = terminated or truncated

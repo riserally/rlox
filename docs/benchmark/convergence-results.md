@@ -1,36 +1,64 @@
 # Convergence Benchmark Results
 
-!!! note "In Progress"
-    Benchmark v5 is currently running on GCP (26/32 experiments complete).
-    This page will be populated with full results upon completion.
+!!! note "27/32 Experiments Complete"
+    Benchmark v5 ran on GCP with 27 of 32 planned experiments completed.
+    Missing: TD3 Hopper-v4, TD3 Walker2d-v4, SAC Walker2d-v4 (SB3), A2C Acrobot-v1, DQN Acrobot-v1.
+    A v6 re-benchmark is planned after bug fixes (see Known Issues below).
 
 ## Methodology
 
 - **Frameworks:** rlox v0.2.3 vs Stable-Baselines3
 - **Hardware:** e2-standard-8 (8 vCPU, 32GB RAM), CPU-only
-- **Environments:** CartPole-v1, Pendulum-v1, HalfCheetah-v4, Hopper-v4, Walker2d-v4
-- **Algorithms:** PPO, SAC, TD3, DQN
+- **Environments:** CartPole-v1, Pendulum-v1, HalfCheetah-v4, Hopper-v4, Walker2d-v4, Acrobot-v1, MountainCar-v0
+- **Algorithms:** PPO, SAC, TD3, DQN, A2C
 - **Evaluation:** 30 episodes every 10K steps, deterministic policy
 - **Seeds:** Single seed (multi-seed planned for next run)
 
-## Preliminary Results (In Progress)
+## Convergence Results
 
-| Algorithm | Environment | rlox Return | SB3 Return | Steps |
-|-----------|-------------|-------------|------------|-------|
-| PPO | CartPole-v1 | ~500 | ~500 | 100K |
-| PPO | Hopper-v4 | ~1390 | ~1390 | 1M |
-| SAC | Hopper-v4 | ~3250 | TBD | 1M |
-| SAC | Walker2d-v4 | ~5005 | TBD | 2M |
-| TD3 | HalfCheetah-v4 | TBD | ~9000 | 1M |
-| DQN | CartPole-v1 | ~500 | ~500 | 100K |
+| Algorithm | Environment | Steps | rlox Return | SB3 Return | Winner |
+|-----------|-------------|-------|-------------|------------|--------|
+| PPO | CartPole-v1 | 100K | 453.9 | 420.9 | rlox |
+| PPO | Acrobot-v1 | 500K | **-88.5** | -118.1 | rlox |
+| PPO | HalfCheetah-v4 | 1M | **4225.6** | 3142.5 | rlox |
+| PPO | Hopper-v4 | 1M | 628.1 | **3577.5** | SB3 |
+| PPO | Walker2d-v4 | 2M | **5007.4** | 4384.3 | rlox |
+| SAC | Pendulum-v1 | 50K | -168.5 | **-167.1** | Tie |
+| SAC | HalfCheetah-v4 | 1M | **11468.1** | 10562.7 | rlox |
+| SAC | Hopper-v4 | 1M | **3290.6** | 3170.2 | rlox |
+| SAC | Walker2d-v4 | 2M | **4978.0** | -- | rlox* |
+| TD3 | Pendulum-v1 | 50K | -162.7 | **-169.4** | Tie |
+| TD3 | HalfCheetah-v4 | 1M | **10400.4** | 9899.3 | rlox |
+| DQN | CartPole-v1 | 100K | 164.8 | **195.8** | SB3 |
+| DQN | MountainCar-v0 | 500K | -178.7 | **-109.5** | SB3 |
+| A2C | CartPole-v1 | 100K | 53.8 | **500.0** | SB3 |
+
+\* SB3 experiment not yet completed for this pair.
 
 ## Speed Comparison
 
 | Algorithm | Environment | rlox SPS | SB3 SPS | Speedup |
 |-----------|-------------|----------|---------|---------|
-| PPO | CartPole-v1 | TBD | TBD | TBD |
-| SAC | Hopper-v4 | ~82 | ~100 | TBD |
-| TD3 | HalfCheetah-v4 | TBD | ~101 | TBD |
+| PPO | CartPole-v1 | 1,691 | 687 | **2.46x** |
+| PPO | Acrobot-v1 | 2,520 | 1,306 | **1.93x** |
+| PPO | HalfCheetah-v4 | 800 | 437 | **1.83x** |
+| PPO | Hopper-v4 | 1,237 | 770 | **1.61x** |
+| PPO | Walker2d-v4 | 931 | 762 | **1.22x** |
+| SAC | Pendulum-v1 | 46 | 42 | **1.11x** |
+| SAC | HalfCheetah-v4 | 42 | 63 | 0.68x |
+| SAC | Hopper-v4 | 77 | 66 | **1.18x** |
+| SAC | Walker2d-v4 | 75 | -- | -- |
+| TD3 | Pendulum-v1 | 76 | 65 | **1.17x** |
+| TD3 | HalfCheetah-v4 | 117 | 101 | **1.16x** |
+| DQN | CartPole-v1 | 462 | 642 | 0.72x |
+| DQN | MountainCar-v0 | 479 | 634 | 0.76x |
+| A2C | CartPole-v1 | 2,028 | 489 | **4.15x** |
+
+## Known Issues
+
+- **PPO Hopper gap (628 vs 3577):** Six collector bugs were identified and fixed in v0.2.4. Re-benchmark is pending.
+- **A2C CartPole instability (54 vs 500):** Advantage normalization bug was identified and fixed. Re-benchmark is pending.
+- **DQN underperformance:** DQN results lag behind SB3 on both CartPole and MountainCar; under investigation.
 
 ## Candle Hybrid Collection Benchmark
 
@@ -51,6 +79,6 @@ The Candle hybrid approach eliminates Python dispatch overhead during collection
 shifting the bottleneck entirely to the PyTorch training backward pass.
 
 !!! info
-    Full convergence results with learning curves, IQM statistics, and multi-seed
-    confidence intervals will be published after benchmark completion.
+    A v6 re-benchmark is planned after the collector and A2C bug fixes in v0.2.4.
+    This will include multi-seed runs with IQM statistics and learning curve plots.
     Results will be uploaded to `gs://rkox-bench-results/convergence-*/`.

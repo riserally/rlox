@@ -8,17 +8,20 @@ apt-get update && apt-get install -y docker.io docker-compose-v2
 echo "=== Cloning rlox ==="
 cd /tmp
 git clone https://github.com/riserally/rlox.git
-cd rlox
+cd /tmp/rlox
 mkdir -p results && chmod 777 results
 
+RLOX_DIR=/tmp/rlox
+
 echo "=== Building Docker image ==="
-docker compose build
+docker compose -f "${RLOX_DIR}/docker-compose.yml" build
 
 echo "=== Running convergence benchmarks ==="
+cd "${RLOX_DIR}"
 docker compose run --rm benchmark-convergence
 
 echo "=== Verifying results ==="
-find ./results -type f -ls
+find "${RLOX_DIR}/results" -type f -ls
 
 # Upload with retries
 set +e
@@ -28,7 +31,7 @@ DEST="gs://rkox-bench-results/convergence-${TIMESTAMP}"
 
 for attempt in 1 2 3; do
   echo "Upload attempt ${attempt}..."
-  gcloud storage cp -r ./results "${DEST}/" 2>&1
+  gcloud storage cp -r "${RLOX_DIR}/results" "${DEST}/" 2>&1
   RC=$?
   if [ $RC -eq 0 ]; then
     echo "Upload succeeded on attempt ${attempt}"

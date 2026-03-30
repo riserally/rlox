@@ -111,16 +111,34 @@ class EvalCallback(Callback):
 
             env = gym.make(env_id)
 
+        # Freeze VecNormalize stats during eval if available
+        vec_normalize = getattr(algo, "vec_normalize", None)
+        if vec_normalize is not None:
+            vec_normalize.training = False
+
         rewards = []
         for _ in range(self.n_eval_episodes):
             obs, _ = env.reset()
             ep_reward, done = 0.0, False
             while not done:
-                action = algo.predict(obs, deterministic=True)
+                # Normalize eval obs if VecNormalize is available
+                if vec_normalize is not None and hasattr(vec_normalize, "normalize_obs"):
+                    import numpy as np
+
+                    obs_norm = vec_normalize.normalize_obs(
+                        np.asarray(obs, dtype=np.float32)[np.newaxis]
+                    )[0]
+                    action = algo.predict(obs_norm, deterministic=True)
+                else:
+                    action = algo.predict(obs, deterministic=True)
                 obs, r, term, trunc, _ = env.step(action)
                 ep_reward += r
                 done = term or trunc
             rewards.append(ep_reward)
+
+        # Restore training mode
+        if vec_normalize is not None:
+            vec_normalize.training = True
 
         mean_reward = sum(rewards) / len(rewards)
         self.eval_results.append((self._step_count, mean_reward))

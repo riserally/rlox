@@ -188,6 +188,38 @@ class ExplorationStrategy(Protocol):
 
 
 @runtime_checkable
+class VecEnv(Protocol):
+    """Protocol for vectorized environments.
+
+    Any object implementing step_all/reset_all/num_envs can be used
+    as a vectorized environment (GymVecEnv, VecNormalize, etc.).
+    """
+
+    def step_all(self, actions: np.ndarray) -> dict[str, Any]:
+        """Step all sub-environments.
+
+        Returns
+        -------
+        dict with keys ``obs``, ``rewards``, ``terminated``, ``truncated``,
+        ``terminal_obs``.
+        """
+        ...
+
+    def reset_all(self, **kwargs: Any) -> np.ndarray:
+        """Reset all sub-environments.
+
+        Returns
+        -------
+        np.ndarray of shape ``(n_envs, obs_dim)``.
+        """
+        ...
+
+    def num_envs(self) -> int:
+        """Return the number of parallel sub-environments."""
+        ...
+
+
+@runtime_checkable
 class ReplayBufferProtocol(Protocol):
     """Protocol for replay buffers.
 

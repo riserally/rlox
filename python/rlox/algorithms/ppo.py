@@ -13,9 +13,11 @@ from rlox.callbacks import Callback, CallbackList
 from rlox.checkpoint import Checkpoint
 from rlox.collectors import RolloutCollector
 from rlox.config import PPOConfig
+from rlox.gym_vec_env import GymVecEnv
 from rlox.logging import LoggerCallback
 from rlox.losses import PPOLoss
 from rlox.policies import DiscretePolicy
+from rlox.vec_normalize import VecNormalize
 
 
 _RUST_NATIVE_ENVS = {"CartPole-v1", "CartPole"}
@@ -102,6 +104,27 @@ class PPO:
             self.policy.parameters(), lr=self.config.learning_rate, eps=1e-5
         )
 
+        # Build environment, optionally wrapping with VecNormalize
+        import rlox as _rlox
+
+        if env_id in _RUST_NATIVE_ENVS:
+            raw_env = _rlox.VecEnv(n=self.config.n_envs, seed=seed, env_id=env_id)
+        else:
+            raw_env = GymVecEnv(env_id, n_envs=self.config.n_envs, seed=seed)
+
+        if self.config.normalize_obs or self.config.normalize_rewards:
+            self.vec_normalize: VecNormalize | None = VecNormalize(
+                raw_env,
+                norm_obs=self.config.normalize_obs,
+                norm_reward=self.config.normalize_rewards,
+                gamma=self.config.gamma,
+                obs_dim=obs_dim,
+            )
+            collector_env = self.vec_normalize
+        else:
+            self.vec_normalize = None
+            collector_env = raw_env
+
         self.collector = RolloutCollector(
             env_id=env_id,
             n_envs=self.config.n_envs,
@@ -109,8 +132,7 @@ class PPO:
             device=self.device,
             gamma=self.config.gamma,
             gae_lambda=self.config.gae_lambda,
-            normalize_rewards=self.config.normalize_rewards,
-            normalize_obs=self.config.normalize_obs,
+            env=collector_env,
         )
 
         self.loss_fn = PPOLoss(

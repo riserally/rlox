@@ -73,6 +73,7 @@ from rlox.collectors import RolloutCollector
 from rlox.gym_vec_env import GymVecEnv
 from rlox.losses import PPOLoss
 from rlox.policies import ContinuousPolicy, DiscretePolicy
+from rlox.vec_normalize import VecNormalize
 
 # -- Configs -------------------------------------------------------------------
 from rlox.config import PPOConfig, SACConfig, DQNConfig
@@ -97,6 +98,7 @@ from rlox.protocols import (
     DiscreteQFunction,
     ExplorationStrategy,
     ReplayBufferProtocol,
+    VecEnv as VecEnvProtocol,
 )
 
 # -- Exploration ---------------------------------------------------------------
@@ -171,6 +173,7 @@ __all__ = [
     "RolloutBatch",
     "RolloutCollector",
     "GymVecEnv",
+    "VecNormalize",
     "PPOLoss",
     "ContinuousPolicy",
     "DiscretePolicy",
@@ -204,6 +207,8 @@ __all__ = [
     # Hub
     "push_to_hub",
     "load_from_hub",
+    # Protocols
+    "VecEnvProtocol",
     # Compile
     "compile_policy",
 ]

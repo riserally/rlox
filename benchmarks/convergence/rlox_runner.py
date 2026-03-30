@@ -23,6 +23,8 @@ from rlox.batch import RolloutBatch
 from rlox.callbacks import Callback
 from rlox.losses import PPOLoss
 from rlox.policies import DiscretePolicy
+from rlox.vec_normalize import VecNormalize
+from rlox.gym_vec_env import GymVecEnv
 
 from common import (
     EvalRecord,
@@ -78,7 +80,7 @@ class _RunningMeanStd:
 
 
 def _collect_rollout_gym(
-    vec_env: gymnasium.vector.VectorEnv,
+    env: Any,
     policy: nn.Module,
     obs: np.ndarray,
     n_steps: int,
@@ -86,13 +88,11 @@ def _collect_rollout_gym(
     gamma: float,
     gae_lambda: float,
     is_discrete: bool,
-    obs_rms: _RunningMeanStd | None = None,
-    ret_rms: _RunningMeanStd | None = None,
-    running_returns: np.ndarray | None = None,
 ) -> tuple[RolloutBatch, np.ndarray]:
-    """Collect on-policy rollout using gymnasium VectorEnv + rlox GAE.
+    """Collect on-policy rollout using env.step_all + rlox GAE.
 
-    Uses gymnasium for env stepping, rlox.compute_gae for advantage estimation.
+    Works with GymVecEnv, VecNormalize, or gymnasium VectorEnv (via duck typing).
+    Normalization is handled at the environment boundary by VecNormalize.
     Returns (batch, next_obs).
     """
     all_obs = []
@@ -101,6 +101,9 @@ def _collect_rollout_gym(
     all_dones = []
     all_log_probs = []
     all_values = []
+
+    # Support both step_all (GymVecEnv/VecNormalize) and step (gymnasium VectorEnv)
+    use_step_all = hasattr(env, "step_all")
 
     for _ in range(n_steps):
         obs_tensor = torch.as_tensor(obs, dtype=torch.float32)
@@ -114,15 +117,16 @@ def _collect_rollout_gym(
         else:
             actions_env = actions.cpu().numpy()
 
-        next_obs, rewards, terminated, truncated, infos = vec_env.step(actions_env)
-        dones = terminated | truncated
+        if use_step_all:
+            step_result = env.step_all(actions_env)
+            next_obs = step_result["obs"]
+            rewards = step_result["rewards"]
+            terminated = step_result["terminated"].astype(bool)
+            truncated = step_result["truncated"].astype(bool)
+        else:
+            next_obs, rewards, terminated, truncated, _infos = env.step(actions_env)
 
-        # Reward normalization (matching SB3 VecNormalize)
-        if ret_rms is not None and running_returns is not None:
-            running_returns = running_returns * gamma + rewards
-            ret_rms.update(running_returns)
-            rewards = rewards / np.sqrt(ret_rms.var + 1e-8)
-            running_returns[dones] = 0.0
+        dones = terminated | truncated
 
         all_obs.append(obs_tensor)
         all_actions.append(actions)
@@ -132,8 +136,6 @@ def _collect_rollout_gym(
         all_dones.append(torch.as_tensor(dones.astype(np.float32)))
 
         obs = next_obs
-        if obs_rms is not None:
-            obs = obs_rms.normalize(obs)
 
     # Bootstrap value for GAE
     with torch.no_grad():
@@ -193,7 +195,7 @@ def _run_ppo(
 ) -> None:
     """PPO training loop with periodic evaluation.
 
-    Uses gymnasium VectorEnv for stepping + rlox.compute_gae for advantages.
+    Uses GymVecEnv + VecNormalize for stepping, rlox.compute_gae for advantages.
     """
     n_envs = hp.get("n_envs", 8)
     n_steps = hp.get("n_steps", 2048)
@@ -234,15 +236,21 @@ def _run_ppo(
         max_grad_norm=max_grad_norm,
     )
 
-    vec_env = gymnasium.vector.SyncVectorEnv(
-        [lambda i=i: gym.make(env_id) for i in range(n_envs)]
-    )
-    obs, _ = vec_env.reset(seed=seed)
+    # Build env with VecNormalize wrapper
+    raw_env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
+    vec_normalize: VecNormalize | None = None
+    if normalize_obs or normalize_reward:
+        vec_normalize = VecNormalize(
+            raw_env,
+            norm_obs=normalize_obs,
+            norm_reward=normalize_reward,
+            gamma=gamma,
+        )
+        env = vec_normalize
+    else:
+        env = raw_env
 
-    # Observation and reward normalization (matching SB3 VecNormalize)
-    obs_rms = _RunningMeanStd(obs_dim) if normalize_obs else None
-    ret_rms = _RunningMeanStd(1) if normalize_reward else None
-    running_returns = np.zeros(n_envs)
+    obs = env.reset_all()
 
     steps_per_rollout = n_envs * n_steps
     n_updates = max(1, max_steps // steps_per_rollout)
@@ -256,12 +264,8 @@ def _run_ppo(
         for pg in optimizer.param_groups:
             pg["lr"] = lr * frac
 
-        if obs_rms is not None:
-            obs = obs_rms.normalize(obs)
-
         batch, obs = _collect_rollout_gym(
-            vec_env, policy, obs, n_steps, n_envs, gamma, gae_lambda, is_discrete,
-            obs_rms=obs_rms, ret_rms=ret_rms, running_returns=running_returns,
+            env, policy, obs, n_steps, n_envs, gamma, gae_lambda, is_discrete,
         )
         total_steps += steps_per_rollout
 
@@ -283,9 +287,9 @@ def _run_ppo(
         if total_steps - last_eval_step >= eval_freq:
             last_eval_step = total_steps
             _do_eval(env_id, policy, is_discrete, total_steps, start_time,
-                     eval_episodes, seed, log, obs_rms=obs_rms)
+                     eval_episodes, seed, log, vec_normalize=vec_normalize)
 
-    vec_env.close()
+    raw_env.close()
 
 
 def _run_a2c(
@@ -667,24 +671,32 @@ def _do_eval(
     eval_episodes: int,
     seed: int,
     log: ExperimentLog,
-    obs_rms: _RunningMeanStd | None = None,
+    vec_normalize: VecNormalize | None = None,
 ) -> None:
     """Run evaluation and append to log."""
     wall_clock = time.monotonic() - start_time
     sps = total_steps / max(wall_clock, 1e-9)
 
+    # Freeze stats during eval
+    if vec_normalize is not None:
+        vec_normalize.training = False
+
     if is_discrete:
         def get_action(obs: np.ndarray) -> int:
-            if obs_rms is not None:
-                obs = (obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8)
+            if vec_normalize is not None:
+                obs = vec_normalize.normalize_obs(
+                    np.asarray(obs, dtype=np.float32)[np.newaxis]
+                )[0]
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
                 logits = policy.actor(obs_t)
                 return int(logits.argmax(dim=-1).item())
     else:
         def get_action(obs: np.ndarray) -> np.ndarray:
-            if obs_rms is not None:
-                obs = (obs - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8)
+            if vec_normalize is not None:
+                obs = vec_normalize.normalize_obs(
+                    np.asarray(obs, dtype=np.float32)[np.newaxis]
+                )[0]
             with torch.no_grad():
                 obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
                 mean = policy.actor_mean(obs_t)
@@ -693,6 +705,11 @@ def _do_eval(
     mean_ret, std_ret, mean_len = evaluate_policy_gym(
         env_id, get_action, eval_episodes, seed + 1000,
     )
+
+    # Restore training mode
+    if vec_normalize is not None:
+        vec_normalize.training = True
+
     log.evaluations.append(EvalRecord(
         step=total_steps, wall_clock_s=wall_clock,
         mean_return=mean_ret, std_return=std_ret,

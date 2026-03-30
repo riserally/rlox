@@ -57,34 +57,30 @@ class TestBug5A2CAdvantageNorm:
 
 class TestBug4ObsMismatch:
     def test_batch_obs_are_normalized_when_flag_set(self) -> None:
-        """When normalize_obs=True, obs stored in batch should match what
-        the policy saw during collection (i.e., normalized)."""
+        """When VecNormalize wraps the env with norm_obs=True, obs stored
+        in batch should match what the policy saw (i.e., normalized)."""
         from rlox.collectors import RolloutCollector
+        from rlox.gym_vec_env import GymVecEnv
+        from rlox.vec_normalize import VecNormalize
 
+        raw_env = GymVecEnv("CartPole-v1", n_envs=2, seed=42)
+        vec_norm = VecNormalize(raw_env, norm_obs=True, norm_reward=False)
         collector = RolloutCollector(
-            "CartPole-v1", n_envs=2, seed=42, normalize_obs=True,
+            "CartPole-v1", n_envs=2, seed=42, env=vec_norm,
         )
         policy = DiscretePolicy(obs_dim=4, n_actions=2)
         batch = collector.collect(policy, n_steps=8)
 
-        # With normalization on, the obs should have roughly zero mean
-        # and unit variance (at least not raw scale). Raw CartPole obs
-        # have non-zero mean (e.g., position starts near 0, velocity near 0,
-        # angle near 0, angular velocity near 0 — but after normalization
-        # by running stats the values should differ from raw).
-        # The key invariant: batch obs should NOT be identical to raw obs.
-        # We verify by checking that the mean of absolute values is reasonable
-        # (normalized obs should be roughly centered).
-        obs_mean = batch.obs.mean(dim=0)
-        # After normalization, mean should be closer to 0 than raw
+        # After normalization, obs should be finite and reasonably scaled
         assert batch.obs.shape == (16, 4)
+        assert torch.isfinite(batch.obs).all()
 
     def test_batch_obs_are_raw_when_flag_not_set(self) -> None:
-        """When normalize_obs=False (default), obs in batch are raw."""
+        """When no VecNormalize wrapper, obs in batch are raw."""
         from rlox.collectors import RolloutCollector
 
         collector = RolloutCollector(
-            "CartPole-v1", n_envs=2, seed=42, normalize_obs=False,
+            "CartPole-v1", n_envs=2, seed=42,
         )
         policy = DiscretePolicy(obs_dim=4, n_actions=2)
         batch = collector.collect(policy, n_steps=8)
@@ -117,23 +113,27 @@ class TestBug3TruncationBootstrap:
 
 class TestBug2RewardNormalization:
     def test_return_estimate_initialized(self) -> None:
-        """Collector with normalize_rewards=True should have return estimate state."""
-        from rlox.collectors import RolloutCollector
+        """VecNormalize with norm_reward=True should have return estimate state."""
+        from rlox.gym_vec_env import GymVecEnv
+        from rlox.vec_normalize import VecNormalize
 
-        collector = RolloutCollector(
-            "CartPole-v1", n_envs=4, seed=0, normalize_rewards=True, gamma=0.99,
-        )
-        assert hasattr(collector, "_return_estimate")
-        assert collector._return_estimate.shape == (4,)
-        np.testing.assert_array_equal(collector._return_estimate, np.zeros(4))
+        raw_env = GymVecEnv("CartPole-v1", n_envs=4, seed=0)
+        vec_norm = VecNormalize(raw_env, norm_obs=False, norm_reward=True, gamma=0.99)
+        assert hasattr(vec_norm, "_return_estimate")
+        assert vec_norm._return_estimate.shape == (4,)
+        np.testing.assert_array_equal(vec_norm._return_estimate, np.zeros(4))
 
     def test_return_based_norm_differs_from_raw_std(self) -> None:
         """Return-based normalization should produce different scaling than
         raw reward std normalization."""
         from rlox.collectors import RolloutCollector
+        from rlox.gym_vec_env import GymVecEnv
+        from rlox.vec_normalize import VecNormalize
 
+        raw_env = GymVecEnv("CartPole-v1", n_envs=2, seed=42)
+        vec_norm = VecNormalize(raw_env, norm_obs=False, norm_reward=True)
         collector = RolloutCollector(
-            "CartPole-v1", n_envs=2, seed=42, normalize_rewards=True,
+            "CartPole-v1", n_envs=2, seed=42, env=vec_norm,
         )
         policy = DiscretePolicy(obs_dim=4, n_actions=2)
         # Should run without error
@@ -143,7 +143,7 @@ class TestBug2RewardNormalization:
         assert torch.isfinite(batch.rewards).all()
 
     def test_reward_norm_disabled_by_default(self) -> None:
-        """Default normalize_rewards=False should not create return estimate."""
+        """Without VecNormalize wrapper, collector has no return estimate."""
         from rlox.collectors import RolloutCollector
 
         collector = RolloutCollector("CartPole-v1", n_envs=2, seed=0)
@@ -156,12 +156,16 @@ class TestBug2RewardNormalization:
 
 class TestBug1ObsNormPerDim:
     def test_obs_norm_produces_per_dim_normalization(self) -> None:
-        """When normalize_obs=True, each observation dimension should be
-        normalized independently (not all dims by the same scalar)."""
+        """When VecNormalize wraps env with norm_obs=True, each observation
+        dimension should be normalized independently (per-dim stats)."""
         from rlox.collectors import RolloutCollector
+        from rlox.gym_vec_env import GymVecEnv
+        from rlox.vec_normalize import VecNormalize
 
+        raw_env = GymVecEnv("CartPole-v1", n_envs=4, seed=42)
+        vec_norm = VecNormalize(raw_env, norm_obs=True, norm_reward=False)
         collector = RolloutCollector(
-            "CartPole-v1", n_envs=4, seed=42, normalize_obs=True,
+            "CartPole-v1", n_envs=4, seed=42, env=vec_norm,
         )
         policy = DiscretePolicy(obs_dim=4, n_actions=2)
         # Run enough steps to build up statistics
@@ -171,8 +175,5 @@ class TestBug1ObsNormPerDim:
         # roughly similar scale (std close to 1). With scalar normalization,
         # dimensions with different scales would remain different.
         obs = batch.obs  # (128, 4)
-        per_dim_std = obs.std(dim=0)
-        # Each dimension's std should be in a reasonable range
-        # (not exactly 1.0 due to small sample, but not wildly different)
         assert obs.shape == (128, 4)
         assert torch.isfinite(obs).all()

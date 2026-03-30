@@ -227,9 +227,24 @@ class RolloutCollector:
             truncated = step_result["truncated"].astype(bool)
             dones = terminated | truncated
 
+            # Bug 2 fix: return-based reward normalization (per-step)
+            # Must normalize BEFORE truncation bootstrap so bootstrap values
+            # (already in normalized space) aren't double-divided by ret_std.
+            if self.normalize_rewards:
+                self._return_estimate = (
+                    self._return_estimate * self.gamma + raw_rewards.astype(np.float64)
+                )
+                self._return_var_stats.update(
+                    self._return_estimate.reshape(-1, 1)
+                )
+                self._return_estimate[dones] = 0.0
+                ret_std = max(np.sqrt(self._return_var_stats.var[0] + 1e-8), 1e-8)
+                raw_rewards = raw_rewards / ret_std
+
             # Bug 3 fix: truncation bootstrap
-            # When truncated but not terminated, add gamma * V(terminal_obs) to reward
-            # so GAE doesn't treat the episode boundary as a death.
+            # When truncated but not terminated, add gamma * V(terminal_obs) to reward.
+            # V(terminal_obs) is in normalized-return space (critic trained on normalized
+            # rewards), so this must happen AFTER reward normalization.
             terminal_obs_list = step_result.get("terminal_obs")
             for i in range(self.n_envs):
                 if truncated[i] and not terminated[i] and terminal_obs_list is not None:
@@ -250,13 +265,6 @@ class RolloutCollector:
                 torch.as_tensor(terminated.astype(np.float32), device=self.device)
             )
 
-            # Bug 2 fix: update return estimates and reset on episode end
-            if self.normalize_rewards:
-                self._return_estimate = (
-                    self._return_estimate * self.gamma + raw_rewards.astype(np.float64)
-                )
-                self._return_estimate[dones] = 0.0
-
             # Next observations
             next_obs = step_result["obs"].copy()
             self._obs = next_obs
@@ -272,14 +280,6 @@ class RolloutCollector:
         rewards_stacked = torch.stack(all_rewards)  # (n_steps, n_envs)
         values_stacked = torch.stack(all_values)  # (n_steps, n_envs)
         dones_stacked = torch.stack(all_dones)  # (n_steps, n_envs)
-
-        # Bug 2 fix: return-based reward normalization
-        if self.normalize_rewards:
-            self._return_var_stats.update(
-                self._return_estimate.reshape(-1, 1)
-            )
-            ret_std = np.sqrt(self._return_var_stats.var[0] + 1e-8)
-            rewards_stacked = rewards_stacked / float(ret_std)
 
         # Transpose to (n_envs, n_steps) env-major, flatten contiguously
         rewards_flat = (

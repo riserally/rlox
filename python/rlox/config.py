@@ -11,7 +11,7 @@ for invalid parameters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, fields
+from dataclasses import dataclass, asdict, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,67 @@ def _validate_positive(name: str, value: float) -> None:
 def _validate_min(name: str, value: int, minimum: int) -> None:
     if value < minimum:
         raise ValueError(f"{name} must be >= {minimum}, got {value}")
+
+
+def _load_toml(path: str | Path) -> dict[str, Any]:
+    """Read a TOML file using tomllib (3.11+)."""
+    import tomllib
+
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def _write_toml(data: dict[str, Any], path: str | Path) -> None:
+    """Write a dict to a TOML file.
+
+    Uses ``tomli_w`` if available, otherwise falls back to a simple
+    serialiser that handles the types we actually use.
+    """
+    try:
+        import tomli_w
+
+        with open(path, "wb") as f:
+            tomli_w.dump(data, f)
+    except ImportError:
+        with open(path, "w") as f:
+            f.write(_dict_to_toml(data))
+
+
+def _dict_to_toml(data: dict[str, Any], _prefix: str = "") -> str:
+    """Minimal TOML serialiser for primitive types + nested dicts."""
+    lines: list[str] = []
+    tables: list[tuple[str, dict]] = []
+
+    for key, val in data.items():
+        if isinstance(val, dict):
+            tables.append((key, val))
+        else:
+            lines.append(f"{key} = {_toml_value(val)}")
+
+    for key, sub in tables:
+        section = f"{_prefix}{key}" if not _prefix else f"{_prefix}.{key}"
+        lines.append(f"\n[{section}]")
+        lines.append(_dict_to_toml(sub, section))
+
+    return "\n".join(lines) + "\n"
+
+
+def _toml_value(val: Any) -> str:
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, float):
+        return repr(val)
+    if isinstance(val, str):
+        return f'"{val}"'
+    if isinstance(val, list):
+        inner = ", ".join(_toml_value(v) for v in val)
+        return f"[{inner}]"
+    if val is None:
+        # TOML has no null — use empty string as sentinel
+        return '""'
+    return repr(val)
 
 
 @dataclass
@@ -103,6 +164,11 @@ class PPOConfig:
             data = yaml.safe_load(f) or {}
         return cls.from_dict(data)
 
+    @classmethod
+    def from_toml(cls, path: str | Path) -> PPOConfig:
+        """Load config from a TOML file, ignoring unknown keys."""
+        return cls.from_dict(_load_toml(path))
+
     def merge(self, overrides: dict[str, Any]) -> PPOConfig:
         d = asdict(self)
         d.update(overrides)
@@ -117,6 +183,10 @@ class PPOConfig:
 
         with open(path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        """Save config to a TOML file."""
+        _write_toml(self.to_dict(), path)
 
 
 @dataclass
@@ -177,6 +247,15 @@ class SACConfig:
             data = yaml.safe_load(f) or {}
         return cls.from_dict(data)
 
+    @classmethod
+    def from_toml(cls, path: str | Path) -> SACConfig:
+        """Load config from a TOML file, ignoring unknown keys."""
+        data = _load_toml(path)
+        # TOML has no null — empty string is our sentinel for None
+        if data.get("target_entropy") == "":
+            data["target_entropy"] = None
+        return cls.from_dict(data)
+
     def merge(self, overrides: dict[str, Any]) -> SACConfig:
         d = asdict(self)
         d.update(overrides)
@@ -191,6 +270,10 @@ class SACConfig:
 
         with open(path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        """Save config to a TOML file."""
+        _write_toml(self.to_dict(), path)
 
 
 @dataclass
@@ -254,6 +337,10 @@ class A2CConfig:
             data = yaml.safe_load(f) or {}
         return cls.from_dict(data)
 
+    @classmethod
+    def from_toml(cls, path: str | Path) -> A2CConfig:
+        return cls.from_dict(_load_toml(path))
+
     def merge(self, overrides: dict[str, Any]) -> A2CConfig:
         d = asdict(self)
         d.update(overrides)
@@ -267,6 +354,9 @@ class A2CConfig:
 
         with open(path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        _write_toml(self.to_dict(), path)
 
 
 @dataclass
@@ -336,6 +426,10 @@ class TD3Config:
             data = yaml.safe_load(f) or {}
         return cls.from_dict(data)
 
+    @classmethod
+    def from_toml(cls, path: str | Path) -> TD3Config:
+        return cls.from_dict(_load_toml(path))
+
     def merge(self, overrides: dict[str, Any]) -> TD3Config:
         d = asdict(self)
         d.update(overrides)
@@ -349,6 +443,9 @@ class TD3Config:
 
         with open(path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        _write_toml(self.to_dict(), path)
 
 
 @dataclass
@@ -432,6 +529,11 @@ class DQNConfig:
             data = yaml.safe_load(f) or {}
         return cls.from_dict(data)
 
+    @classmethod
+    def from_toml(cls, path: str | Path) -> DQNConfig:
+        """Load config from a TOML file, ignoring unknown keys."""
+        return cls.from_dict(_load_toml(path))
+
     def merge(self, overrides: dict[str, Any]) -> DQNConfig:
         d = asdict(self)
         d.update(overrides)
@@ -446,3 +548,94 @@ class DQNConfig:
 
         with open(path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        """Save config to a TOML file."""
+        _write_toml(self.to_dict(), path)
+
+
+# ---------------------------------------------------------------------------
+# Top-level training config (Layer 2)
+# ---------------------------------------------------------------------------
+
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c"}
+_VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
+_VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
+
+
+@dataclass
+class TrainingConfig:
+    """Top-level config for YAML/TOML-driven training.
+
+    Combines algorithm selection, environment, seed, hyperparameters,
+    callbacks, and logging into a single serializable config.
+    """
+
+    algorithm: str  # "ppo", "sac", "dqn", "td3", "a2c"
+    env_id: str
+    total_timesteps: int = 100_000
+    seed: int = 42
+    n_envs: int = 1
+    hyperparameters: dict[str, Any] = field(default_factory=dict)
+    callbacks: list[str] = field(default_factory=list)
+    logger: str | None = None  # "tensorboard", "wandb", "console"
+    log_dir: str | None = None
+    eval_freq: int = 10_000
+    eval_episodes: int = 10
+    checkpoint_freq: int = 50_000
+    checkpoint_dir: str = "checkpoints"
+    normalize_obs: bool = False
+    normalize_rewards: bool = False
+
+    def __post_init__(self) -> None:
+        self.algorithm = self.algorithm.lower()
+        if self.algorithm not in _VALID_ALGORITHMS:
+            raise ValueError(
+                f"Unknown algorithm {self.algorithm!r}, "
+                f"expected one of {sorted(_VALID_ALGORITHMS)}"
+            )
+        _validate_min("total_timesteps", self.total_timesteps, 1)
+        _validate_min("n_envs", self.n_envs, 1)
+
+    # -- Constructors --------------------------------------------------------
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> TrainingConfig:
+        """Construct from a dict, ignoring unknown keys."""
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        # Normalise None-sentinels from TOML (empty strings)
+        for key in ("logger", "log_dir"):
+            if key in filtered and filtered[key] == "":
+                filtered[key] = None
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> TrainingConfig:
+        """Load from a YAML file."""
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> TrainingConfig:
+        """Load from a TOML file."""
+        return cls.from_dict(_load_toml(path))
+
+    # -- Serialisation -------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Save to a YAML file."""
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        """Save to a TOML file."""
+        _write_toml(self.to_dict(), path)

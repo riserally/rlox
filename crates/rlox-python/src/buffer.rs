@@ -478,6 +478,29 @@ impl PyMmapReplayBuffer {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    /// Push multiple transitions at once from flat numpy arrays.
+    #[pyo3(signature = (obs, next_obs, actions, rewards, terminated, truncated))]
+    fn push_batch(
+        &mut self,
+        obs: PyReadonlyArray1<f32>,
+        next_obs: PyReadonlyArray1<f32>,
+        actions: PyReadonlyArray1<f32>,
+        rewards: PyReadonlyArray1<f32>,
+        terminated: PyReadonlyArray1<f32>,
+        truncated: PyReadonlyArray1<f32>,
+    ) -> PyResult<()> {
+        self.inner
+            .push_batch(
+                obs.as_slice()?,
+                next_obs.as_slice()?,
+                actions.as_slice()?,
+                rewards.as_slice()?,
+                terminated.as_slice()?,
+                truncated.as_slice()?,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
     fn sample<'py>(
         &self,
         py: Python<'py>,

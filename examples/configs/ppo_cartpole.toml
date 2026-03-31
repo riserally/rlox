@@ -1,0 +1,22 @@
+algorithm = "ppo"
+env_id = "CartPole-v1"
+total_timesteps = 100000
+seed = 42
+n_envs = 8
+
+callbacks = ["eval", "progress"]
+logger = "console"
+eval_freq = 10000
+eval_episodes = 10
+
+[hyperparameters]
+learning_rate = 0.00025
+n_steps = 128
+n_epochs = 4
+clip_eps = 0.2
+batch_size = 256
+gamma = 0.99
+gae_lambda = 0.95
+ent_coef = 0.01
+vf_coef = 0.5
+max_grad_norm = 0.5

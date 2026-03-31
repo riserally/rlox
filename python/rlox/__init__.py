@@ -77,7 +77,10 @@ from rlox.policies import ContinuousPolicy, DiscretePolicy
 from rlox.vec_normalize import VecNormalize
 
 # -- Configs -------------------------------------------------------------------
-from rlox.config import PPOConfig, SACConfig, DQNConfig, A2CConfig, TD3Config
+from rlox.config import PPOConfig, SACConfig, DQNConfig, A2CConfig, TD3Config, TrainingConfig
+
+# -- Runner (config-driven training) ------------------------------------------
+from rlox.runner import train_from_config
 
 # -- Callbacks -----------------------------------------------------------------
 from rlox.callbacks import (
@@ -185,6 +188,8 @@ __all__ = [
     "DQNConfig",
     "A2CConfig",
     "TD3Config",
+    "TrainingConfig",
+    "train_from_config",
     # Callbacks
     "Callback",
     "CallbackList",

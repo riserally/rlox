@@ -28,7 +28,62 @@ def _import_algo(name: str):
     return getattr(mod, cls_name)
 
 
+def _is_training_config(path: str) -> bool:
+    """Check if a config file is a TrainingConfig (has 'algorithm' key)."""
+    if path.endswith((".yaml", ".yml")):
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return "algorithm" in data
+    elif path.endswith(".toml"):
+        import tomllib
+
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        return "algorithm" in data
+    return False
+
+
 def cmd_train(args):
+    # If --config points to a TrainingConfig file, use the config-driven runner
+    if args.config and _is_training_config(args.config):
+        from rlox.config import TrainingConfig
+        from rlox.runner import train_from_config
+
+        config = (
+            TrainingConfig.from_toml(args.config)
+            if args.config.endswith(".toml")
+            else TrainingConfig.from_yaml(args.config)
+        )
+        # CLI overrides
+        if args.env:
+            config.env_id = args.env
+        if args.seed != 42:
+            config.seed = args.seed
+        if args.timesteps != 100_000:
+            config.total_timesteps = args.timesteps
+
+        print(
+            f"Training {config.algorithm.upper()} on {config.env_id} "
+            f"for {config.total_timesteps} steps (seed={config.seed})"
+        )
+        metrics = train_from_config(config)
+        print(f"\nTraining complete. Final metrics: {metrics}")
+
+        if args.save:
+            print(f"Note: --save is not supported with config-driven training yet")
+        return
+
+    # Legacy arg-based path — require --algo and --env
+    if not args.algo:
+        parser_err = "the following arguments are required: --algo (or use --config with a TrainingConfig file)"
+        print(f"error: {parser_err}", file=sys.stderr)
+        sys.exit(2)
+    if not args.env:
+        parser_err = "the following arguments are required: --env (or use --config with a TrainingConfig file)"
+        print(f"error: {parser_err}", file=sys.stderr)
+        sys.exit(2)
     algo_cls = _import_algo(args.algo)
 
     kwargs: dict = {"seed": args.seed}
@@ -96,8 +151,9 @@ def main():
 
     # Train
     train_p = sub.add_parser("train", help="Train an RL agent")
-    train_p.add_argument("--algo", required=True, choices=list(ALGO_MAP.keys()))
-    train_p.add_argument("--env", required=True, help="Gymnasium environment ID")
+    train_p.add_argument("--algo", choices=list(ALGO_MAP.keys()),
+                         help="Algorithm (not required when --config provides it)")
+    train_p.add_argument("--env", help="Gymnasium environment ID")
     train_p.add_argument("--timesteps", type=int, default=100_000)
     train_p.add_argument("--seed", type=int, default=42)
     train_p.add_argument("--config", default=None, help="YAML config file")

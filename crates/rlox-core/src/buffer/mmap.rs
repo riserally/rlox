@@ -20,14 +20,17 @@ const HEADER_SIZE: usize = 24;
 ///
 /// Architecture:
 /// - `hot`: in-memory `ReplayBuffer` for recent data (fast sampling)
-/// - `cold`: memory-mapped file for overflow data
+/// - `cold`: memory-mapped file for overflow data (ring-buffer with wrapping)
 /// - Sampling prefers hot data but can reach into cold
 pub struct MmapReplayBuffer {
     hot: ReplayBuffer,
     cold_path: PathBuf,
     cold_file: Option<File>,
     cold_mmap: Option<Mmap>,
+    /// Number of valid records in cold storage (saturates at cold_capacity).
     cold_count: usize,
+    /// Next write position in cold ring-buffer (wraps at cold_capacity).
+    cold_write_pos: usize,
     obs_dim: usize,
     act_dim: usize,
     hot_capacity: usize,
@@ -64,6 +67,7 @@ impl MmapReplayBuffer {
             cold_file: None,
             cold_mmap: None,
             cold_count: 0,
+            cold_write_pos: 0,
             obs_dim,
             act_dim,
             hot_capacity,
@@ -111,20 +115,61 @@ impl MmapReplayBuffer {
 
         // If hot is full, spill the oldest hot record to cold before pushing.
         if self.hot.len() == self.hot_capacity {
-            let cold_capacity = self.total_capacity - self.hot_capacity;
-            if self.cold_count < cold_capacity {
-                // Read the record at the current write position (the one about
-                // to be overwritten) from the hot buffer.
-                let oldest = self.read_oldest_hot_record();
-                self.append_to_cold(&oldest)?;
-            }
-            // If cold is also full, the oldest cold data is effectively lost
-            // (ring-buffer semantics for total_capacity). We could implement
-            // cold ring-buffer rewriting but that adds complexity; for now the
-            // cold file is append-only up to cold_capacity.
+            let oldest = self.read_oldest_hot_record();
+            self.write_to_cold(&oldest)?;
         }
 
         self.hot.push(record)?;
+        Ok(())
+    }
+
+    /// Push multiple transitions at once from flat arrays.
+    ///
+    /// `obs_batch` shape: `[n * obs_dim]`, `next_obs_batch`: same,
+    /// `actions_batch`: `[n * act_dim]`, others: `[n]`.
+    pub fn push_batch(
+        &mut self,
+        obs_batch: &[f32],
+        next_obs_batch: &[f32],
+        actions_batch: &[f32],
+        rewards: &[f32],
+        terminated: &[f32],
+        truncated: &[f32],
+    ) -> Result<(), RloxError> {
+        let n = rewards.len();
+        if obs_batch.len() != n * self.obs_dim
+            || next_obs_batch.len() != n * self.obs_dim
+            || actions_batch.len() != n * self.act_dim
+            || terminated.len() != n
+            || truncated.len() != n
+        {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("n={n}, obs_dim={}, act_dim={}", self.obs_dim, self.act_dim),
+                got: format!(
+                    "obs={}, next_obs={}, act={}, rew={}, term={}, trunc={}",
+                    obs_batch.len(),
+                    next_obs_batch.len(),
+                    actions_batch.len(),
+                    rewards.len(),
+                    terminated.len(),
+                    truncated.len()
+                ),
+            });
+        }
+        for i in 0..n {
+            let obs = obs_batch[i * self.obs_dim..(i + 1) * self.obs_dim].to_vec();
+            let next_obs = next_obs_batch[i * self.obs_dim..(i + 1) * self.obs_dim].to_vec();
+            let action = actions_batch[i * self.act_dim..(i + 1) * self.act_dim].to_vec();
+            let record = ExperienceRecord {
+                obs,
+                next_obs,
+                action,
+                reward: rewards[i],
+                terminated: terminated[i] != 0.0,
+                truncated: truncated[i] != 0.0,
+            };
+            self.push(record)?;
+        }
         Ok(())
     }
 
@@ -168,6 +213,7 @@ impl MmapReplayBuffer {
             std::fs::remove_file(&self.cold_path)?;
         }
         self.cold_count = 0;
+        self.cold_write_pos = 0;
         Ok(())
     }
 
@@ -199,9 +245,16 @@ impl MmapReplayBuffer {
         }
     }
 
-    /// Append a record to the cold file and re-mmap it.
-    fn append_to_cold(&mut self, record: &ExperienceRecord) -> Result<(), RloxError> {
+    /// Write a record to the cold ring-buffer at `cold_write_pos`, then advance.
+    ///
+    /// When the cold file is not yet at capacity, this extends the file.
+    /// Once full, it overwrites the oldest record (ring-buffer wrap).
+    fn write_to_cold(&mut self, record: &ExperienceRecord) -> Result<(), RloxError> {
+        use std::io::Seek;
+
         self.ensure_cold_file()?;
+
+        let cold_capacity = self.total_capacity - self.hot_capacity;
 
         // Serialize record.
         let record_size = self.record_byte_size();
@@ -219,11 +272,18 @@ impl MmapReplayBuffer {
         buf.push(record.terminated as u8);
         buf.push(record.truncated as u8);
 
+        // Seek to the correct slot in the ring-buffer.
+        let file_offset = HEADER_SIZE + self.cold_write_pos * record_size;
         let file = self.cold_file.as_mut().expect("cold_file must be open");
+        file.seek(std::io::SeekFrom::Start(file_offset as u64))?;
         file.write_all(&buf)?;
         file.flush()?;
 
-        self.cold_count += 1;
+        // Advance ring-buffer position.
+        self.cold_write_pos = (self.cold_write_pos + 1) % cold_capacity;
+        if self.cold_count < cold_capacity {
+            self.cold_count += 1;
+        }
 
         // Update header with new record count.
         self.write_cold_header()?;
@@ -519,5 +579,247 @@ mod tests {
         let batch = buf.sample(5, 42).unwrap();
         assert_eq!(batch.observations.len(), 5 * obs_dim);
         assert_eq!(batch.obs_dim, obs_dim);
+    }
+
+    // ---- push_batch tests ----
+
+    #[test]
+    fn test_push_batch_fills_hot_correctly() {
+        let (_tmp, path) = temp_cold_path();
+        let mut buf = MmapReplayBuffer::new(100, 1000, 4, 1, path).unwrap();
+
+        let n = 10;
+        let obs: Vec<f32> = (0..n * 4).map(|i| i as f32).collect();
+        let next_obs: Vec<f32> = (0..n * 4).map(|i| i as f32 + 100.0).collect();
+        let actions: Vec<f32> = (0..n).map(|i| i as f32 * 0.1).collect();
+        let rewards: Vec<f32> = (0..n).map(|i| i as f32).collect();
+        let terminated = vec![0.0f32; n];
+        let truncated = vec![0.0f32; n];
+
+        buf.push_batch(&obs, &next_obs, &actions, &rewards, &terminated, &truncated)
+            .unwrap();
+
+        assert_eq!(buf.len(), 10);
+        assert_eq!(buf.cold_count, 0);
+
+        // Sample all and verify rewards round-trip.
+        let batch = buf.sample(10, 42).unwrap();
+        assert_eq!(batch.batch_size, 10);
+        assert_eq!(batch.rewards.len(), 10);
+    }
+
+    #[test]
+    fn test_push_batch_triggers_spill_to_cold() {
+        let (_tmp, path) = temp_cold_path();
+        let mut buf = MmapReplayBuffer::new(5, 100, 2, 1, path).unwrap();
+
+        let n = 12;
+        let obs: Vec<f32> = (0..n * 2).map(|i| i as f32).collect();
+        let next_obs: Vec<f32> = (0..n * 2).map(|i| i as f32 + 100.0).collect();
+        let actions: Vec<f32> = (0..n).map(|i| i as f32 * 0.1).collect();
+        let rewards: Vec<f32> = (0..n).map(|i| i as f32).collect();
+        let terminated = vec![0.0f32; n];
+        let truncated = vec![0.0f32; n];
+
+        buf.push_batch(&obs, &next_obs, &actions, &rewards, &terminated, &truncated)
+            .unwrap();
+
+        assert_eq!(buf.hot.len(), 5);
+        assert_eq!(buf.cold_count, 7);
+        assert_eq!(buf.len(), 12);
+    }
+
+    #[test]
+    fn test_push_batch_shape_mismatch() {
+        let (_tmp, path) = temp_cold_path();
+        let mut buf = MmapReplayBuffer::new(100, 1000, 4, 1, path).unwrap();
+
+        // Wrong obs length.
+        let result = buf.push_batch(
+            &[1.0, 2.0, 3.0], // 3 instead of 4
+            &[1.0, 2.0, 3.0, 4.0],
+            &[0.0],
+            &[1.0],
+            &[0.0],
+            &[0.0],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_push_batch_terminated_truncated_flags() {
+        let (_tmp, path) = temp_cold_path();
+        let mut buf = MmapReplayBuffer::new(100, 1000, 2, 1, path).unwrap();
+
+        let obs = vec![1.0, 2.0, 3.0, 4.0]; // 2 records, obs_dim=2
+        let next_obs = vec![5.0, 6.0, 7.0, 8.0];
+        let actions = vec![0.0, 1.0];
+        let rewards = vec![1.0, 2.0];
+        let terminated = vec![1.0, 0.0]; // first terminated
+        let truncated = vec![0.0, 1.0]; // second truncated
+
+        buf.push_batch(&obs, &next_obs, &actions, &rewards, &terminated, &truncated)
+            .unwrap();
+
+        let batch = buf.sample(2, 42).unwrap();
+        // Both records should be present; verify bools are meaningful.
+        assert_eq!(batch.terminated.len(), 2);
+        assert_eq!(batch.truncated.len(), 2);
+    }
+
+    // ---- cold ring-buffer eviction tests ----
+
+    #[test]
+    fn test_cold_ring_buffer_eviction_overwrites_oldest() {
+        let (_tmp, path) = temp_cold_path();
+        // hot_capacity=3, total_capacity=6 => cold_capacity=3
+        let mut buf = MmapReplayBuffer::new(3, 6, 2, 1, path).unwrap();
+
+        // Push 10 records. After 6, cold is full (3 hot + 3 cold).
+        // Records 7-10 should evict oldest cold entries via ring-buffer.
+        for i in 0..10 {
+            let rec = ExperienceRecord {
+                obs: vec![i as f32; 2],
+                next_obs: vec![i as f32 + 100.0; 2],
+                action: vec![i as f32 * 0.1],
+                reward: i as f32,
+                terminated: false,
+                truncated: false,
+            };
+            buf.push(rec).unwrap();
+        }
+
+        // Total should be capped at total_capacity=6.
+        assert_eq!(buf.len(), 6);
+        assert_eq!(buf.hot.len(), 3);
+        assert_eq!(buf.cold_count, 3);
+
+        // Sample all 6 records. The cold ring-buffer should contain records
+        // with rewards from the spill sequence, not the very oldest ones.
+        let batch = buf.sample(6, 42).unwrap();
+        assert_eq!(batch.batch_size, 6);
+        assert_eq!(batch.rewards.len(), 6);
+
+        // Rewards 0, 1, 2 were the earliest cold entries but should have been
+        // overwritten. Hot has the last 3 pushed (7, 8, 9).
+        // Cold should have the 3 most recent spills.
+        for &r in &batch.rewards {
+            assert!(
+                r >= 4.0,
+                "expected only recent records (reward >= 4.0), got {r}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cold_eviction_cold_write_pos_wraps() {
+        let (_tmp, path) = temp_cold_path();
+        // hot_capacity=2, total_capacity=4 => cold_capacity=2
+        let mut buf = MmapReplayBuffer::new(2, 4, 1, 1, path).unwrap();
+
+        // Push 8 records to force multiple cold wrap-arounds.
+        for i in 0..8 {
+            let rec = ExperienceRecord {
+                obs: vec![i as f32],
+                next_obs: vec![i as f32 + 10.0],
+                action: vec![0.0],
+                reward: i as f32,
+                terminated: false,
+                truncated: false,
+            };
+            buf.push(rec).unwrap();
+        }
+
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf.cold_count, 2);
+        // cold_write_pos should have wrapped: 6 spills into capacity 2 => pos 0
+        assert_eq!(buf.cold_write_pos, 0);
+    }
+
+    #[test]
+    fn test_sampling_after_cold_eviction_returns_valid_data() {
+        let (_tmp, path) = temp_cold_path();
+        // hot=5, total=8, cold_capacity=3
+        let mut buf = MmapReplayBuffer::new(5, 8, 3, 1, path).unwrap();
+
+        // Push 20 records to cause many evictions.
+        for i in 0..20 {
+            let rec = ExperienceRecord {
+                obs: vec![i as f32; 3],
+                next_obs: vec![i as f32 + 0.5; 3],
+                action: vec![i as f32 * 0.01],
+                reward: i as f32,
+                terminated: i % 3 == 0,
+                truncated: i % 5 == 0,
+            };
+            buf.push(rec).unwrap();
+        }
+
+        assert_eq!(buf.len(), 8);
+
+        // Sampling should not panic and data should be internally consistent.
+        let batch = buf.sample(8, 123).unwrap();
+        assert_eq!(batch.batch_size, 8);
+        assert_eq!(batch.observations.len(), 8 * 3);
+        assert_eq!(batch.next_observations.len(), 8 * 3);
+        assert_eq!(batch.actions.len(), 8);
+        assert_eq!(batch.rewards.len(), 8);
+
+        // Each sampled obs should match its reward (obs was [r; 3]).
+        for i in 0..8 {
+            let r = batch.rewards[i];
+            let obs_slice = &batch.observations[i * 3..(i + 1) * 3];
+            for &v in obs_slice {
+                assert!(
+                    (v - r).abs() < 1e-6,
+                    "obs {v} should match reward {r}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_push_batch_then_sample_consistency() {
+        let (_tmp, path) = temp_cold_path();
+        let mut buf = MmapReplayBuffer::new(5, 15, 2, 1, path).unwrap();
+
+        // Push 3 batches of 5 to fill past hot and into cold.
+        for batch_idx in 0..3 {
+            let base = batch_idx as f32 * 5.0;
+            let n = 5;
+            let obs: Vec<f32> = (0..n).flat_map(|i| {
+                let v = base + i as f32;
+                vec![v, v + 0.1]
+            }).collect();
+            let next_obs: Vec<f32> = (0..n).flat_map(|i| {
+                let v = base + i as f32 + 100.0;
+                vec![v, v + 0.1]
+            }).collect();
+            let actions: Vec<f32> = (0..n).map(|i| (base + i as f32) * 0.01).collect();
+            let rewards: Vec<f32> = (0..n).map(|i| base + i as f32).collect();
+            let terminated = vec![0.0f32; n];
+            let truncated = vec![0.0f32; n];
+            buf.push_batch(&obs, &next_obs, &actions, &rewards, &terminated, &truncated)
+                .unwrap();
+        }
+
+        assert_eq!(buf.len(), 15);
+        assert_eq!(buf.hot.len(), 5);
+        assert_eq!(buf.cold_count, 10);
+
+        // Sample and check structural validity.
+        let batch = buf.sample(15, 7).unwrap();
+        assert_eq!(batch.batch_size, 15);
+        assert_eq!(batch.observations.len(), 15 * 2);
+
+        // Each observation pair should match: obs[0] and obs[1] differ by 0.1.
+        for i in 0..15 {
+            let o0 = batch.observations[i * 2];
+            let o1 = batch.observations[i * 2 + 1];
+            assert!(
+                (o1 - o0 - 0.1).abs() < 1e-5,
+                "obs pair mismatch at sample {i}: {o0}, {o1}"
+            );
+        }
     }
 }

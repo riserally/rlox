@@ -156,3 +156,29 @@ class A2C:
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         )
         return last_metrics
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        from rlox.checkpoint import Checkpoint
+
+        Checkpoint.save(
+            path,
+            model=self.policy,
+            optimizer=self.optimizer,
+            step=0,
+            config={"env_id": self.env_id},
+        )
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> A2C:
+        """Restore A2C from a checkpoint."""
+        from rlox.checkpoint import Checkpoint
+
+        data = Checkpoint.load(path)
+        config = data.get("config", {})
+        eid = env_id or config.get("env_id", "CartPole-v1")
+
+        a2c = cls(env_id=eid)
+        a2c.policy.load_state_dict(data["model_state_dict"])
+        a2c.optimizer.load_state_dict(data["optimizer_state_dict"])
+        return a2c

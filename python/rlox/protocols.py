@@ -20,10 +20,35 @@ Example
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 import numpy as np
 import torch
+
+
+@runtime_checkable
+class Algorithm(Protocol):
+    """Protocol that all rlox algorithms must satisfy.
+
+    Any class with ``env_id``, ``train()``, ``save()``, and
+    ``from_checkpoint()`` can be used as an algorithm with the unified
+    :class:`~rlox.trainer.Trainer`.
+    """
+
+    env_id: str
+
+    def train(self, total_timesteps: int) -> dict[str, float]:
+        """Run training and return metrics."""
+        ...
+
+    def save(self, path: str) -> None:
+        """Save checkpoint."""
+        ...
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> Self:
+        """Restore from checkpoint."""
+        ...
 
 
 @runtime_checkable

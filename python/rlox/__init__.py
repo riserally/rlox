@@ -121,6 +121,9 @@ from rlox.trainers import (
     IMPALATrainer,
 )
 
+# -- Unified Trainer -----------------------------------------------------------
+from rlox.trainer import Trainer, ALGORITHM_REGISTRY
+
 # -- Runner (config-driven training) ------------------------------------------
 from rlox.runner import train_from_config
 
@@ -240,6 +243,9 @@ __all__ = [
     "DreamerV3Config",
     "IMPALAConfig",
     "TrainingConfig",
+    # Unified Trainer
+    "Trainer",
+    "ALGORITHM_REGISTRY",
     # Runner
     "train_from_config",
     # Trainers

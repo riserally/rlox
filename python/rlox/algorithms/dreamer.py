@@ -841,3 +841,28 @@ class DreamerV3:
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         )
         return last_metrics
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        state = {
+            "world_model": self.world_model.state_dict(),
+            "actor_critic": self.actor_critic.state_dict(),
+            "wm_optimizer": self.wm_optimizer.state_dict(),
+            "ac_optimizer": self.ac_optimizer.state_dict(),
+            "config": {"env_id": self.env_id},
+        }
+        torch.save(state, path)
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> DreamerV3:
+        """Restore DreamerV3 from a checkpoint."""
+        data = torch.load(path, weights_only=False)
+        config = data.get("config", {})
+        eid = env_id or config.get("env_id", "CartPole-v1")
+
+        dreamer = cls(env_id=eid)
+        dreamer.world_model.load_state_dict(data["world_model"])
+        dreamer.actor_critic.load_state_dict(data["actor_critic"])
+        dreamer.wm_optimizer.load_state_dict(data["wm_optimizer"])
+        dreamer.ac_optimizer.load_state_dict(data["ac_optimizer"])
+        return dreamer

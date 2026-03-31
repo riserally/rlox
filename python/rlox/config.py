@@ -87,8 +87,52 @@ def _toml_value(val: Any) -> str:
     return repr(val)
 
 
+class ConfigMixin:
+    """Shared serialization/deserialization for all config dataclasses.
+
+    Provides ``from_dict``, ``from_yaml``, ``from_toml``, ``merge``,
+    ``to_dict``, ``to_yaml``, and ``to_toml`` so individual config classes
+    only need to declare their fields and ``__post_init__`` validation.
+    """
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]):
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path):
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_toml(cls, path: str | Path):
+        return cls.from_dict(_load_toml(path))
+
+    def merge(self, overrides: dict[str, Any]):
+        d = asdict(self)
+        d.update(overrides)
+        return type(self).from_dict(d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        _write_toml(self.to_dict(), path)
+
+
 @dataclass
-class PPOConfig:
+class PPOConfig(ConfigMixin):
     """Configuration for PPO training.
 
     Defaults match CleanRL's PPO implementation for CartPole-v1.
@@ -149,48 +193,9 @@ class PPOConfig:
         _validate_min("n_epochs", self.n_epochs, 1)
         _validate_min("batch_size", self.batch_size, 1)
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> PPOConfig:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> PPOConfig:
-        """Load config from a YAML file, ignoring unknown keys."""
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> PPOConfig:
-        """Load config from a TOML file, ignoring unknown keys."""
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> PPOConfig:
-        d = asdict(self)
-        d.update(overrides)
-        return PPOConfig.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        """Save config to a YAML file."""
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        """Save config to a TOML file."""
-        _write_toml(self.to_dict(), path)
-
 
 @dataclass
-class SACConfig:
+class SACConfig(ConfigMixin):
     """Configuration for SAC training.
 
     Defaults match rl-zoo3 SAC hyperparameters.
@@ -233,51 +238,17 @@ class SACConfig:
         _validate_min("batch_size", self.batch_size, 1)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> SACConfig:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> SACConfig:
-        """Load config from a YAML file, ignoring unknown keys."""
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
     def from_toml(cls, path: str | Path) -> SACConfig:
         """Load config from a TOML file, ignoring unknown keys."""
         data = _load_toml(path)
-        # TOML has no null — empty string is our sentinel for None
+        # TOML has no null -- empty string is our sentinel for None
         if data.get("target_entropy") == "":
             data["target_entropy"] = None
         return cls.from_dict(data)
 
-    def merge(self, overrides: dict[str, Any]) -> SACConfig:
-        d = asdict(self)
-        d.update(overrides)
-        return SACConfig.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        """Save config to a YAML file."""
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        """Save config to a TOML file."""
-        _write_toml(self.to_dict(), path)
-
 
 @dataclass
-class A2CConfig:
+class A2CConfig(ConfigMixin):
     """Configuration for A2C (Advantage Actor-Critic) training.
 
     A2C uses a single gradient step per rollout (no clipping, no epochs).
@@ -323,44 +294,9 @@ class A2CConfig:
         _validate_min("n_steps", self.n_steps, 1)
         _validate_min("n_envs", self.n_envs, 1)
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> A2CConfig:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> A2CConfig:
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> A2CConfig:
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> A2CConfig:
-        d = asdict(self)
-        d.update(overrides)
-        return A2CConfig.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        _write_toml(self.to_dict(), path)
-
 
 @dataclass
-class TD3Config:
+class TD3Config(ConfigMixin):
     """Configuration for TD3 (Twin Delayed DDPG) training.
 
     Deterministic policy with target policy smoothing and delayed updates.
@@ -412,44 +348,9 @@ class TD3Config:
         _validate_min("batch_size", self.batch_size, 1)
         _validate_min("policy_delay", self.policy_delay, 1)
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> TD3Config:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> TD3Config:
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> TD3Config:
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> TD3Config:
-        d = asdict(self)
-        d.update(overrides)
-        return TD3Config.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        _write_toml(self.to_dict(), path)
-
 
 @dataclass
-class DQNConfig:
+class DQNConfig(ConfigMixin):
     """Configuration for DQN training with Rainbow extensions.
 
     Supports Double DQN, Dueling architecture, N-step returns, and
@@ -514,52 +415,13 @@ class DQNConfig:
         _validate_min("batch_size", self.batch_size, 1)
         _validate_min("n_step", self.n_step, 1)
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> DQNConfig:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> DQNConfig:
-        """Load config from a YAML file, ignoring unknown keys."""
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> DQNConfig:
-        """Load config from a TOML file, ignoring unknown keys."""
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> DQNConfig:
-        d = asdict(self)
-        d.update(overrides)
-        return DQNConfig.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        """Save config to a YAML file."""
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        """Save config to a TOML file."""
-        _write_toml(self.to_dict(), path)
-
 
 # ---------------------------------------------------------------------------
 # Top-level training config (Layer 2)
 # ---------------------------------------------------------------------------
 
 @dataclass
-class MAPPOConfig:
+class MAPPOConfig(ConfigMixin):
     """Configuration for Multi-Agent PPO (MAPPO) training.
 
     Centralized training with decentralized execution (CTDE).
@@ -615,44 +477,9 @@ class MAPPOConfig:
         _validate_min("n_epochs", self.n_epochs, 1)
         _validate_min("n_envs", self.n_envs, 1)
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> MAPPOConfig:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> MAPPOConfig:
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> MAPPOConfig:
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> MAPPOConfig:
-        d = asdict(self)
-        d.update(overrides)
-        return MAPPOConfig.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        _write_toml(self.to_dict(), path)
-
 
 @dataclass
-class DreamerV3Config:
+class DreamerV3Config(ConfigMixin):
     """Configuration for DreamerV3 (world-model-based RL) training.
 
     Attributes
@@ -709,44 +536,9 @@ class DreamerV3Config:
         _validate_min("stoch_classes", self.stoch_classes, 1)
         _validate_min("imagination_horizon", self.imagination_horizon, 1)
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> DreamerV3Config:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> DreamerV3Config:
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> DreamerV3Config:
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> DreamerV3Config:
-        d = asdict(self)
-        d.update(overrides)
-        return DreamerV3Config.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        _write_toml(self.to_dict(), path)
-
 
 @dataclass
-class IMPALAConfig:
+class IMPALAConfig(ConfigMixin):
     """Configuration for IMPALA (Importance Weighted Actor-Learner Architecture).
 
     Attributes
@@ -796,41 +588,6 @@ class IMPALAConfig:
         _validate_min("n_steps", self.n_steps, 1)
         _validate_min("queue_size", self.queue_size, 1)
         _validate_min("n_envs_per_actor", self.n_envs_per_actor, 1)
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> IMPALAConfig:
-        valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
-        return cls(**filtered)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> IMPALAConfig:
-        import yaml
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return cls.from_dict(data)
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> IMPALAConfig:
-        return cls.from_dict(_load_toml(path))
-
-    def merge(self, overrides: dict[str, Any]) -> IMPALAConfig:
-        d = asdict(self)
-        d.update(overrides)
-        return IMPALAConfig.from_dict(d)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    def to_yaml(self, path: str | Path) -> None:
-        import yaml
-
-        with open(path, "w") as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
-
-    def to_toml(self, path: str | Path) -> None:
-        _write_toml(self.to_dict(), path)
 
 
 _VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala"}

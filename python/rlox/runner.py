@@ -122,19 +122,9 @@ def train_from_config(config: TrainingConfig | str | Path) -> dict[str, float]:
                 "Use .yaml, .yml, or .toml."
             )
 
-    if config.algorithm not in _ALGO_TRAINER_MAP:
-        raise ValueError(
-            f"Unknown algorithm: {config.algorithm!r}. "
-            f"Supported: {sorted(_ALGO_TRAINER_MAP)}"
-        )
-
     callbacks = _build_callbacks(config)
     logger = _build_logger(config)
 
-    trainer_dotted = _ALGO_TRAINER_MAP[config.algorithm]
-    trainer_cls = _import_class(trainer_dotted)
-
-    # Build kwargs — all algorithms now use Trainer wrappers
     hp = dict(config.hyperparameters)
     hp["n_envs"] = config.n_envs
     if config.normalize_obs:
@@ -142,29 +132,14 @@ def train_from_config(config: TrainingConfig | str | Path) -> dict[str, float]:
     if config.normalize_rewards:
         hp["normalize_rewards"] = True
 
-    if config.algorithm in ("ppo", "a2c", "td3", "mappo", "dreamer", "impala"):
-        # Trainers that accept logger directly
-        trainer = trainer_cls(
-            env=config.env_id,
-            config=hp,
-            callbacks=callbacks or None,
-            logger=logger,
-            seed=config.seed,
-        )
-    elif config.algorithm in ("sac", "dqn"):
-        trainer = trainer_cls(
-            env=config.env_id,
-            config=hp,
-            callbacks=callbacks or None,
-            seed=config.seed,
-        )
-        # Attach logger to inner algo
-        if logger is not None:
-            algo_inner = getattr(trainer, "algo", trainer)
-            if hasattr(algo_inner, "logger"):
-                algo_inner.logger = logger
-    else:
-        raise ValueError(f"Unhandled algorithm dispatch: {config.algorithm!r}")
+    from rlox.trainer import Trainer
 
-    metrics = trainer.train(total_timesteps=config.total_timesteps)
-    return metrics
+    trainer = Trainer(
+        algorithm=config.algorithm,
+        env=config.env_id,
+        config=hp,
+        callbacks=callbacks or None,
+        logger=logger,
+        seed=config.seed,
+    )
+    return trainer.train(total_timesteps=config.total_timesteps)

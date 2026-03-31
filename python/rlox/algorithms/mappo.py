@@ -675,3 +675,33 @@ class MAPPO:
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         )
         return last_metrics
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        import torch as _torch
+
+        state = {
+            "actors": self.actors.state_dict(),
+            "critic": self.critic.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "config": {"env_id": self.env_id, "n_agents": self.n_agents},
+            "step": self._global_step,
+        }
+        _torch.save(state, path)
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> MAPPO:
+        """Restore MAPPO from a checkpoint."""
+        import torch as _torch
+
+        data = _torch.load(path, weights_only=False)
+        config = data.get("config", {})
+        eid = env_id or config.get("env_id", "CartPole-v1")
+        n_agents = config.get("n_agents", 1)
+
+        mappo = cls(env_id=eid, n_agents=n_agents)
+        mappo.actors.load_state_dict(data["actors"])
+        mappo.critic.load_state_dict(data["critic"])
+        mappo.optimizer.load_state_dict(data["optimizer"])
+        mappo._global_step = data.get("step", 0)
+        return mappo

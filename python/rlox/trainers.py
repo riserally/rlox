@@ -14,9 +14,19 @@ Example
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from rlox.callbacks import Callback, CallbackList
+
+
+def _deprecation_warning(old_name: str) -> None:
+    warnings.warn(
+        f"{old_name} is deprecated. Use Trainer('{old_name.replace('Trainer', '').lower()}', ...) instead. "
+        f"See https://riserally.github.io/rlox/python-guide/#unified-trainer",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 class PPOTrainer:
@@ -48,6 +58,7 @@ class PPOTrainer:
         seed: int = 42,
         compile: bool = False,
     ):
+        _deprecation_warning("PPOTrainer")
         from rlox.algorithms.ppo import PPO
 
         cfg = config or {}
@@ -109,6 +120,7 @@ class SACTrainer:
         seed: int = 42,
         compile: bool = False,
     ):
+        _deprecation_warning("SACTrainer")
         from rlox.algorithms.sac import SAC
 
         cfg = config or {}
@@ -166,6 +178,7 @@ class DQNTrainer:
         seed: int = 42,
         compile: bool = False,
     ):
+        _deprecation_warning("DQNTrainer")
         from rlox.algorithms.dqn import DQN
 
         cfg = config or {}
@@ -226,6 +239,7 @@ class A2CTrainer:
         seed: int = 42,
         compile: bool = False,
     ):
+        _deprecation_warning("A2CTrainer")
         from rlox.algorithms.a2c import A2C
 
         cfg = config or {}
@@ -289,6 +303,7 @@ class TD3Trainer:
         seed: int = 42,
         compile: bool = False,
     ):
+        _deprecation_warning("TD3Trainer")
         from rlox.algorithms.td3 import TD3
 
         cfg = config or {}
@@ -351,6 +366,7 @@ class MAPPOTrainer:
         logger: Any | None = None,
         seed: int = 42,
     ):
+        _deprecation_warning("MAPPOTrainer")
         from rlox.algorithms.mappo import MAPPO
 
         cfg = config or {}
@@ -408,6 +424,7 @@ class DreamerV3Trainer:
         logger: Any | None = None,
         seed: int = 42,
     ):
+        _deprecation_warning("DreamerV3Trainer")
         from rlox.algorithms.dreamer import DreamerV3
 
         cfg = config or {}
@@ -466,6 +483,7 @@ class IMPALATrainer:
         logger: Any | None = None,
         seed: int = 42,
     ):
+        _deprecation_warning("IMPALATrainer")
         from rlox.algorithms.impala import IMPALA
 
         cfg = config or {}

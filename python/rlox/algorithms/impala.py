@@ -428,3 +428,26 @@ class IMPALA:
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         )
         return last_metrics
+
+    def save(self, path: str) -> None:
+        """Save training checkpoint."""
+        state = {
+            "policy": self.policy.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "config": {"env_id": self.env_id},
+            "step": self._global_step,
+        }
+        torch.save(state, path)
+
+    @classmethod
+    def from_checkpoint(cls, path: str, env_id: str | None = None) -> IMPALA:
+        """Restore IMPALA from a checkpoint."""
+        data = torch.load(path, weights_only=False)
+        config = data.get("config", {})
+        eid = env_id or config.get("env_id", "CartPole-v1")
+
+        impala = cls(env_id=eid)
+        impala.policy.load_state_dict(data["policy"])
+        impala.optimizer.load_state_dict(data["optimizer"])
+        impala._global_step = data.get("step", 0)
+        return impala

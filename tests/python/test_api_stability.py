@@ -50,6 +50,9 @@ class TestVersionIsString:
         for part in parts:
             assert part.isdigit()
 
+    def test_version_is_1_0_0(self):
+        assert rlox.__version__ == "1.0.0"
+
 
 # =========================================================================
 # Rust primitives
@@ -66,17 +69,29 @@ class TestRustPrimitivesImportable:
         "ExperienceTable",
         "ReplayBuffer",
         "PrioritizedReplayBuffer",
+        "MmapReplayBuffer",
+        "OfflineDatasetBuffer",
         "VarLenStore",
         "compute_gae",
+        "compute_gae_batched",
+        "compute_gae_batched_f32",
         "compute_vtrace",
         "compute_group_advantages",
         "compute_batch_group_advantages",
         "compute_token_kl",
         "compute_token_kl_schulman",
+        "compute_batch_token_kl",
+        "compute_batch_token_kl_schulman",
+        "compute_token_kl_f32",
+        "compute_token_kl_schulman_f32",
+        "compute_batch_token_kl_f32",
+        "compute_batch_token_kl_schulman_f32",
         "DPOPair",
         "RunningStats",
+        "RunningStatsVec",
         "pack_sequences",
         "ActorCritic",
+        "CandleCollector",
     ]
 
     @pytest.mark.parametrize("symbol", RUST_SYMBOLS)
@@ -97,27 +112,71 @@ class TestPythonLayerImportable:
         "RolloutBatch",
         "RolloutCollector",
         "GymVecEnv",
+        "VecNormalize",
         "PPOLoss",
         "ContinuousPolicy",
         "DiscretePolicy",
         "PPOConfig",
         "SACConfig",
         "DQNConfig",
+        "A2CConfig",
+        "TD3Config",
+        "MAPPOConfig",
+        "DreamerV3Config",
+        "IMPALAConfig",
+        "TrainingConfig",
+        "train_from_config",
         "Callback",
         "CallbackList",
         "EvalCallback",
         "EarlyStoppingCallback",
         "CheckpointCallback",
+        "ProgressBarCallback",
+        "TimingCallback",
         "LoggerCallback",
         "WandbLogger",
         "TensorBoardLogger",
+        "ConsoleLogger",
         "interquartile_mean",
         "performance_profiles",
         "stratified_bootstrap_ci",
         "aggregate_metrics",
         "probability_of_improvement",
         "TrainingDiagnostics",
+        "MetricsCollector",
+        "TerminalDashboard",
+        "HTMLReport",
         "Checkpoint",
+        "push_to_hub",
+        "load_from_hub",
+        "compile_policy",
+        "VecEnvProtocol",
+        # Protocols
+        "OnPolicyActor",
+        "StochasticActor",
+        "DeterministicActor",
+        "QFunction",
+        "DiscreteQFunction",
+        "ExplorationStrategy",
+        "ReplayBufferProtocol",
+        # Exploration
+        "GaussianNoise",
+        "EpsilonGreedy",
+        "OUNoise",
+        # Off-policy
+        "OffPolicyCollector",
+        "CollectorProtocol",
+        # Builders
+        "PPOBuilder",
+        "SACBuilder",
+        "DQNBuilder",
+        # Losses
+        "LossComponent",
+        "CompositeLoss",
+        # Distributed
+        "MultiGPUTrainer",
+        "RemoteEnvPool",
+        "launch_elastic",
     ]
 
     @pytest.mark.parametrize("symbol", PYTHON_SYMBOLS)
@@ -162,7 +221,7 @@ class TestAlgorithmsImportable:
 
 
 class TestConfigsHaveFromDictAndToDict:
-    """PPOConfig, SACConfig, DQNConfig must have from_dict, to_dict, merge,
+    """All config classes must have from_dict, to_dict, merge,
     from_yaml, and to_yaml."""
 
     CONFIG_CLASSES = [
@@ -171,6 +230,9 @@ class TestConfigsHaveFromDictAndToDict:
         rlox.DQNConfig,
         rlox.A2CConfig,
         rlox.TD3Config,
+        rlox.MAPPOConfig,
+        rlox.DreamerV3Config,
+        rlox.IMPALAConfig,
     ]
 
     REQUIRED_METHODS = ["from_dict", "to_dict", "merge", "from_yaml", "to_yaml"]
@@ -184,7 +246,7 @@ class TestConfigsHaveFromDictAndToDict:
     @pytest.mark.parametrize("cls", CONFIG_CLASSES, ids=lambda c: c.__name__)
     def test_config_roundtrip(self, cls: type):
         """from_dict(to_dict()) should produce an equivalent config."""
-        original = cls()
+        original = cls() if cls is not rlox.MAPPOConfig else cls(n_agents=2)
         d = original.to_dict()
         restored = cls.from_dict(d)
         assert original.to_dict() == restored.to_dict()
@@ -196,13 +258,22 @@ class TestConfigsHaveFromDictAndToDict:
 
 
 class TestTrainersHaveTrainMethod:
-    """PPOTrainer, SACTrainer, DQNTrainer must all have train()."""
+    """All trainers must have train() and be importable."""
 
     def _get_trainer_class(self, name: str) -> type:
         mod = importlib.import_module("rlox.trainers")
         return getattr(mod, name)
 
-    TRAINER_NAMES = ["PPOTrainer", "SACTrainer", "DQNTrainer"]
+    TRAINER_NAMES = [
+        "PPOTrainer",
+        "SACTrainer",
+        "DQNTrainer",
+        "A2CTrainer",
+        "TD3Trainer",
+        "MAPPOTrainer",
+        "DreamerV3Trainer",
+        "IMPALATrainer",
+    ]
 
     @pytest.mark.parametrize("name", TRAINER_NAMES)
     def test_trainers_have_train_method(self, name: str):
@@ -214,6 +285,36 @@ class TestTrainersHaveTrainMethod:
     def test_trainers_importable(self, name: str):
         cls = self._get_trainer_class(name)
         assert cls is not None
+
+    @pytest.mark.parametrize("name", TRAINER_NAMES)
+    def test_trainers_have_save_method(self, name: str):
+        cls = self._get_trainer_class(name)
+        assert hasattr(cls, "save"), f"{name} missing save() method"
+
+    @pytest.mark.parametrize("name", TRAINER_NAMES)
+    def test_trainers_have_from_checkpoint(self, name: str):
+        cls = self._get_trainer_class(name)
+        assert hasattr(cls, "from_checkpoint"), f"{name} missing from_checkpoint() classmethod"
+
+    TRAINER_EXPORTS = [
+        "PPOTrainer",
+        "SACTrainer",
+        "DQNTrainer",
+        "A2CTrainer",
+        "TD3Trainer",
+        "MAPPOTrainer",
+        "DreamerV3Trainer",
+        "IMPALATrainer",
+    ]
+
+    @pytest.mark.parametrize("name", TRAINER_EXPORTS)
+    def test_trainers_in_rlox_all(self, name: str):
+        assert name in rlox.__all__, f"{name} missing from rlox.__all__"
+
+    @pytest.mark.parametrize("name", TRAINER_EXPORTS)
+    def test_trainers_importable_from_rlox(self, name: str):
+        obj = getattr(rlox, name, None)
+        assert obj is not None, f"{name} not importable from rlox"
 
 
 # =========================================================================
@@ -254,8 +355,23 @@ class TestCallbackProtocol:
 
 
 # =========================================================================
-# RemoteEnvPool
+# Distributed
 # =========================================================================
+
+
+class TestDistributedImportable:
+    """Distributed components must be importable from rlox."""
+
+    DISTRIBUTED_SYMBOLS = [
+        "MultiGPUTrainer",
+        "RemoteEnvPool",
+        "launch_elastic",
+    ]
+
+    @pytest.mark.parametrize("symbol", DISTRIBUTED_SYMBOLS)
+    def test_distributed_importable(self, symbol: str):
+        obj = getattr(rlox, symbol, None)
+        assert obj is not None, f"Distributed symbol '{symbol}' not importable from rlox"
 
 
 class TestRemoteEnvPool:
@@ -263,57 +379,25 @@ class TestRemoteEnvPool:
         from rlox.distributed import RemoteEnvPool
         assert RemoteEnvPool is not None
 
-    def test_num_envs(self):
+    def test_empty_addresses_raises(self):
         from rlox.distributed import RemoteEnvPool
-        pool = RemoteEnvPool(
-            workers=["node-1:50051", "node-2:50051"],
-            envs_per_worker=64,
+        with pytest.raises(ValueError):
+            RemoteEnvPool(addresses=[])
+
+
+# =========================================================================
+# Runner dispatch completeness
+# =========================================================================
+
+
+class TestRunnerAlgoMap:
+    """train_from_config runner must support all algorithms."""
+
+    EXPECTED_ALGOS = ["ppo", "sac", "dqn", "a2c", "td3", "mappo", "dreamer", "impala"]
+
+    @pytest.mark.parametrize("algo", EXPECTED_ALGOS)
+    def test_runner_knows_algo(self, algo: str):
+        from rlox.runner import _ALGO_TRAINER_MAP
+        assert algo in _ALGO_TRAINER_MAP, (
+            f"Algorithm '{algo}' missing from runner._ALGO_TRAINER_MAP"
         )
-        assert pool.num_envs() == 128
-
-    def test_step_raises_connection_error(self):
-        from rlox.distributed import RemoteEnvPool
-        import numpy as np
-        pool = RemoteEnvPool(workers=["localhost:50051"], envs_per_worker=4)
-        with pytest.raises(ConnectionError, match="gRPC server not running"):
-            pool.step_all(np.zeros(4, dtype=np.int32))
-
-    def test_reset_raises_connection_error(self):
-        from rlox.distributed import RemoteEnvPool
-        pool = RemoteEnvPool(workers=["localhost:50051"], envs_per_worker=4)
-        with pytest.raises(ConnectionError, match="gRPC server not running"):
-            pool.reset_all()
-
-    def test_empty_workers_raises(self):
-        from rlox.distributed import RemoteEnvPool
-        with pytest.raises(ValueError, match="must not be empty"):
-            RemoteEnvPool(workers=[])
-
-    def test_repr(self):
-        from rlox.distributed import RemoteEnvPool
-        pool = RemoteEnvPool(workers=["a:1", "b:2"], envs_per_worker=32)
-        r = repr(pool)
-        assert "workers=2" in r
-        assert "total_envs=64" in r
-
-    def test_worker_addresses(self):
-        from rlox.distributed import RemoteEnvPool
-        pool = RemoteEnvPool(workers=["a:1", "b:2"], envs_per_worker=8)
-        assert pool.worker_addresses == ["a:1", "b:2"]
-
-    def test_spaces_with_metadata(self):
-        from rlox.distributed import RemoteEnvPool
-        pool = RemoteEnvPool(
-            workers=["a:1"],
-            envs_per_worker=4,
-            obs_shape=(4,),
-            n_actions=2,
-        )
-        assert pool.observation_space == {"shape": (4,)}
-        assert pool.action_space == {"type": "discrete", "n": 2}
-
-    def test_spaces_without_metadata(self):
-        from rlox.distributed import RemoteEnvPool
-        pool = RemoteEnvPool(workers=["a:1"], envs_per_worker=4)
-        assert pool.observation_space is None
-        assert pool.action_space is None

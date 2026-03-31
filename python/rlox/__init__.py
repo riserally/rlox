@@ -89,6 +89,18 @@ from rlox.config import (
     TrainingConfig,
 )
 
+# -- Trainers ------------------------------------------------------------------
+from rlox.trainers import (
+    PPOTrainer,
+    SACTrainer,
+    DQNTrainer,
+    A2CTrainer,
+    TD3Trainer,
+    MAPPOTrainer,
+    DreamerV3Trainer,
+    IMPALATrainer,
+)
+
 # -- Runner (config-driven training) ------------------------------------------
 from rlox.runner import train_from_config
 
@@ -154,7 +166,10 @@ from rlox.hub import push_to_hub, load_from_hub
 # -- Compile -------------------------------------------------------------------
 from rlox.compile import compile_policy
 
-__version__ = "0.3.0"
+# -- Distributed ---------------------------------------------------------------
+from rlox.distributed import MultiGPUTrainer, RemoteEnvPool, launch_elastic
+
+__version__ = "1.0.0"
 
 __all__ = [
     # Rust primitives
@@ -205,7 +220,17 @@ __all__ = [
     "DreamerV3Config",
     "IMPALAConfig",
     "TrainingConfig",
+    # Runner
     "train_from_config",
+    # Trainers
+    "PPOTrainer",
+    "SACTrainer",
+    "DQNTrainer",
+    "A2CTrainer",
+    "TD3Trainer",
+    "MAPPOTrainer",
+    "DreamerV3Trainer",
+    "IMPALATrainer",
     # Callbacks
     "Callback",
     "CallbackList",
@@ -214,6 +239,29 @@ __all__ = [
     "CheckpointCallback",
     "ProgressBarCallback",
     "TimingCallback",
+    # Protocols
+    "OnPolicyActor",
+    "StochasticActor",
+    "DeterministicActor",
+    "QFunction",
+    "DiscreteQFunction",
+    "ExplorationStrategy",
+    "ReplayBufferProtocol",
+    "VecEnvProtocol",
+    # Exploration
+    "GaussianNoise",
+    "EpsilonGreedy",
+    "OUNoise",
+    # Off-policy collectors
+    "OffPolicyCollector",
+    "CollectorProtocol",
+    # Builders
+    "PPOBuilder",
+    "SACBuilder",
+    "DQNBuilder",
+    # Losses
+    "LossComponent",
+    "CompositeLoss",
     # Logging
     "LoggerCallback",
     "WandbLogger",
@@ -236,8 +284,10 @@ __all__ = [
     # Hub
     "push_to_hub",
     "load_from_hub",
-    # Protocols
-    "VecEnvProtocol",
     # Compile
     "compile_policy",
+    # Distributed
+    "MultiGPUTrainer",
+    "RemoteEnvPool",
+    "launch_elastic",
 ]

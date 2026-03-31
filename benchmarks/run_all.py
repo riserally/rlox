@@ -49,6 +49,7 @@ def main():
                         help="Run reduced iterations for faster feedback")
     parser.add_argument("--category", choices=[
         "all", "env_stepping", "buffer_ops", "gae", "llm", "e2e",
+        "distributed", "algorithms", "mmap_buffer",
     ], default="all")
     args = parser.parse_args()
 
@@ -135,6 +136,30 @@ def main():
                 print(f"\nE2E ROLLOUT BENCHMARK FAILED: {e}")
         else:
             print("\n[SKIP] E2E rollout benchmarks — Phase 2+3 required")
+
+    if args.category in ("all", "distributed"):
+        try:
+            from bench_distributed import run_all as run_distributed
+            run_distributed(args.output_dir)
+        except Exception as e:
+            print(f"\nDISTRIBUTED BENCHMARK FAILED: {e}")
+
+    if args.category in ("all", "algorithms"):
+        try:
+            from bench_algorithms import run_all as run_algorithms
+            run_algorithms(args.output_dir)
+        except Exception as e:
+            print(f"\nALGORITHM BENCHMARK FAILED: {e}")
+
+    if args.category in ("all", "mmap_buffer"):
+        if check_phase_available("phase2"):
+            try:
+                from bench_mmap_buffer import run_all as run_mmap
+                run_mmap(args.output_dir)
+            except Exception as e:
+                print(f"\nMMAP BUFFER BENCHMARK FAILED: {e}")
+        else:
+            print("\n[SKIP] Mmap buffer benchmarks — Phase 2 not implemented")
 
     print("\n" + "=" * 70)
     print("DONE")

@@ -24,9 +24,11 @@ _ALGO_TRAINER_MAP: dict[str, str] = {
     "ppo": "rlox.trainers:PPOTrainer",
     "sac": "rlox.trainers:SACTrainer",
     "dqn": "rlox.trainers:DQNTrainer",
-    # a2c and td3 use the raw algorithm classes (no dedicated trainer)
-    "a2c": "rlox.algorithms.a2c:A2C",
-    "td3": "rlox.algorithms.td3:TD3",
+    "a2c": "rlox.trainers:A2CTrainer",
+    "td3": "rlox.trainers:TD3Trainer",
+    "mappo": "rlox.trainers:MAPPOTrainer",
+    "dreamer": "rlox.trainers:DreamerV3Trainer",
+    "impala": "rlox.trainers:IMPALATrainer",
 }
 
 
@@ -132,7 +134,7 @@ def train_from_config(config: TrainingConfig | str | Path) -> dict[str, float]:
     trainer_dotted = _ALGO_TRAINER_MAP[config.algorithm]
     trainer_cls = _import_class(trainer_dotted)
 
-    # Build kwargs depending on whether this is a Trainer or raw algo class
+    # Build kwargs — all algorithms now use Trainer wrappers
     hp = dict(config.hyperparameters)
     hp["n_envs"] = config.n_envs
     if config.normalize_obs:
@@ -140,8 +142,8 @@ def train_from_config(config: TrainingConfig | str | Path) -> dict[str, float]:
     if config.normalize_rewards:
         hp["normalize_rewards"] = True
 
-    if config.algorithm in ("ppo",):
-        # PPOTrainer takes config dict, callbacks, logger, seed
+    if config.algorithm in ("ppo", "a2c", "td3", "mappo", "dreamer", "impala"):
+        # Trainers that accept logger directly
         trainer = trainer_cls(
             env=config.env_id,
             config=hp,
@@ -162,15 +164,7 @@ def train_from_config(config: TrainingConfig | str | Path) -> dict[str, float]:
             if hasattr(algo_inner, "logger"):
                 algo_inner.logger = logger
     else:
-        # a2c, td3 — raw algorithm class
-        trainer = trainer_cls(
-            env_id=config.env_id,
-            seed=config.seed,
-            callbacks=callbacks or None,
-            **hp,
-        )
-        if logger is not None and hasattr(trainer, "logger"):
-            trainer.logger = logger
+        raise ValueError(f"Unhandled algorithm dispatch: {config.algorithm!r}")
 
     metrics = trainer.train(total_timesteps=config.total_timesteps)
     return metrics

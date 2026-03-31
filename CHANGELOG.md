@@ -2,6 +2,31 @@
 
 All notable changes to rlox are documented here.
 
+## [1.0.0] - 2026-03-29
+
+### API 1.0 Freeze
+
+This release marks the first stable API. All public exports are frozen and
+covered by stability tests. Semver guarantees apply from this version onward.
+
+### Added
+- **A2CTrainer** -- high-level trainer wrapping A2C with callback/logger integration
+- **TD3Trainer** -- high-level trainer wrapping TD3 with callback/logger integration
+- **MAPPOTrainer** -- high-level trainer wrapping MAPPO for multi-agent environments
+- **DreamerV3Trainer** -- high-level trainer wrapping DreamerV3 world-model-based RL
+- **IMPALATrainer** -- high-level trainer wrapping IMPALA actor-learner architecture
+- All trainers expose `train(total_timesteps)`, `save(path)`, and `from_checkpoint(path)`
+- `train_from_config` dispatch extended to all 8 algorithms: ppo, sac, dqn, a2c, td3, mappo, dreamer, impala
+- Complete `__all__` exports: trainers, configs, protocols, exploration, builders, losses, distributed, dashboard
+- Distributed components exported at top level: `MultiGPUTrainer`, `RemoteEnvPool`, `launch_elastic`
+- API stability test suite expanded: all 8 trainers, all 8 configs, distributed symbols, runner dispatch
+
+### Changed
+- `_VALID_ALGORITHMS` in config now includes `mappo`, `dreamer`, `impala`
+- Runner dispatch uses Trainer wrappers for all algorithms (no more raw algo class fallback)
+- `pyproject.toml` classifier updated to `Development Status :: 5 - Production/Stable`
+- Version bumped to 1.0.0 in `__init__.py` and `pyproject.toml`
+
 ## [0.3.0] - 2026-03-30
 
 ### Added

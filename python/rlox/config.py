@@ -833,7 +833,7 @@ class IMPALAConfig:
         _write_toml(self.to_dict(), path)
 
 
-_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c"}
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
 

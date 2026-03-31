@@ -558,6 +558,281 @@ class DQNConfig:
 # Top-level training config (Layer 2)
 # ---------------------------------------------------------------------------
 
+@dataclass
+class MAPPOConfig:
+    """Configuration for Multi-Agent PPO (MAPPO) training.
+
+    Centralized training with decentralized execution (CTDE).
+
+    Attributes
+    ----------
+    n_agents : int
+        Number of agents (default 2).
+    learning_rate : float
+        Adam learning rate (default 5e-4).
+    n_steps : int
+        Rollout length per environment per update (default 128).
+    n_epochs : int
+        Number of SGD passes per rollout (default 5).
+    clip_range : float
+        PPO clipping range (default 0.2).
+    gamma : float
+        Discount factor (default 0.99).
+    gae_lambda : float
+        GAE lambda (default 0.95).
+    vf_coef : float
+        Value loss coefficient (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.01).
+    max_grad_norm : float
+        Maximum gradient norm for clipping (default 10.0).
+    share_parameters : bool
+        Whether agents share actor parameters (default False).
+    hidden : int
+        Hidden layer width (default 64).
+    n_envs : int
+        Number of parallel environments (default 8).
+    """
+
+    n_agents: int = 2
+    learning_rate: float = 5e-4
+    n_steps: int = 128
+    n_epochs: int = 5
+    clip_range: float = 0.2
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    vf_coef: float = 0.5
+    ent_coef: float = 0.01
+    max_grad_norm: float = 10.0
+    share_parameters: bool = False
+    hidden: int = 64
+    n_envs: int = 8
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("n_agents", self.n_agents, 1)
+        _validate_min("n_steps", self.n_steps, 1)
+        _validate_min("n_epochs", self.n_epochs, 1)
+        _validate_min("n_envs", self.n_envs, 1)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> MAPPOConfig:
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> MAPPOConfig:
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> MAPPOConfig:
+        return cls.from_dict(_load_toml(path))
+
+    def merge(self, overrides: dict[str, Any]) -> MAPPOConfig:
+        d = asdict(self)
+        d.update(overrides)
+        return MAPPOConfig.from_dict(d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        _write_toml(self.to_dict(), path)
+
+
+@dataclass
+class DreamerV3Config:
+    """Configuration for DreamerV3 (world-model-based RL) training.
+
+    Attributes
+    ----------
+    learning_rate : float
+        Learning rate for all optimisers (default 1e-4).
+    buffer_size : int
+        Replay buffer capacity (default 1M).
+    batch_size : int
+        Number of sequences per training batch (default 16).
+    seq_len : int
+        Sequence length for training (default 50).
+    gamma : float
+        Discount factor (default 0.997).
+    lambda_ : float
+        Lambda for lambda-returns (default 0.95).
+    deter_dim : int
+        Deterministic state dimension in RSSM (default 512).
+    stoch_dim : int
+        Stochastic state dimension (number of categoricals, default 32).
+    stoch_classes : int
+        Number of classes per categorical (default 32).
+    hidden : int
+        Hidden layer width (default 512).
+    imagination_horizon : int
+        Steps to imagine ahead for actor-critic (default 15).
+    kl_balance : float
+        KL balancing coefficient (default 0.8).
+    free_nats : float
+        Free nats for KL loss (default 1.0).
+    """
+
+    learning_rate: float = 1e-4
+    buffer_size: int = 1_000_000
+    batch_size: int = 16
+    seq_len: int = 50
+    gamma: float = 0.997
+    lambda_: float = 0.95
+    deter_dim: int = 512
+    stoch_dim: int = 32
+    stoch_classes: int = 32
+    hidden: int = 512
+    imagination_horizon: int = 15
+    kl_balance: float = 0.8
+    free_nats: float = 1.0
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("buffer_size", self.buffer_size, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+        _validate_min("seq_len", self.seq_len, 1)
+        _validate_min("deter_dim", self.deter_dim, 1)
+        _validate_min("stoch_dim", self.stoch_dim, 1)
+        _validate_min("stoch_classes", self.stoch_classes, 1)
+        _validate_min("imagination_horizon", self.imagination_horizon, 1)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> DreamerV3Config:
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> DreamerV3Config:
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> DreamerV3Config:
+        return cls.from_dict(_load_toml(path))
+
+    def merge(self, overrides: dict[str, Any]) -> DreamerV3Config:
+        d = asdict(self)
+        d.update(overrides)
+        return DreamerV3Config.from_dict(d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        _write_toml(self.to_dict(), path)
+
+
+@dataclass
+class IMPALAConfig:
+    """Configuration for IMPALA (Importance Weighted Actor-Learner Architecture).
+
+    Attributes
+    ----------
+    learning_rate : float
+        RMSprop learning rate (default 4e-4).
+    n_actors : int
+        Number of actor threads (default 4).
+    n_steps : int
+        Rollout length per actor per batch (default 20).
+    gamma : float
+        Discount factor (default 0.99).
+    vf_coef : float
+        Value loss coefficient (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.01).
+    max_grad_norm : float
+        Maximum gradient norm for clipping (default 40.0).
+    rho_clip : float
+        V-trace truncation for importance weights (default 1.0).
+    c_clip : float
+        V-trace truncation for trace coefficients (default 1.0).
+    queue_size : int
+        Maximum experience queue size (default 16).
+    hidden : int
+        Hidden layer width (default 256).
+    n_envs_per_actor : int
+        Number of environments per actor thread (default 1).
+    """
+
+    learning_rate: float = 4e-4
+    n_actors: int = 4
+    n_steps: int = 20
+    gamma: float = 0.99
+    vf_coef: float = 0.5
+    ent_coef: float = 0.01
+    max_grad_norm: float = 40.0
+    rho_clip: float = 1.0
+    c_clip: float = 1.0
+    queue_size: int = 16
+    hidden: int = 256
+    n_envs_per_actor: int = 1
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("n_actors", self.n_actors, 1)
+        _validate_min("n_steps", self.n_steps, 1)
+        _validate_min("queue_size", self.queue_size, 1)
+        _validate_min("n_envs_per_actor", self.n_envs_per_actor, 1)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> IMPALAConfig:
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> IMPALAConfig:
+        import yaml
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> IMPALAConfig:
+        return cls.from_dict(_load_toml(path))
+
+    def merge(self, overrides: dict[str, Any]) -> IMPALAConfig:
+        d = asdict(self)
+        d.update(overrides)
+        return IMPALAConfig.from_dict(d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_yaml(self, path: str | Path) -> None:
+        import yaml
+
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def to_toml(self, path: str | Path) -> None:
+        _write_toml(self.to_dict(), path)
+
+
 _VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}

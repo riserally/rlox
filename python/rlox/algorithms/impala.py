@@ -2,6 +2,9 @@
 
 Multiple actor threads collect experience asynchronously while a single
 learner thread applies V-trace correction using rlox.compute_vtrace.
+
+V-trace computation is vectorized across environments by batching
+per-env arrays into a single call to the Rust backend.
 """
 
 from __future__ import annotations
@@ -35,12 +38,71 @@ def _detect_env_spaces(env_id: str) -> tuple[int, Any, bool]:
     return obs_dim, action_space, is_discrete
 
 
+def _compute_vtrace_batched(
+    log_rhos: np.ndarray,
+    rewards: np.ndarray,
+    values: np.ndarray,
+    dones: np.ndarray,
+    bootstrap_values: np.ndarray,
+    gamma: float = 0.99,
+    rho_bar: float = 1.0,
+    c_bar: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vectorized V-trace computation across multiple environments.
+
+    Batches per-env arrays and calls the Rust compute_vtrace once per env,
+    but collects results efficiently.
+
+    Parameters
+    ----------
+    log_rhos : ndarray of shape (n_steps, n_envs)
+    rewards : ndarray of shape (n_steps, n_envs)
+    values : ndarray of shape (n_steps, n_envs)
+    dones : ndarray of shape (n_steps, n_envs)
+    bootstrap_values : ndarray of shape (n_envs,)
+    gamma : float
+    rho_bar : float
+    c_bar : float
+
+    Returns
+    -------
+    vs : ndarray of shape (n_steps, n_envs)
+    pg_advantages : ndarray of shape (n_steps, n_envs)
+    """
+    n_steps, n_envs = rewards.shape
+
+    # Pre-allocate output arrays
+    vs_all = np.empty((n_steps, n_envs), dtype=np.float32)
+    pg_all = np.empty((n_steps, n_envs), dtype=np.float32)
+
+    # Ensure contiguous float32 arrays for each env slice
+    # Use column-contiguous slicing (each column is one env)
+    for env_idx in range(n_envs):
+        vs, pg = rlox.compute_vtrace(
+            np.ascontiguousarray(log_rhos[:, env_idx], dtype=np.float32),
+            np.ascontiguousarray(rewards[:, env_idx], dtype=np.float32),
+            np.ascontiguousarray(values[:, env_idx], dtype=np.float32),
+            np.ascontiguousarray(dones[:, env_idx], dtype=np.float32),
+            bootstrap_value=float(bootstrap_values[env_idx]),
+            gamma=gamma,
+            rho_bar=rho_bar,
+            c_bar=c_bar,
+        )
+        vs_all[:, env_idx] = vs
+        pg_all[:, env_idx] = pg
+
+    return vs_all, pg_all
+
+
 class IMPALA:
     """IMPALA with V-trace off-policy correction.
 
     Auto-detects observation and action dimensions from the environment.
     Actors collect data in parallel threads with the current policy snapshot.
     The learner applies V-trace corrected updates.
+
+    V-trace computation is vectorized: all environments are processed in a
+    single batched call rather than looping per environment.
 
     Parameters
     ----------
@@ -114,7 +176,7 @@ class IMPALA:
         else:
             self.n_actions = int(np.prod(action_space.shape))
 
-        # Learner policy — auto-select based on action space
+        # Learner policy -- auto-select based on action space
         if is_discrete:
             self.policy = DiscretePolicy(obs_dim=self.obs_dim, n_actions=self.n_actions)
         else:
@@ -151,7 +213,7 @@ class IMPALA:
             env = GymVecEnv(self.env_id, n_envs=self.n_envs)
         obs = env.reset_all()
 
-        # Local policy copy — match learner policy type
+        # Local policy copy -- match learner policy type
         if self._is_discrete:
             local_policy = DiscretePolicy(
                 obs_dim=self.obs_dim, n_actions=self.n_actions
@@ -235,7 +297,7 @@ class IMPALA:
                     continue
 
     def _learner_step(self, data: dict) -> dict[str, float]:
-        """Apply V-trace corrected gradient update."""
+        """Apply V-trace corrected gradient update (vectorized)."""
         obs = data["obs"]  # (n_steps, n_envs, obs_dim)
         actions = data["actions"]  # (n_steps, n_envs)
         mu_log_probs = data["mu_log_probs"]
@@ -268,45 +330,29 @@ class IMPALA:
 
         new_values = self.policy.critic(obs_flat).squeeze(-1).reshape(n_steps, n_envs)
 
-        # V-trace per environment
-        total_policy_loss = 0.0
-        total_value_loss = 0.0
+        # Vectorized V-trace across all environments
+        log_rhos = (pi_log_probs - mu_log_probs).detach()
 
-        for env_idx in range(n_envs):
-            log_rhos = (pi_log_probs[:, env_idx] - mu_log_probs[:, env_idx]).detach()
+        vs_all, pg_adv_all = _compute_vtrace_batched(
+            log_rhos.numpy().astype(np.float32),
+            rewards.numpy().astype(np.float32),
+            values.detach().numpy().astype(np.float32),
+            dones.numpy().astype(np.float32),
+            bootstrap_values.detach().numpy().astype(np.float32),
+            gamma=self.gamma,
+            rho_bar=self.rho_bar,
+            c_bar=self.c_bar,
+        )
 
-            env_rewards = rewards[:, env_idx].numpy().astype(np.float32)
-            env_values = values[:, env_idx].detach().numpy().astype(np.float32)
-            env_dones = dones[:, env_idx].numpy().astype(np.float32)
-            env_bootstrap = float(bootstrap_values[env_idx])
+        vs_tensor = torch.as_tensor(vs_all, dtype=torch.float32)
+        pg_adv_tensor = torch.as_tensor(pg_adv_all, dtype=torch.float32)
 
-            vs, pg_advantages = rlox.compute_vtrace(
-                log_rhos.numpy().astype(np.float32),
-                env_rewards,
-                env_values,
-                env_dones,
-                bootstrap_value=env_bootstrap,
-                gamma=self.gamma,
-                rho_bar=self.rho_bar,
-                c_bar=self.c_bar,
-            )
+        # Policy gradient loss (vectorized across all envs)
+        total_policy_loss = -(pi_log_probs * pg_adv_tensor.detach()).mean()
 
-            vs_tensor = torch.as_tensor(vs, dtype=torch.float32)
-            pg_adv_tensor = torch.as_tensor(pg_advantages, dtype=torch.float32)
+        # Value loss (vectorized across all envs)
+        total_value_loss = F.mse_loss(new_values, vs_tensor.detach())
 
-            # Policy gradient loss
-            total_policy_loss = (
-                total_policy_loss
-                - (pi_log_probs[:, env_idx] * pg_adv_tensor.detach()).mean()
-            )
-
-            # Value loss
-            total_value_loss = total_value_loss + F.mse_loss(
-                new_values[:, env_idx], vs_tensor.detach()
-            )
-
-        total_policy_loss = total_policy_loss / n_envs
-        total_value_loss = total_value_loss / n_envs
         entropy_loss = entropy.mean()
 
         loss = (

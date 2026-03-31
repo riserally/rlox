@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use rlox_core::env::builtins::{CartPole, Pendulum};
+use rlox_core::env::mujoco::SimplifiedMuJoCoEnv;
 use rlox_core::env::parallel::VecEnv;
 use rlox_core::env::spaces::{Action, ActionSpace};
 use rlox_core::env::{RLEnv, Transition};
@@ -94,10 +95,17 @@ impl PyVecEnv {
                     Box::new(Pendulum::new(Some(s))) as Box<dyn RLEnv>
                 })
                 .collect(),
+            "HalfCheetah-v4" | "HalfCheetah" => (0..n)
+                .map(|i| {
+                    let s = derive_seed(master_seed, i);
+                    Box::new(SimplifiedMuJoCoEnv::new(Some(s))) as Box<dyn RLEnv>
+                })
+                .collect(),
             unknown => {
                 return Err(PyValueError::new_err(format!(
                     "Unknown env_id '{}'. Supported native env IDs: \
-                     [\"CartPole-v1\", \"CartPole\", \"Pendulum-v1\", \"Pendulum\"]. \
+                     [\"CartPole-v1\", \"CartPole\", \"Pendulum-v1\", \"Pendulum\", \
+                     \"HalfCheetah-v4\", \"HalfCheetah\"]. \
                      For Gymnasium environments, use GymVecEnv instead.",
                     unknown,
                 )));

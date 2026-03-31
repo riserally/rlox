@@ -132,6 +132,9 @@ from rlox.evaluation import (
 # -- Diagnostics ---------------------------------------------------------------
 from rlox.diagnostics import TrainingDiagnostics
 
+# -- Dashboard -----------------------------------------------------------------
+from rlox.dashboard import MetricsCollector, TerminalDashboard, HTMLReport
+
 # -- Checkpoint ----------------------------------------------------------------
 from rlox.checkpoint import Checkpoint
 
@@ -211,6 +214,10 @@ __all__ = [
     "probability_of_improvement",
     # Diagnostics
     "TrainingDiagnostics",
+    # Dashboard
+    "MetricsCollector",
+    "TerminalDashboard",
+    "HTMLReport",
     # Checkpoint
     "Checkpoint",
     # Hub

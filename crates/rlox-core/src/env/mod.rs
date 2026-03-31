@@ -1,5 +1,6 @@
 pub mod batch;
 pub mod builtins;
+pub mod mujoco;
 pub mod parallel;
 pub mod spaces;
 

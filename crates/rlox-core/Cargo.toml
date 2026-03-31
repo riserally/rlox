@@ -17,6 +17,10 @@ serde = { version = "1", features = ["derive"] }
 memmap2 = "0.9"
 crossbeam-channel = "0.5"
 
+[features]
+default = []
+mujoco = []  # Enable when MuJoCo C library is installed
+
 [dev-dependencies]
 proptest = "1"
 tempfile = "3"

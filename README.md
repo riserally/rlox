@@ -56,6 +56,19 @@ trainer = SACTrainer(env="Pendulum-v1", config={"learning_starts": 500})
 metrics = trainer.train(total_timesteps=20_000)
 ```
 
+**Config-driven training (YAML):**
+
+```bash
+python -m rlox train --config config.yaml
+```
+
+```python
+from rlox import TrainingConfig, train_from_config
+
+config = TrainingConfig.from_yaml("config.yaml")
+metrics = train_from_config(config)
+```
+
 **Use Rust primitives directly:**
 
 ```python
@@ -91,13 +104,16 @@ result = env.step_all(actions)
 ```
 ┌──────────────────────────────────────────────────┐
 │  Python (control plane)                          │
-│  PPO, SAC, DQN, TD3, A2C, GRPO, DPO             │
-│  GymVecEnv, callbacks, configs (YAML),           │
-│  trainers, checkpointing, diagnostics            │
+│  PPO, SAC, DQN, TD3, A2C, MAPPO, DreamerV3,     │
+│  IMPALA, GRPO, DPO                               │
+│  GymVecEnv, VecNormalize, callbacks,             │
+│  YAML/TOML configs, trainers, checkpointing,     │
+│  diagnostics dashboard                           │
 │  vLLM/TGI/SGLang backends, multi-GPU (DDP)       │
 ├────────────── PyO3 boundary ─────────────────────┤
 │  Rust (data plane)                               │
-│  rlox-core:   envs, Rayon parallel stepping,     │
+│  rlox-core:   envs (CartPole, Pendulum),         │
+│               Rayon parallel stepping,           │
 │               buffers (ring, mmap, priority),    │
 │               GAE, V-trace, GRPO, pipeline       │
 │  rlox-nn:     RL algorithm traits                │
@@ -147,14 +163,18 @@ Same hyperparameters (rl-zoo3 defaults), 5 seeds per experiment. On-policy algor
 
 ## Features
 
-- **Algorithms**: PPO, SAC, DQN, TD3, A2C, GRPO, DPO, MAPPO, DreamerV3, IMPALA
-- **Environments**: Gymnasium-compatible, Rayon-parallel VecEnv, CartPole built-in
+- **8 Algorithms**: PPO, SAC, DQN, TD3, A2C, MAPPO, DreamerV3, IMPALA (+ GRPO, DPO for LLM)
+- **8 Trainers**: Each algorithm has a high-level `Trainer` with `train()`, `save()`, `from_checkpoint()`
+- **Environments**: Gymnasium-compatible, Rayon-parallel VecEnv, CartPole and Pendulum-v1 built-in
+- **VecNormalize**: Obs/reward normalization at the environment boundary (SB3-compatible)
 - **Buffers**: ring, mmap, priority replay — all in Rust with zero-copy Python access
+- **Config-driven training**: YAML/TOML configs via `TrainingConfig` and `python -m rlox train --config config.yaml`
+- **Diagnostics dashboard**: `TerminalDashboard`, `HTMLReport`, entropy/KL/gradient monitoring
 - **LLM post-training**: GRPO, DPO, token KL, sequence packing, vLLM/TGI/SGLang backends
 - **Distributed**: pipeline parallelism (crossbeam), gRPC workers, multi-GPU (DDP)
-- **Production**: YAML configs, callbacks, checkpointing, eval toolkit, diagnostics
+- **Production**: callbacks, checkpointing, eval toolkit (IQM, bootstrap CI, performance profiles)
 - **NN backends**: Burn (NdArray) and Candle (CPU) for pure-Rust inference, PyTorch for training
-- **313 Rust tests, 382 Python tests** — all passing
+- **409 Rust tests, 869 Python tests** — comprehensive coverage
 
 ## Tutorials & Documentation
 
@@ -216,7 +236,7 @@ If you use rlox in your research, please cite:
   title        = {rlox: Rust-Accelerated Reinforcement Learning},
   year         = {2026},
   url          = {https://github.com/riserally/rlox},
-  version      = {0.2.3},
+  version      = {1.0.0},
   license      = {MIT OR Apache-2.0}
 }
 ```

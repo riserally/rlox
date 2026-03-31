@@ -1,29 +1,42 @@
-"""rlox -- Rust-accelerated reinforcement learning.
+"""rlox -- Rust-accelerated reinforcement learning (v1.0.0).
 
 The Polars architecture pattern applied to RL: Rust data plane for
 environments, buffers, and advantage computation; Python control plane
 for training logic, policies, and neural networks.
 
+8 algorithms, 8 trainers, config-driven training, diagnostics dashboard.
+
 Rust primitives (via PyO3)
 --------------------------
 - :class:`CartPole`, :class:`VecEnv`, :class:`GymEnv` -- environment stepping
-- :class:`ExperienceTable`, :class:`ReplayBuffer`, :class:`PrioritizedReplayBuffer` -- storage
+- :class:`ExperienceTable`, :class:`ReplayBuffer`, :class:`PrioritizedReplayBuffer`,
+  :class:`MmapReplayBuffer`, :class:`OfflineDatasetBuffer` -- storage
 - :func:`compute_gae`, :func:`compute_vtrace` -- advantage estimation
 - :func:`compute_group_advantages`, :func:`compute_token_kl` -- LLM post-training
 - :class:`DPOPair`, :class:`VarLenStore`, :func:`pack_sequences` -- sequence handling
-- :class:`RunningStats` -- online mean/variance
-- :class:`ActorCritic` -- NN backend
+- :class:`RunningStats`, :class:`RunningStatsVec` -- online mean/variance
+- :class:`ActorCritic`, :class:`CandleCollector` -- NN backend
 
 Python layer
 ------------
+- :class:`VecNormalize` -- obs/reward normalization wrapper (SB3-compatible)
 - :class:`RolloutBatch` -- flat-tensor container for on-policy data
-- :class:`RolloutCollector` -- VecEnv + GAE rollout collection
-- :class:`PPOLoss` -- clipped PPO objective
+- :class:`RolloutCollector`, :class:`OffPolicyCollector` -- data collection
 - :class:`GymVecEnv` -- gymnasium wrapper with VecEnv interface
 - :class:`ContinuousPolicy`, :class:`DiscretePolicy` -- default policy networks
+- :class:`TrainingConfig` -- YAML/TOML config-driven training
+- :class:`TerminalDashboard`, :class:`HTMLReport` -- diagnostics dashboard
+
+Trainers
+--------
+- :class:`PPOTrainer`, :class:`SACTrainer`, :class:`DQNTrainer`, :class:`A2CTrainer`
+- :class:`TD3Trainer`, :class:`MAPPOTrainer`, :class:`DreamerV3Trainer`, :class:`IMPALATrainer`
+
+All trainers expose ``train(total_timesteps)``, ``save(path)``, and
+``from_checkpoint(path)``.
 
 For algorithm implementations, see :mod:`rlox.algorithms`.
-For high-level trainers, see :mod:`rlox.trainers`.
+For config-driven training, see :func:`train_from_config`.
 
 Quick start::
 
@@ -33,6 +46,13 @@ Quick start::
     trainer = PPOTrainer(env="CartPole-v1", seed=42)
     metrics = trainer.train(total_timesteps=50_000)
     print(f"Mean reward: {metrics['mean_reward']:.1f}")
+
+Config-driven::
+
+    from rlox import TrainingConfig, train_from_config
+
+    config = TrainingConfig.from_yaml("config.yaml")
+    metrics = train_from_config(config)
 """
 
 # -- Rust primitives (PyO3) ---------------------------------------------------

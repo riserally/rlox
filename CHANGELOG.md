@@ -27,7 +27,7 @@ covered by stability tests. Semver guarantees apply from this version onward.
 - `pyproject.toml` classifier updated to `Development Status :: 5 - Production/Stable`
 - Version bumped to 1.0.0 in `__init__.py` and `pyproject.toml`
 
-## [0.3.0] - 2026-03-30
+## [0.3.0] - 2026-03-29
 
 ### Added
 - **VecNormalize environment wrapper** — obs/reward normalization at the
@@ -133,8 +133,8 @@ covered by stability tests. Semver guarantees apply from this version onward.
 - Config consolidation: single validated `PPOConfig` (was duplicated)
 
 ### Test Suite
-- 313 Rust tests (was 255)
-- 382 Python tests (was 85)
+- 313 Rust tests at v0.2.0 (was 255)
+- 382 Python tests at v0.2.0 (was 85)
 - Zero benchmark regressions
 
 ## [0.1.0] - 2026-03-14

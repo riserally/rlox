@@ -43,9 +43,9 @@ python -m rlox train --algo ppo --env CartPole-v1 --timesteps 100000
 ```mermaid
 graph TD
     subgraph Python[Python Control Plane]
-        A[PPO / SAC / DQN / TD3 / GRPO / DPO]
+        A[PPO / SAC / DQN / TD3 / A2C / MAPPO / DreamerV3 / IMPALA]
         B[PyTorch Policies & Networks]
-        C[Callbacks, Configs, Logging]
+        C[VecNormalize, Callbacks, YAML Configs, Dashboard]
     end
 
     subgraph Rust[Rust Data Plane — PyO3]

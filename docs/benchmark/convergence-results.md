@@ -1,13 +1,14 @@
 # Convergence Benchmark Results
 
-!!! note "27/32 Experiments Complete"
+!!! note "27/32 Experiments Complete — v6 Re-benchmark Pending"
     Benchmark v5 ran on GCP with 27 of 32 planned experiments completed.
     Missing: TD3 Hopper-v4, TD3 Walker2d-v4, SAC Walker2d-v4 (SB3), A2C Acrobot-v1, DQN Acrobot-v1.
-    A v6 re-benchmark is planned after bug fixes (see Known Issues below).
+    Six convergence bugs were identified and fixed in v0.3.0/v1.0.0 (see Known Issues below).
+    A v6 re-benchmark will validate these fixes with multi-seed runs and IQM statistics.
 
 ## Methodology
 
-- **Frameworks:** rlox v0.2.3 vs Stable-Baselines3
+- **Frameworks:** rlox v0.2.3 vs Stable-Baselines3 (v6 will use rlox v1.0.0)
 - **Hardware:** e2-standard-8 (8 vCPU, 32GB RAM), CPU-only
 - **Environments:** CartPole-v1, Pendulum-v1, HalfCheetah-v4, Hopper-v4, Walker2d-v4, Acrobot-v1, MountainCar-v0
 - **Algorithms:** PPO, SAC, TD3, DQN, A2C
@@ -54,10 +55,23 @@
 | DQN | MountainCar-v0 | 479 | 634 | 0.76x |
 | A2C | CartPole-v1 | 2,028 | 489 | **4.15x** |
 
-## Known Issues
+## Known Issues (Fixed in v0.3.0 / v1.0.0)
 
-- **PPO Hopper gap (628 vs 3577):** Six collector bugs were identified and fixed in v0.2.4. Re-benchmark is pending.
-- **A2C CartPole instability (54 vs 500):** Advantage normalization bug was identified and fixed. Re-benchmark is pending.
+All six convergence bugs identified during v5 benchmarking have been fixed. The v6 re-benchmark will validate these fixes.
+
+| Bug | Fix (v0.3.0) | Affected Results |
+|-----|-------------|------------------|
+| Truncation bootstrap missing | V(terminal_obs) bootstrap for truncated episodes | PPO Hopper (628 vs 3577) |
+| Scalar obs normalization | Per-dimension Welford stats via `RunningStatsVec` | All MuJoCo envs |
+| Raw reward normalization | Return-based std (SB3 convention) | All normalized envs |
+| Train/collect obs mismatch | Consistent normalization via `VecNormalize` wrapper | All normalized envs |
+| A2C advantage normalization | Default changed to False for small batches | A2C CartPole (54 vs 500) |
+| log_std init = -0.5 | Changed to 0.0 (std=1.0, matching SB3) | All continuous envs |
+
+### Pre-fix notes (v5 results above)
+
+- **PPO Hopper gap (628 vs 3577):** Truncation bootstrap + normalization bugs. Fixed.
+- **A2C CartPole instability (54 vs 500):** Advantage normalization default. Fixed.
 - **DQN underperformance:** DQN results lag behind SB3 on both CartPole and MountainCar; under investigation.
 
 ## Candle Hybrid Collection Benchmark
@@ -79,6 +93,6 @@ The Candle hybrid approach eliminates Python dispatch overhead during collection
 shifting the bottleneck entirely to the PyTorch training backward pass.
 
 !!! info
-    A v6 re-benchmark is planned after the collector and A2C bug fixes in v0.2.4.
-    This will include multi-seed runs with IQM statistics and learning curve plots.
+    A v6 re-benchmark is planned using rlox v1.0.0 with all six convergence fixes applied.
+    This will include multi-seed runs (5 seeds) with IQM statistics and learning curve plots.
     Results will be uploaded to `gs://rkox-bench-results/convergence-*/`.

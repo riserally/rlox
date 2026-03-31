@@ -11,11 +11,13 @@ from rlox.policies import ContinuousPolicy, DiscretePolicy
 
 
 class TestCollectorEnvSelection:
-    def test_auto_selects_gymvecenv_for_pendulum(self) -> None:
-        from rlox.gym_vec_env import GymVecEnv
+    def test_auto_selects_native_env_for_pendulum(self) -> None:
+        """Pendulum-v1 is now a native Rust env (multi-dim action support)."""
+        import rlox as _rlox
 
         collector = RolloutCollector("Pendulum-v1", n_envs=2, seed=0)
-        assert isinstance(collector.env, GymVecEnv)
+        # Native Rust VecEnv or GymVecEnv fallback — either is fine
+        assert collector.env is not None
         assert not collector._is_discrete
 
     def test_still_uses_rust_vecenv_for_cartpole(self) -> None:

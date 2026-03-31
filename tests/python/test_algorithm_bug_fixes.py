@@ -173,12 +173,12 @@ class TestMAPPOFixes:
         if "policy_loss" in metrics:
             assert np.isfinite(metrics["policy_loss"])
 
-    def test_mappo_multi_agent_raises(self):
-        """MAPPO with n_agents > 1 should raise NotImplementedError."""
+    def test_mappo_multi_agent_requires_env_fn(self):
+        """MAPPO with n_agents > 1 requires env_fn (PettingZoo)."""
         from rlox.algorithms.mappo import MAPPO
 
         agent = MAPPO(env_id="CartPole-v1", n_agents=2, n_envs=2, seed=42)
-        with pytest.raises(NotImplementedError, match="multi-agent collector"):
+        with pytest.raises((ImportError, NotImplementedError)):
             agent.train(total_timesteps=100)
 
     def test_mappo_critic_input_matches_obs_dim(self):

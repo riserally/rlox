@@ -4,7 +4,7 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 
 > Measured on Apple M4 (14 cores), macOS 26.2, Python 3.12.7, PyTorch 2.10.0.
 > All speedups reported with bootstrap 95% confidence intervals (10,000 resamples).
-> Last updated: 2026-03-14.
+> Last updated: 2026-03-29.
 
 ## Summary
 

@@ -61,11 +61,15 @@ crates/
   rlox-burn/     # Burn backend (alternative)
   rlox-python/   # PyO3 bindings
 python/rlox/
-  algorithms/    # PPO, SAC, DQN, TD3, offline RL, LLM
+  algorithms/    # PPO, SAC, DQN, TD3, A2C, MAPPO, DreamerV3, IMPALA, offline RL, LLM
   offline/       # Offline RL base class + protocols
   exploration/   # Noise strategies + intrinsic rewards
+  wrappers/      # VecNormalize and other env wrappers
   callbacks.py   # Training callbacks
   policies.py    # Neural network policies
+  trainers.py    # High-level trainers for all algorithms
+  runner.py      # Config-driven training (train_from_config)
+  dashboard.py   # MetricsCollector, TerminalDashboard, HTMLReport
 tests/python/    # Python test suite
 docs/            # MkDocs documentation
 ```

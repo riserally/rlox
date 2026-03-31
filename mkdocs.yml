@@ -102,9 +102,13 @@ nav:
   - API Reference:
     - Overview: api/index.md
     - Algorithms: api/algorithms.md
+    - Trainers: api/trainers.md
+    - Config: api/config.md
     - Buffers & Primitives: api/buffers.md
     - Callbacks & Logging: api/callbacks.md
     - Policies & Networks: api/policies.md
+    - Distributed: api/distributed.md
+    - Dashboard: api/dashboard.md
   - Research:
     - Overview: research/README.md
     - PPO: research/01-ppo.md

@@ -170,6 +170,115 @@ a2c = A2C(env_id="CartPole-v1", n_envs=8, learning_rate=7e-4)
 metrics = a2c.train(total_timesteps=50_000)
 ```
 
+### A2CTrainer (High-Level)
+
+```python
+from rlox.trainers import A2CTrainer
+
+metrics = A2CTrainer(env="CartPole-v1").train(50_000)
+```
+
+### TD3Trainer (High-Level)
+
+```python
+from rlox.trainers import TD3Trainer
+
+metrics = TD3Trainer(env="Pendulum-v1").train(50_000)
+```
+
+### MAPPOTrainer (Multi-Agent)
+
+Multi-agent PPO with centralised critic. Works with PettingZoo environments.
+
+```python
+from rlox.trainers import MAPPOTrainer
+
+trainer = MAPPOTrainer(env="spread_v3", n_agents=3, seed=42)
+metrics = trainer.train(total_timesteps=500_000)
+```
+
+### DreamerV3Trainer (World Model)
+
+Learns a latent dynamics model and trains the policy inside the learned world model. Particularly effective for image-based and sparse-reward environments.
+
+```python
+from rlox.trainers import DreamerV3Trainer
+
+trainer = DreamerV3Trainer(env="Pendulum-v1", seed=42)
+metrics = trainer.train(total_timesteps=200_000)
+```
+
+### IMPALATrainer (Distributed Actors)
+
+Distributed actor-learner architecture with V-trace off-policy correction. Actors collect experience in parallel (optionally across machines via gRPC) while a central learner trains the policy.
+
+```python
+from rlox.trainers import IMPALATrainer
+
+trainer = IMPALATrainer(env="CartPole-v1", n_actors=8, seed=42)
+metrics = trainer.train(total_timesteps=1_000_000)
+```
+
+### Config-Driven Training
+
+Define experiments in YAML and launch without writing Python scripts:
+
+```yaml
+# experiment.yaml
+algorithm: ppo
+env: CartPole-v1
+total_timesteps: 100_000
+seed: 42
+config:
+  n_envs: 16
+  learning_rate: 3e-4
+```
+
+```python
+from rlox.runner import train_from_config
+
+metrics = train_from_config("experiment.yaml")
+```
+
+### VecNormalize
+
+Running observation and reward normalisation for vectorised environments:
+
+```python
+from rlox.trainers import PPOTrainer
+from rlox.wrappers import VecNormalize
+
+trainer = PPOTrainer(
+    env="HalfCheetah-v4",
+    wrappers=[VecNormalize(norm_obs=True, norm_reward=True, clip_obs=10.0)],
+    seed=42,
+)
+metrics = trainer.train(total_timesteps=1_000_000)
+```
+
+### Diagnostics Dashboard & HTML Report
+
+```python
+from rlox.dashboard import MetricsCollector, HTMLReport, TerminalDashboard
+from rlox.trainers import PPOTrainer
+
+# Collect metrics and generate an HTML report after training
+collector = MetricsCollector()
+trainer = PPOTrainer(env="CartPole-v1", callbacks=[collector], seed=42)
+trainer.train(total_timesteps=50_000)
+
+report = HTMLReport(collector)
+report.save("training_report.html")
+
+# Or use a live terminal dashboard during training
+trainer = PPOTrainer(
+    env="CartPole-v1",
+    callbacks=[TerminalDashboard()],
+    seed=42,
+)
+trainer.train(total_timesteps=50_000)
+```
+
 ## LLM Post-Training
 
 See [llm-post-training.md](llm-post-training.md) for the full guide.

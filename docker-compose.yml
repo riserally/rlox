@@ -26,7 +26,7 @@ x-rlox-base: &rlox-base
     args:
       RUST_VERSION: "1.86"
       PYTHON_VERSION: "3.12"
-  image: rlox-experiments:0.2.3
+  image: rlox-experiments:1.0.0
   environment:
     PYTHONUNBUFFERED: "1"
     MUJOCO_GL: "egl"

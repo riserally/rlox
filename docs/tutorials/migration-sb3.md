@@ -11,6 +11,8 @@
 | **Load** | `PPO.load("ppo")` | `PPO.from_checkpoint("ppo.pt")` |
 | **Eval callback** | `EvalCallback(eval_env)` | `EvalCallback(env_id=..., eval_freq=...)` |
 | **Multi-env** | `make_vec_env("CartPole-v1", 8)` | `PPO(env_id="CartPole-v1", n_envs=8)` |
+| **VecNormalize** | `VecNormalize(env)` | `VecNormalize(norm_obs=True, norm_reward=True)` wrapper |
+| **Config-driven** | N/A (kwargs only) | `train_from_config("experiment.yaml")` |
 
 ## What's Different
 
@@ -52,9 +54,9 @@ rlox includes algorithms SB3 doesn't have:
 | `GRPO` | LLM post-training |
 | `DPO` | Direct preference optimization |
 | `HybridPPO` | Candle hybrid collection (180K SPS) |
-| `IMPALA` | Distributed actor-learner |
-| `MAPPO` | Multi-agent PPO |
-| `DreamerV3` | Model-based RL |
+| `IMPALA` | Distributed actor-learner with V-trace |
+| `MAPPO` | Multi-agent PPO with centralised critic |
+| `DreamerV3` | Model-based RL with learned world model |
 
 ## Full Migration Example
 
@@ -145,6 +147,40 @@ sac.train(50_000)
 sac = SAC(env_id="Pendulum-v1", n_envs=4, learning_starts=1000)
 sac.train(50_000)
 ```
+
+## VecNormalize Migration
+
+```python
+# SB3
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+env = DummyVecEnv([lambda: gym.make("HalfCheetah-v4")])
+env = VecNormalize(env, norm_obs=True, norm_reward=True)
+model = PPO("MlpPolicy", env)
+model.learn(1_000_000)
+
+# rlox
+from rlox.algorithms.ppo import PPO
+from rlox.wrappers import VecNormalize
+ppo = PPO(
+    env_id="HalfCheetah-v4",
+    n_envs=8,
+    wrappers=[VecNormalize(norm_obs=True, norm_reward=True, clip_obs=10.0)],
+)
+ppo.train(1_000_000)
+```
+
+## Config-Driven Training (rlox only)
+
+SB3 requires writing Python scripts for every experiment. rlox supports YAML configs:
+
+```python
+from rlox.runner import train_from_config
+metrics = train_from_config("experiment.yaml")
+```
+
+## Advanced Algorithms (rlox only)
+
+rlox includes MAPPO (multi-agent), DreamerV3 (world-model-based), and IMPALA (distributed actor-learner). These have no SB3 equivalent.
 
 ## Offline RL (rlox only)
 

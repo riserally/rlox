@@ -19,7 +19,7 @@
 | Stable-Baselines3 | 2.7.1 |
 | tensordict | 0.11.0 |
 | Gymnasium | 1.2.3 |
-| rlox | 0.1.0 (Rust via PyO3 0.23.5, maturin --release) |
+| rlox | 1.0.0 (Rust via PyO3 0.23.5, maturin --release) |
 
 ## Statistical Methodology
 

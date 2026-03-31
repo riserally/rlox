@@ -293,7 +293,7 @@ If you use rlox in your research, please cite:
   title        = {rlox: Rust-Accelerated Reinforcement Learning},
   year         = {2026},
   url          = {https://github.com/riserally/rlox},
-  version      = {0.2.3},
+  version      = {1.0.0},
   license      = {MIT OR Apache-2.0}
 }
 ```

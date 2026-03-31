@@ -87,6 +87,68 @@ trainer = DQNTrainer(
 )
 ```
 
+**A2CTrainer** -- On-policy, single gradient step per rollout.
+
+```python
+from rlox.trainers import A2CTrainer
+
+trainer = A2CTrainer(
+    env="CartPole-v1",
+    config={"n_envs": 8, "learning_rate": 7e-4},
+    seed=42,
+)
+```
+
+**TD3Trainer** -- Off-policy, continuous actions with delayed policy updates.
+
+```python
+from rlox.trainers import TD3Trainer
+
+trainer = TD3Trainer(
+    env="Pendulum-v1",
+    config={"policy_delay": 2, "target_noise": 0.2},
+    seed=42,
+)
+```
+
+**MAPPOTrainer** -- Multi-agent PPO with centralised critic and per-agent actors.
+
+```python
+from rlox.trainers import MAPPOTrainer
+
+trainer = MAPPOTrainer(
+    env="spread_v3",   # PettingZoo environment
+    n_agents=3,
+    seed=42,
+)
+metrics = trainer.train(total_timesteps=500_000)
+```
+
+**DreamerV3Trainer** -- World-model-based training (learns a latent dynamics model, trains the policy inside the learned world model).
+
+```python
+from rlox.trainers import DreamerV3Trainer
+
+trainer = DreamerV3Trainer(
+    env="Pendulum-v1",
+    seed=42,
+)
+metrics = trainer.train(total_timesteps=200_000)
+```
+
+**IMPALATrainer** -- Distributed actor-learner architecture with V-trace off-policy correction. Scales to many actors across machines via gRPC.
+
+```python
+from rlox.trainers import IMPALATrainer
+
+trainer = IMPALATrainer(
+    env="CartPole-v1",
+    n_actors=8,
+    seed=42,
+)
+metrics = trainer.train(total_timesteps=1_000_000)
+```
+
 ### Callbacks
 
 ```python
@@ -600,6 +662,101 @@ except ValueError as e:
 | `normalize_advantages` | True | Per-minibatch normalisation |
 | `clip_vloss` | True | Clipped value loss |
 | `anneal_lr` | True | Linear LR annealing |
+
+---
+
+## Config-Driven Training
+
+Define your entire experiment in a YAML file and launch with `train_from_config`:
+
+```yaml
+# experiment.yaml
+algorithm: ppo
+env: CartPole-v1
+total_timesteps: 100_000
+seed: 42
+config:
+  n_envs: 16
+  learning_rate: 3e-4
+  n_steps: 128
+  n_epochs: 4
+logger:
+  type: wandb
+  project: rlox-experiments
+```
+
+```python
+from rlox.runner import train_from_config
+from rlox.config import TrainingConfig
+
+# From a YAML file
+metrics = train_from_config("experiment.yaml")
+
+# Or build programmatically
+cfg = TrainingConfig(
+    algorithm="ppo",
+    env="CartPole-v1",
+    total_timesteps=100_000,
+    seed=42,
+    config={"n_envs": 16, "learning_rate": 3e-4},
+)
+metrics = train_from_config(cfg)
+```
+
+---
+
+## VecNormalize
+
+`VecNormalize` wraps a vectorised environment to apply running normalisation to observations and rewards. It uses `RunningStatsVec` (Rust) for efficient per-dimension statistics.
+
+```python
+from rlox.trainers import PPOTrainer
+from rlox.wrappers import VecNormalize
+
+trainer = PPOTrainer(
+    env="CartPole-v1",
+    wrappers=[VecNormalize(norm_obs=True, norm_reward=True, clip_obs=10.0)],
+    seed=42,
+)
+metrics = trainer.train(total_timesteps=100_000)
+```
+
+`VecNormalize` is especially useful for environments with large or variable observation scales (MuJoCo, robotics).
+
+---
+
+## Diagnostics Dashboard
+
+`MetricsCollector` aggregates training metrics in memory and feeds them to visualisation backends.
+
+```python
+from rlox.dashboard import MetricsCollector, HTMLReport, TerminalDashboard
+
+# Collect metrics during training
+collector = MetricsCollector()
+
+from rlox.trainers import PPOTrainer
+trainer = PPOTrainer(
+    env="CartPole-v1",
+    callbacks=[collector],
+    seed=42,
+)
+trainer.train(total_timesteps=50_000)
+
+# Generate a static HTML report
+report = HTMLReport(collector)
+report.save("training_report.html")
+
+# Or use the live terminal dashboard (Rich-based)
+# Pass TerminalDashboard as a callback for real-time display:
+from rlox.trainers import PPOTrainer
+trainer = PPOTrainer(
+    env="CartPole-v1",
+    callbacks=[TerminalDashboard()],
+    seed=42,
+)
+trainer.train(total_timesteps=50_000)
+```
 
 ---
 

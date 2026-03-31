@@ -12,7 +12,7 @@ This tutorial walks you through installing rlox, training your first agent, and 
 
 ```bash
 # Clone the repository
-git clone https://github.com/wojciechkpl/rlox.git
+git clone https://github.com/riserally/rlox.git
 cd rlox
 
 # Create a Python virtual environment
@@ -335,7 +335,9 @@ cargo test --package rlox-core
 | `compute_token_kl` | Token-level KL divergence |
 | `DPOPair` | DPO preference pair container |
 | `RunningStats` | Online mean/variance (Welford) |
+| `RunningStatsVec` | Per-dimension online mean/variance (for observation normalisation) |
 | `pack_sequences` | LLM sequence packing |
+| `Pendulum` | Native Pendulum-v1 environment |
 
 ### Python Layer (from `rlox.*`)
 
@@ -344,6 +346,11 @@ cargo test --package rlox-core
 | `PPOTrainer` | `rlox.trainers` | High-level PPO trainer |
 | `SACTrainer` | `rlox.trainers` | High-level SAC trainer |
 | `DQNTrainer` | `rlox.trainers` | High-level DQN trainer |
+| `A2CTrainer` | `rlox.trainers` | High-level A2C trainer |
+| `TD3Trainer` | `rlox.trainers` | High-level TD3 trainer |
+| `MAPPOTrainer` | `rlox.trainers` | Multi-agent PPO trainer |
+| `DreamerV3Trainer` | `rlox.trainers` | World-model-based trainer (DreamerV3) |
+| `IMPALATrainer` | `rlox.trainers` | Distributed actor-learner trainer |
 | `PPO`, `A2C` | `rlox.algorithms` | On-policy algorithms |
 | `SAC`, `TD3`, `DQN` | `rlox.algorithms` | Off-policy algorithms (with `predict()`) |
 | `GRPO`, `DPO`, `OnlineDPO` | `rlox.algorithms` | LLM post-training |
@@ -353,8 +360,14 @@ cargo test --package rlox-core
 | `RolloutBatch` | `rlox.batch` | Flat tensor container |
 | `RolloutCollector` | `rlox.collectors` | VecEnv + batched GAE collection |
 | `PPOLoss` | `rlox.losses` | Clipped surrogate objective |
+| `VecNormalize` | `rlox.wrappers` | Running observation/reward normalisation for VecEnv |
+| `TrainingConfig` | `rlox.config` | Unified YAML/dataclass config for any algorithm |
+| `train_from_config` | `rlox.runner` | Launch training from a `TrainingConfig` or YAML file |
 | `PPOConfig`, `SACConfig`, `DQNConfig` | `rlox.config` | Validated configs |
 | `ConsoleLogger`, `WandbLogger`, `TensorBoardLogger` | `rlox.logging` | Training loggers |
+| `TerminalDashboard` | `rlox.dashboard` | Live terminal dashboard (Rich-based) |
+| `HTMLReport` | `rlox.dashboard` | Static HTML training report |
+| `MetricsCollector` | `rlox.dashboard` | In-memory metrics aggregation for dashboards |
 | `ProgressBarCallback`, `TimingCallback` | `rlox.callbacks` | Progress & profiling |
 | `Callback`, `EvalCallback` | `rlox.callbacks` | Training hooks |
 | `compile_policy` | `rlox.compile` | torch.compile integration |

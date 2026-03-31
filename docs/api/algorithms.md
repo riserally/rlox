@@ -34,6 +34,18 @@
 
 ::: rlox.algorithms.best_of_n.BestOfN
 
+## Multi-Agent
+
+::: rlox.algorithms.mappo.MAPPO
+
+## Model-Based
+
+::: rlox.algorithms.dreamer.DreamerV3
+
+## Distributed
+
+::: rlox.algorithms.impala.IMPALA
+
 ## Hybrid
 
 ::: rlox.algorithms.hybrid_ppo.HybridPPO

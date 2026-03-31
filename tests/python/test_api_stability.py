@@ -397,7 +397,7 @@ class TestRunnerAlgoMap:
 
     @pytest.mark.parametrize("algo", EXPECTED_ALGOS)
     def test_runner_knows_algo(self, algo: str):
-        from rlox.runner import _ALGO_TRAINER_MAP
-        assert algo in _ALGO_TRAINER_MAP, (
-            f"Algorithm '{algo}' missing from runner._ALGO_TRAINER_MAP"
+        from rlox.trainer import ALGORITHM_REGISTRY
+        assert algo in ALGORITHM_REGISTRY, (
+            f"Algorithm '{algo}' missing from ALGORITHM_REGISTRY"
         )

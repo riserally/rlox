@@ -20,25 +20,6 @@ from rlox.callbacks import (
 from rlox.config import TrainingConfig
 
 
-_ALGO_TRAINER_MAP: dict[str, str] = {
-    "ppo": "rlox.trainers:PPOTrainer",
-    "sac": "rlox.trainers:SACTrainer",
-    "dqn": "rlox.trainers:DQNTrainer",
-    "a2c": "rlox.trainers:A2CTrainer",
-    "td3": "rlox.trainers:TD3Trainer",
-    "mappo": "rlox.trainers:MAPPOTrainer",
-    "dreamer": "rlox.trainers:DreamerV3Trainer",
-    "impala": "rlox.trainers:IMPALATrainer",
-}
-
-
-def _import_class(dotted: str) -> type:
-    module_path, cls_name = dotted.rsplit(":", 1)
-    import importlib
-
-    mod = importlib.import_module(module_path)
-    return getattr(mod, cls_name)
-
 
 def _build_callbacks(config: TrainingConfig) -> list[Callback]:
     """Instantiate callbacks from string names in the config."""

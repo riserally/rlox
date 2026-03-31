@@ -27,23 +27,23 @@ Python layer
 - :class:`TrainingConfig` -- YAML/TOML config-driven training
 - :class:`TerminalDashboard`, :class:`HTMLReport` -- diagnostics dashboard
 
-Trainers
---------
-- :class:`PPOTrainer`, :class:`SACTrainer`, :class:`DQNTrainer`, :class:`A2CTrainer`
-- :class:`TD3Trainer`, :class:`MAPPOTrainer`, :class:`DreamerV3Trainer`, :class:`IMPALATrainer`
+Unified Trainer
+---------------
+- :class:`Trainer` -- single entry point for all 8 algorithms
+- Algorithms: ``ppo``, ``sac``, ``dqn``, ``td3``, ``a2c``, ``mappo``, ``dreamer``, ``impala``
+- :data:`ALGORITHM_REGISTRY` -- algorithm name -> class mapping
 
-All trainers expose ``train(total_timesteps)``, ``save(path)``, and
-``from_checkpoint(path)``.
+All algorithms expose ``train(total_timesteps)``, ``save(path)``, and
+``from_checkpoint(path)`` via the unified :class:`Trainer`.
 
 For algorithm implementations, see :mod:`rlox.algorithms`.
 For config-driven training, see :func:`train_from_config`.
 
 Quick start::
 
-    import rlox
-    from rlox.trainers import PPOTrainer
+    from rlox import Trainer
 
-    trainer = PPOTrainer(env="CartPole-v1", seed=42)
+    trainer = Trainer("ppo", env="CartPole-v1", seed=42)
     metrics = trainer.train(total_timesteps=50_000)
     print(f"Mean reward: {metrics['mean_reward']:.1f}")
 

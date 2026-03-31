@@ -4,7 +4,7 @@ rlox provides three levels of API for reinforcement learning in Python. Each lev
 
 | Level | What you write | What rlox handles |
 |-------|----------------|-------------------|
-| **High-level** (Trainer) | `PPOTrainer("CartPole-v1").train(50_000)` | Everything |
+| **High-level** (Trainer) | `Trainer("ppo", env="CartPole-v1").train(50_000)` | Everything |
 | **Mid-level** (Algorithm) | Training loop, hyperparams | Network creation, collection, loss |
 | **Low-level** (Primitives) | Full loop, custom networks | Fast env stepping, GAE, buffers |
 
@@ -44,9 +44,9 @@ python -m rlox eval --algo ppo --checkpoint model.pt --env CartPole-v1 --episode
 Three lines to a trained agent:
 
 ```python
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 
-trainer = PPOTrainer(env="CartPole-v1", seed=42)
+trainer = Trainer("ppo", env="CartPole-v1", seed=42)
 metrics = trainer.train(total_timesteps=50_000)
 print(f"Mean reward: {metrics['mean_reward']:.1f}")
 ```
@@ -54,10 +54,10 @@ print(f"Mean reward: {metrics['mean_reward']:.1f}")
 ### Available Trainers
 
 ```python
-from rlox.trainers import PPOTrainer, SACTrainer, DQNTrainer
+from rlox import Trainer
 ```
 
-**PPOTrainer** -- On-policy, discrete or continuous actions.
+**Trainer("ppo", ...)** -- On-policy, discrete or continuous actions.
 
 ```python
 trainer = PPOTrainer(
@@ -67,7 +67,7 @@ trainer = PPOTrainer(
 )
 ```
 
-**SACTrainer** -- Off-policy, continuous actions (e.g. Pendulum, MuJoCo).
+**Trainer("sac", ...)** -- Off-policy, continuous actions (e.g. Pendulum, MuJoCo).
 
 ```python
 trainer = SACTrainer(
@@ -77,7 +77,7 @@ trainer = SACTrainer(
 )
 ```
 
-**DQNTrainer** -- Off-policy, discrete actions with Rainbow extensions.
+**Trainer("dqn", ...)** -- Off-policy, discrete actions with Rainbow extensions.
 
 ```python
 trainer = DQNTrainer(
@@ -90,7 +90,7 @@ trainer = DQNTrainer(
 **A2CTrainer** -- On-policy, single gradient step per rollout.
 
 ```python
-from rlox.trainers import A2CTrainer
+from rlox import Trainer
 
 trainer = A2CTrainer(
     env="CartPole-v1",
@@ -102,7 +102,7 @@ trainer = A2CTrainer(
 **TD3Trainer** -- Off-policy, continuous actions with delayed policy updates.
 
 ```python
-from rlox.trainers import TD3Trainer
+from rlox import Trainer
 
 trainer = TD3Trainer(
     env="Pendulum-v1",
@@ -111,10 +111,10 @@ trainer = TD3Trainer(
 )
 ```
 
-**MAPPOTrainer** -- Multi-agent PPO with centralised critic and per-agent actors.
+**Trainer("mappo", ...)** -- Multi-agent PPO with centralised critic and per-agent actors.
 
 ```python
-from rlox.trainers import MAPPOTrainer
+from rlox import Trainer
 
 trainer = MAPPOTrainer(
     env="spread_v3",   # PettingZoo environment
@@ -124,10 +124,10 @@ trainer = MAPPOTrainer(
 metrics = trainer.train(total_timesteps=500_000)
 ```
 
-**DreamerV3Trainer** -- World-model-based training (learns a latent dynamics model, trains the policy inside the learned world model).
+**Trainer("dreamer", ...)** -- World-model-based training (learns a latent dynamics model, trains the policy inside the learned world model).
 
 ```python
-from rlox.trainers import DreamerV3Trainer
+from rlox import Trainer
 
 trainer = DreamerV3Trainer(
     env="Pendulum-v1",
@@ -136,10 +136,10 @@ trainer = DreamerV3Trainer(
 metrics = trainer.train(total_timesteps=200_000)
 ```
 
-**IMPALATrainer** -- Distributed actor-learner architecture with V-trace off-policy correction. Scales to many actors across machines via gRPC.
+**Trainer("impala", ...)** -- Distributed actor-learner architecture with V-trace off-policy correction. Scales to many actors across machines via gRPC.
 
 ```python
-from rlox.trainers import IMPALATrainer
+from rlox import Trainer
 
 trainer = IMPALATrainer(
     env="CartPole-v1",
@@ -198,7 +198,7 @@ logger = WandbLogger(project="rlox-experiments", name="ppo-cartpole")
 # TensorBoard
 logger = TensorBoardLogger(log_dir="runs/ppo-cartpole")
 
-trainer = PPOTrainer(env="CartPole-v1", logger=logger)
+trainer = Trainer("ppo", env="CartPole-v1", logger=logger)
 trainer.train(total_timesteps=100_000)
 ```
 
@@ -710,7 +710,7 @@ metrics = train_from_config(cfg)
 `VecNormalize` wraps a vectorised environment to apply running normalisation to observations and rewards. It uses `RunningStatsVec` (Rust) for efficient per-dimension statistics.
 
 ```python
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 from rlox.wrappers import VecNormalize
 
 trainer = PPOTrainer(
@@ -735,7 +735,7 @@ from rlox.dashboard import MetricsCollector, HTMLReport, TerminalDashboard
 # Collect metrics during training
 collector = MetricsCollector()
 
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 trainer = PPOTrainer(
     env="CartPole-v1",
     callbacks=[collector],
@@ -749,7 +749,7 @@ report.save("training_report.html")
 
 # Or use the live terminal dashboard (Rich-based)
 # Pass TerminalDashboard as a callback for real-time display:
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 trainer = PPOTrainer(
     env="CartPole-v1",
     callbacks=[TerminalDashboard()],

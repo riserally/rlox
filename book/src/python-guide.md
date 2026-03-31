@@ -4,7 +4,7 @@ rlox provides three levels of API for reinforcement learning in Python. Each lev
 
 | Level | What you write | What rlox handles |
 |-------|----------------|-------------------|
-| **High-level** (Trainer) | `PPOTrainer("CartPole-v1").train(50_000)` | Everything |
+| **High-level** (Trainer) | `Trainer("ppo", env="CartPole-v1").train(50_000)` | Everything |
 | **Mid-level** (Algorithm) | Training loop, hyperparams | Network creation, collection, loss |
 | **Low-level** (Primitives) | Full loop, custom networks | Fast env stepping, GAE, buffers |
 
@@ -35,9 +35,9 @@ python -c "from rlox import CartPole; print('rlox ready')"
 Three lines to a trained agent:
 
 ```python
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 
-trainer = PPOTrainer(env="CartPole-v1", seed=42)
+trainer = Trainer("ppo", env="CartPole-v1", seed=42)
 metrics = trainer.train(total_timesteps=50_000)
 print(f"Mean reward: {metrics['mean_reward']:.1f}")
 ```
@@ -45,10 +45,10 @@ print(f"Mean reward: {metrics['mean_reward']:.1f}")
 ### Available Trainers
 
 ```python
-from rlox.trainers import PPOTrainer, SACTrainer, DQNTrainer
+from rlox import Trainer
 ```
 
-**PPOTrainer** -- On-policy, discrete or continuous actions.
+**Trainer("ppo", ...)** -- On-policy, discrete or continuous actions.
 
 ```python
 trainer = PPOTrainer(
@@ -58,7 +58,7 @@ trainer = PPOTrainer(
 )
 ```
 
-**SACTrainer** -- Off-policy, continuous actions (e.g. Pendulum, MuJoCo).
+**Trainer("sac", ...)** -- Off-policy, continuous actions (e.g. Pendulum, MuJoCo).
 
 ```python
 trainer = SACTrainer(
@@ -68,7 +68,7 @@ trainer = SACTrainer(
 )
 ```
 
-**DQNTrainer** -- Off-policy, discrete actions with Rainbow extensions.
+**Trainer("dqn", ...)** -- Off-policy, discrete actions with Rainbow extensions.
 
 ```python
 trainer = DQNTrainer(
@@ -110,7 +110,7 @@ logger = WandbLogger(project="rlox-experiments", name="ppo-cartpole")
 # TensorBoard
 logger = TensorBoardLogger(log_dir="runs/ppo-cartpole")
 
-trainer = PPOTrainer(env="CartPole-v1", logger=logger)
+trainer = Trainer("ppo", env="CartPole-v1", logger=logger)
 trainer.train(total_timesteps=100_000)
 ```
 

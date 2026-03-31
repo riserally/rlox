@@ -36,10 +36,10 @@ python -c "from rlox import CartPole; print('rlox ready')"
 The fastest way to train an RL agent with rlox:
 
 ```python
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 
 # Train PPO on CartPole-v1 with default hyperparameters
-trainer = PPOTrainer(env="CartPole-v1", seed=42)
+trainer = Trainer("ppo", env="CartPole-v1", seed=42)
 metrics = trainer.train(total_timesteps=50_000)
 
 print(f"Mean reward: {metrics['mean_reward']:.1f}")
@@ -192,7 +192,7 @@ kl = rlox.compute_token_kl(log_p, log_q)
 For continuous control with SAC or TD3:
 
 ```python
-from rlox.trainers import SACTrainer
+from rlox import Trainer
 
 trainer = SACTrainer(
     env="Pendulum-v1",
@@ -210,7 +210,7 @@ print(f"Mean reward: {metrics['mean_reward']:.1f}")
 For discrete control with DQN (with Rainbow extensions):
 
 ```python
-from rlox.trainers import DQNTrainer
+from rlox import Trainer
 
 trainer = DQNTrainer(
     env="CartPole-v1",
@@ -258,11 +258,11 @@ advantages, returns = rlox.compute_gae(
 ### Weights & Biases
 
 ```python
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 from rlox.logging import WandbLogger
 
 logger = WandbLogger(project="rlox-experiments", name="ppo-cartpole")
-trainer = PPOTrainer(env="CartPole-v1", logger=logger)
+trainer = Trainer("ppo", env="CartPole-v1", logger=logger)
 trainer.train(total_timesteps=100_000)
 ```
 
@@ -272,7 +272,7 @@ trainer.train(total_timesteps=100_000)
 from rlox.logging import TensorBoardLogger
 
 logger = TensorBoardLogger(log_dir="runs/ppo-cartpole")
-trainer = PPOTrainer(env="CartPole-v1", logger=logger)
+trainer = Trainer("ppo", env="CartPole-v1", logger=logger)
 trainer.train(total_timesteps=100_000)
 # Then: tensorboard --logdir runs/
 ```
@@ -281,7 +281,7 @@ trainer.train(total_timesteps=100_000)
 
 ```python
 from rlox.callbacks import EarlyStoppingCallback
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 
 trainer = PPOTrainer(
     env="CartPole-v1",
@@ -330,12 +330,12 @@ cargo test --package rlox-core
 
 | Component | Module | Purpose |
 |-----------|--------|---------|
-| `PPOTrainer` | `rlox.trainers` | High-level PPO trainer |
-| `SACTrainer` | `rlox.trainers` | High-level SAC trainer |
-| `DQNTrainer` | `rlox.trainers` | High-level DQN trainer |
+| `Trainer("ppo", ...)` | `rlox` | Unified PPO trainer |
+| `Trainer("sac", ...)` | `rlox` | Unified SAC trainer |
+| `Trainer("dqn", ...)` | `rlox` | Unified DQN trainer |
 | `A2CTrainer` | `rlox.trainers` | High-level A2C trainer |
 | `TD3Trainer` | `rlox.trainers` | High-level TD3 trainer |
-| `MAPPOTrainer` | `rlox.trainers` | Multi-agent PPO trainer |
+| `Trainer("mappo", ...)` | `rlox` | Unified multi-agent PPO trainer |
 | `DreamerV3Trainer` | `rlox.trainers` | World-model-based trainer (DreamerV3) |
 | `IMPALATrainer` | `rlox.trainers` | Distributed actor-learner trainer |
 | `PPO`, `A2C` | `rlox.algorithms` | On-policy algorithms |

@@ -33,7 +33,7 @@ from rlox.algorithms.online_dpo import OnlineDPO
 from rlox.algorithms.best_of_n import BestOfN
 from rlox.algorithms.mappo import MAPPO
 from rlox.algorithms.dreamer import DreamerV3
-from rlox.algorithms.impala import IMPALA
+from rlox.algorithms.impala import IMPALA, DistributedIMPALA
 
 __all__ = [
     "PPO",
@@ -49,4 +49,5 @@ __all__ = [
     "MAPPO",
     "DreamerV3",
     "IMPALA",
+    "DistributedIMPALA",
 ]

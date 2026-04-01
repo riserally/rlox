@@ -206,3 +206,174 @@ class TestDreamerV3Config:
         cfg.to_toml(path)
         loaded = DreamerV3Config.from_toml(path)
         assert loaded.imagination_horizon == 20
+
+
+# ---------------------------------------------------------------------------
+# CNN Encoder / Decoder
+# ---------------------------------------------------------------------------
+
+
+class TestCNNEncoder:
+    """Test convolutional encoder for image observations."""
+
+    def test_output_shape_64x64_rgb(self):
+        from rlox.algorithms.dreamer import CNNEncoder
+
+        encoder = CNNEncoder(in_channels=3, depth=48)
+        x = torch.randn(2, 3, 64, 64)
+        out = encoder(x)
+        assert out.dim() == 2
+        assert out.shape[0] == 2
+        # 4 layers of stride-2 => 64 / 16 = 4, depth*8 = 384, so 384*4*4 = 6144
+        assert out.shape[1] == 48 * 8 * 4 * 4
+
+    def test_output_shape_grayscale(self):
+        from rlox.algorithms.dreamer import CNNEncoder
+
+        encoder = CNNEncoder(in_channels=1, depth=48)
+        x = torch.randn(4, 1, 64, 64)
+        out = encoder(x)
+        assert out.shape == (4, 48 * 8 * 4 * 4)
+
+    def test_nhwc_input_auto_permuted(self):
+        from rlox.algorithms.dreamer import CNNEncoder
+
+        encoder = CNNEncoder(in_channels=3, depth=48)
+        x = torch.randn(2, 64, 64, 3)  # NHWC format
+        out = encoder(x)
+        assert out.dim() == 2
+        assert out.shape[0] == 2
+
+    def test_custom_depth(self):
+        from rlox.algorithms.dreamer import CNNEncoder
+
+        encoder = CNNEncoder(in_channels=3, depth=32)
+        x = torch.randn(1, 3, 64, 64)
+        out = encoder(x)
+        assert out.shape[1] == 32 * 8 * 4 * 4
+
+    def test_non_square_input(self):
+        from rlox.algorithms.dreamer import CNNEncoder
+
+        encoder = CNNEncoder(in_channels=3, depth=48)
+        x = torch.randn(1, 3, 96, 96)
+        out = encoder(x)
+        # 96 / 16 = 6, so 384 * 6 * 6 = 13824
+        assert out.shape == (1, 48 * 8 * 6 * 6)
+
+
+class TestCNNDecoder:
+    """Test transposed convolutional decoder for image reconstruction."""
+
+    def test_output_shape_matches_input_64(self):
+        from rlox.algorithms.dreamer import CNNDecoder
+
+        feat_dim = 128
+        decoder = CNNDecoder(feat_dim=feat_dim, out_channels=3, depth=48, img_size=64)
+        features = torch.randn(2, feat_dim)
+        out = decoder(features)
+        assert out.shape == (2, 3, 64, 64)
+
+    def test_output_shape_grayscale(self):
+        from rlox.algorithms.dreamer import CNNDecoder
+
+        feat_dim = 128
+        decoder = CNNDecoder(feat_dim=feat_dim, out_channels=1, depth=48, img_size=64)
+        features = torch.randn(3, feat_dim)
+        out = decoder(features)
+        assert out.shape == (3, 1, 64, 64)
+
+    def test_output_shape_96(self):
+        from rlox.algorithms.dreamer import CNNDecoder
+
+        feat_dim = 256
+        decoder = CNNDecoder(feat_dim=feat_dim, out_channels=3, depth=48, img_size=96)
+        features = torch.randn(1, feat_dim)
+        out = decoder(features)
+        assert out.shape == (1, 3, 96, 96)
+
+    def test_encoder_decoder_roundtrip_shape(self):
+        """Encoder output fed to decoder should reconstruct original spatial dims."""
+        from rlox.algorithms.dreamer import CNNEncoder, CNNDecoder
+
+        encoder = CNNEncoder(in_channels=3, depth=48)
+        dummy = torch.randn(1, 3, 64, 64)
+        embed_dim = encoder(dummy).shape[-1]
+
+        feat_dim = 128 + embed_dim  # simulating deter + stoch + embed
+        decoder = CNNDecoder(feat_dim=feat_dim, out_channels=3, depth=48, img_size=64)
+        features = torch.randn(2, feat_dim)
+        out = decoder(features)
+        assert out.shape == (2, 3, 64, 64)
+
+
+class TestPreprocessObs:
+    """Test image observation preprocessing."""
+
+    def test_normalize_pixel_values(self):
+        from rlox.algorithms.dreamer import preprocess_obs
+
+        obs = torch.randint(0, 256, (2, 3, 64, 64), dtype=torch.uint8).float()
+        result = preprocess_obs(obs, use_cnn=True)
+        assert result.max() <= 1.0
+        assert result.min() >= 0.0
+
+    def test_adds_batch_dim_if_missing(self):
+        from rlox.algorithms.dreamer import preprocess_obs
+
+        obs = torch.randn(3, 64, 64)
+        result = preprocess_obs(obs, use_cnn=True)
+        assert result.dim() == 4
+        assert result.shape[0] == 1
+
+    def test_flat_obs_passthrough(self):
+        from rlox.algorithms.dreamer import preprocess_obs
+
+        obs = torch.randn(4, 8)
+        result = preprocess_obs(obs, use_cnn=False)
+        assert torch.equal(result, obs)
+
+
+def _has_box2d() -> bool:
+    """Check if Box2D is available for CarRacing env."""
+    try:
+        import Box2D  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+_skip_no_box2d = pytest.mark.skipif(
+    not _has_box2d(), reason="Box2D not installed (pip install 'gymnasium[box2d]')"
+)
+
+
+class TestDreamerV3CNN:
+    """Test DreamerV3 instantiation and forward pass with image observations."""
+
+    @_skip_no_box2d
+    def test_instantiation_with_image_env(self):
+        """DreamerV3 should detect image obs and create CNN encoder/decoder."""
+        from rlox.algorithms.dreamer import DreamerV3, CNNEncoder, CNNDecoder
+
+        agent = DreamerV3(env_id="CarRacing-v3", seed=42)
+        assert agent._use_cnn is True
+        assert isinstance(agent.encoder, CNNEncoder)
+        assert isinstance(agent.decoder, CNNDecoder)
+
+    def test_mlp_path_unchanged(self):
+        """Flat observation envs should still use MLP path."""
+        from rlox.algorithms.dreamer import DreamerV3
+
+        agent = DreamerV3(env_id="CartPole-v1", seed=42)
+        assert agent._use_cnn is False
+        assert not hasattr(agent, "encoder")
+
+    @_skip_no_box2d
+    def test_encoder_embed_dim_computed(self):
+        """The embed_dim should be computed from a dummy forward pass."""
+        from rlox.algorithms.dreamer import DreamerV3
+
+        agent = DreamerV3(env_id="CarRacing-v3", seed=42)
+        # embed_dim should be positive and match encoder output
+        assert agent._embed_dim > 0

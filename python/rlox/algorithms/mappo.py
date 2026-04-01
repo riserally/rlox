@@ -228,6 +228,11 @@ class MultiAgentCollector:
                         torch.tensor(float(any_done), dtype=torch.float32, device=device)
                     )
 
+                    if any_done:
+                        # PettingZoo parallel envs clear their agent list on
+                        # episode end; reset to get fresh observations.
+                        next_obs, _ = env.reset()
+
                     env_observations[env_idx] = next_obs
 
                 # Stack across envs for this step

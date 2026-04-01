@@ -1,6 +1,8 @@
-"""Tests for IMPALA: vectorized V-trace and config."""
+"""Tests for IMPALA: vectorized V-trace, config, and distributed wiring."""
 
 from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -164,3 +166,144 @@ class TestIMPALAConfig:
         loaded = IMPALAConfig.from_toml(path)
         assert loaded.rho_clip == 0.5
         assert loaded.c_clip == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Distributed IMPALA wiring
+# ---------------------------------------------------------------------------
+
+
+class TestIMPALADistributed:
+    """Tests for IMPALA remote env (distributed actor) support."""
+
+    def test_impala_accepts_worker_addresses(self) -> None:
+        """IMPALA.__init__ should accept worker_addresses without crashing."""
+        from rlox.algorithms.impala import IMPALA
+
+        addresses = ["gpu-node-1:50051", "gpu-node-2:50051"]
+        agent = IMPALA(
+            env_id="CartPole-v1",
+            n_actors=2,
+            n_envs=2,
+            seed=42,
+            worker_addresses=addresses,
+        )
+        assert agent._worker_addresses == addresses
+
+    def test_impala_without_addresses_uses_local_env(self) -> None:
+        """When worker_addresses is None, IMPALA should use local envs (backward compat)."""
+        from rlox.algorithms.impala import IMPALA
+
+        agent = IMPALA(env_id="CartPole-v1", n_actors=1, n_envs=2, seed=42)
+        assert agent._worker_addresses is None
+
+    def test_impala_partitions_addresses_across_actors(self) -> None:
+        """Addresses should be split across actors."""
+        from rlox.algorithms.impala import IMPALA
+
+        addresses = [
+            "node-1:50051", "node-2:50051",
+            "node-3:50051", "node-4:50051",
+        ]
+        agent = IMPALA(
+            env_id="CartPole-v1",
+            n_actors=2,
+            n_envs=2,
+            seed=42,
+            worker_addresses=addresses,
+        )
+        partitions = agent._partition_addresses()
+        assert len(partitions) == 2
+        # All addresses accounted for
+        all_addrs = [a for p in partitions for a in p]
+        assert sorted(all_addrs) == sorted(addresses)
+
+    def test_impala_single_actor_gets_all_addresses(self) -> None:
+        """With one actor, it should receive all addresses."""
+        from rlox.algorithms.impala import IMPALA
+
+        addresses = ["node-1:50051", "node-2:50051"]
+        agent = IMPALA(
+            env_id="CartPole-v1",
+            n_actors=1,
+            n_envs=2,
+            seed=42,
+            worker_addresses=addresses,
+        )
+        partitions = agent._partition_addresses()
+        assert len(partitions) == 1
+        assert partitions[0] == addresses
+
+    def test_impala_more_actors_than_addresses_raises(self) -> None:
+        """Having more actors than addresses should raise ValueError."""
+        from rlox.algorithms.impala import IMPALA
+
+        with pytest.raises(ValueError, match="more actors.*than worker addresses"):
+            IMPALA(
+                env_id="CartPole-v1",
+                n_actors=4,
+                n_envs=2,
+                seed=42,
+                worker_addresses=["node-1:50051", "node-2:50051"],
+            )
+
+    def test_actor_loop_creates_remote_env_pool_when_distributed(self) -> None:
+        """When worker_addresses are provided, _actor_loop should create a RemoteEnvPool."""
+        from rlox.algorithms.impala import IMPALA
+
+        addresses = ["node-1:50051", "node-2:50051"]
+        agent = IMPALA(
+            env_id="CartPole-v1",
+            n_actors=2,
+            n_envs=2,
+            seed=42,
+            worker_addresses=addresses,
+        )
+
+        # Patch RemoteEnvPool to capture construction
+        mock_pool = MagicMock()
+        mock_pool.reset_all.return_value = np.zeros((2, 4), dtype=np.float32)
+
+        with patch(
+            "rlox.algorithms.impala.RemoteEnvPool", return_value=mock_pool
+        ) as mock_cls:
+            # Set stop event immediately so the actor loop exits after one check
+            agent._stop_event.set()
+            agent._actor_loop(0)
+
+            mock_cls.assert_called_once_with(addresses=["node-1:50051"])
+            mock_pool.connect.assert_called_once()
+
+
+class TestDistributedIMPALA:
+    """Tests for the DistributedIMPALA convenience wrapper."""
+
+    def test_distributed_impala_class_exists(self) -> None:
+        """DistributedIMPALA should be importable."""
+        from rlox.algorithms.impala import DistributedIMPALA
+
+        assert DistributedIMPALA is not None
+
+    def test_distributed_impala_is_subclass_of_impala(self) -> None:
+        from rlox.algorithms.impala import IMPALA, DistributedIMPALA
+
+        assert issubclass(DistributedIMPALA, IMPALA)
+
+    def test_distributed_impala_requires_worker_addresses(self) -> None:
+        """DistributedIMPALA must receive worker_addresses."""
+        from rlox.algorithms.impala import DistributedIMPALA
+
+        agent = DistributedIMPALA(
+            env_id="CartPole-v1",
+            worker_addresses=["node-1:50051", "node-2:50051"],
+            n_actors=2,
+        )
+        assert agent._worker_addresses is not None
+        assert len(agent._worker_addresses) == 2
+
+    def test_distributed_impala_rejects_missing_addresses(self) -> None:
+        """DistributedIMPALA should reject construction without addresses."""
+        from rlox.algorithms.impala import DistributedIMPALA
+
+        with pytest.raises((TypeError, ValueError)):
+            DistributedIMPALA(env_id="CartPole-v1")

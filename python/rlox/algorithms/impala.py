@@ -21,6 +21,7 @@ import torch.nn.functional as F
 
 import rlox
 from rlox.callbacks import Callback, CallbackList
+from rlox.distributed.remote_env import RemoteEnvPool
 from rlox.logging import LoggerCallback
 from rlox.policies import DiscretePolicy
 
@@ -134,6 +135,11 @@ class IMPALA:
         Logger for metrics.
     callbacks : list[Callback], optional
         Training callbacks.
+    worker_addresses : list[str] | None
+        If provided, each actor uses a :class:`RemoteEnvPool` connecting
+        to a subset of these gRPC worker addresses instead of local
+        VecEnv/GymVecEnv.  The addresses are partitioned evenly across
+        actors, so ``len(worker_addresses) >= n_actors`` is required.
     """
 
     def __init__(
@@ -152,10 +158,19 @@ class IMPALA:
         max_grad_norm: float = 40.0,
         logger: LoggerCallback | None = None,
         callbacks: list[Callback] | None = None,
+        worker_addresses: list[str] | None = None,
     ):
+        if worker_addresses is not None and len(worker_addresses) < n_actors:
+            raise ValueError(
+                f"Cannot have more actors ({n_actors}) than worker addresses "
+                f"({len(worker_addresses)}). Each actor needs at least one "
+                f"worker address."
+            )
+
         self.env_id = env_id
         self.n_actors = n_actors
         self.n_envs = n_envs
+        self._worker_addresses = worker_addresses
         self.n_steps = n_steps
         self.gamma = gamma
         self.rho_bar = rho_bar
@@ -195,6 +210,27 @@ class IMPALA:
         self._stop_event = threading.Event()
         self._policy_lock = threading.Lock()
 
+    def _partition_addresses(self) -> list[list[str]]:
+        """Split worker_addresses evenly across actors.
+
+        Returns a list of length ``n_actors``, where each element is the
+        subset of addresses assigned to that actor.  When addresses don't
+        divide evenly, earlier actors receive the extra addresses.
+        """
+        if self._worker_addresses is None:
+            return [[] for _ in range(self.n_actors)]
+
+        addrs = list(self._worker_addresses)
+        n = len(addrs)
+        base, extra = divmod(n, self.n_actors)
+        partitions: list[list[str]] = []
+        offset = 0
+        for i in range(self.n_actors):
+            size = base + (1 if i < extra else 0)
+            partitions.append(addrs[offset : offset + size])
+            offset += size
+        return partitions
+
     def _get_policy_snapshot(self) -> dict:
         """Get a copy of the current policy parameters."""
         with self._policy_lock:
@@ -202,15 +238,22 @@ class IMPALA:
 
     def _actor_loop(self, actor_id: int) -> None:
         """Actor thread: collect experience and enqueue."""
-        # Use native VecEnv for supported envs, GymVecEnv for everything else
-        try:
-            env = rlox.VecEnv(
-                n=self.n_envs, seed=self.seed + actor_id * 1000, env_id=self.env_id
-            )
-        except ValueError:
-            from rlox.gym_vec_env import GymVecEnv
+        actor_addresses = self._partition_addresses()[actor_id]
 
-            env = GymVecEnv(self.env_id, n_envs=self.n_envs)
+        if actor_addresses:
+            # Distributed mode: use RemoteEnvPool as the env backend
+            env = RemoteEnvPool(addresses=actor_addresses)
+            env.connect()
+        else:
+            # Local mode: use native VecEnv or GymVecEnv fallback
+            try:
+                env = rlox.VecEnv(
+                    n=self.n_envs, seed=self.seed + actor_id * 1000, env_id=self.env_id
+                )
+            except ValueError:
+                from rlox.gym_vec_env import GymVecEnv
+
+                env = GymVecEnv(self.env_id, n_envs=self.n_envs)
         obs = env.reset_all()
 
         # Local policy copy -- match learner policy type
@@ -451,3 +494,41 @@ class IMPALA:
         impala.optimizer.load_state_dict(data["optimizer"])
         impala._global_step = data.get("step", 0)
         return impala
+
+
+class DistributedIMPALA(IMPALA):
+    """IMPALA with remote environment workers via gRPC.
+
+    Thin convenience wrapper that enforces ``worker_addresses`` is provided
+    and defaults ``n_actors`` to match the number of addresses.
+
+    Parameters
+    ----------
+    env_id : str
+        Gymnasium environment ID (used for space detection).
+    worker_addresses : list[str]
+        gRPC ``host:port`` addresses for remote environment workers.
+    **kwargs
+        Forwarded to :class:`IMPALA`.
+    """
+
+    def __init__(
+        self,
+        env_id: str,
+        worker_addresses: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if worker_addresses is None or len(worker_addresses) == 0:
+            raise ValueError(
+                "DistributedIMPALA requires at least one worker address. "
+                "Use IMPALA directly for local-only training."
+            )
+
+        # Default n_actors to number of addresses if not explicitly set
+        kwargs.setdefault("n_actors", len(worker_addresses))
+
+        super().__init__(
+            env_id=env_id,
+            worker_addresses=worker_addresses,
+            **kwargs,
+        )

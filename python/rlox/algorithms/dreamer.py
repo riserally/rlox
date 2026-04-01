@@ -27,6 +27,130 @@ import rlox
 
 
 # ---------------------------------------------------------------------------
+# Image preprocessing
+# ---------------------------------------------------------------------------
+
+
+def preprocess_obs(obs: torch.Tensor, *, use_cnn: bool) -> torch.Tensor:
+    """Preprocess observations: normalize images to [0, 1], add batch dim if needed.
+
+    Parameters
+    ----------
+    obs : Tensor
+        Raw observation tensor.
+    use_cnn : bool
+        Whether the agent uses CNN (image observations).
+
+    Returns
+    -------
+    Tensor -- preprocessed observation.
+    """
+    if not use_cnn:
+        return obs
+    obs = obs.float() / 255.0 if obs.max() > 1.0 else obs.float()
+    if obs.dim() == 3:
+        obs = obs.unsqueeze(0)
+    return obs
+
+
+# ---------------------------------------------------------------------------
+# CNN Encoder / Decoder (DreamerV3 architecture)
+# ---------------------------------------------------------------------------
+
+
+class CNNEncoder(nn.Module):
+    """Convolutional encoder for image observations (DreamerV3 architecture).
+
+    4 convolutional layers with depths [depth*1, depth*2, depth*4, depth*8],
+    kernel size 4, stride 2, padding 1 -- halving spatial dims each layer.
+    Output is flattened to a 1-D embedding vector.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input image channels (default 3 for RGB).
+    depth : int
+        Base channel depth (default 48). Layers use depth*{1,2,4,8}.
+    """
+
+    def __init__(self, in_channels: int = 3, depth: int = 48):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels, depth, 4, 2, 1), nn.SiLU(),
+            nn.Conv2d(depth, depth * 2, 4, 2, 1), nn.SiLU(),
+            nn.Conv2d(depth * 2, depth * 4, 4, 2, 1), nn.SiLU(),
+            nn.Conv2d(depth * 4, depth * 8, 4, 2, 1), nn.SiLU(),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        """Encode image observation to flat embedding.
+
+        Parameters
+        ----------
+        obs : Tensor of shape (B, C, H, W) or (B, H, W, C)
+
+        Returns
+        -------
+        Tensor of shape (B, embed_dim) where embed_dim = depth*8 * (H//16) * (W//16).
+        """
+        if obs.dim() == 4 and obs.shape[-1] in (1, 3):
+            obs = obs.permute(0, 3, 1, 2)  # NHWC -> NCHW
+        return self.layers(obs).reshape(obs.shape[0], -1)
+
+
+class CNNDecoder(nn.Module):
+    """Transposed convolutional decoder for image reconstruction.
+
+    Mirrors the CNNEncoder: 4 transposed-conv layers upsampling from a learned
+    spatial grid back to the original image size.
+
+    Parameters
+    ----------
+    feat_dim : int
+        Dimension of the input feature vector (deter + stoch, or any latent).
+    out_channels : int
+        Number of output image channels (default 3).
+    depth : int
+        Base channel depth (default 48), matching the encoder.
+    img_size : int
+        Target output spatial size (default 64). Must be divisible by 16.
+    """
+
+    def __init__(
+        self,
+        feat_dim: int,
+        out_channels: int = 3,
+        depth: int = 48,
+        img_size: int = 64,
+    ):
+        super().__init__()
+        self.spatial = img_size // 16
+        self.depth = depth
+        self.fc = nn.Linear(feat_dim, depth * 8 * self.spatial * self.spatial)
+        self.layers = nn.Sequential(
+            nn.ConvTranspose2d(depth * 8, depth * 4, 4, 2, 1), nn.SiLU(),
+            nn.ConvTranspose2d(depth * 4, depth * 2, 4, 2, 1), nn.SiLU(),
+            nn.ConvTranspose2d(depth * 2, depth, 4, 2, 1), nn.SiLU(),
+            nn.ConvTranspose2d(depth, out_channels, 4, 2, 1),
+        )
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        """Decode feature vector to image.
+
+        Parameters
+        ----------
+        features : Tensor of shape (B, feat_dim)
+
+        Returns
+        -------
+        Tensor of shape (B, out_channels, img_size, img_size).
+        """
+        x = self.fc(features)
+        x = x.reshape(-1, self.depth * 8, self.spatial, self.spatial)
+        return self.layers(x)
+
+
+# ---------------------------------------------------------------------------
 # Symlog / Symexp transforms
 # ---------------------------------------------------------------------------
 
@@ -446,20 +570,42 @@ class DreamerV3:
         self.free_nats = free_nats
         self.device = "cpu"
 
-        # Detect if continuous
+        # Detect action space and observation space
         tmp = gym.make(env_id)
         self._is_continuous = isinstance(tmp.action_space, gym.spaces.Box)
         if self._is_continuous:
             self.n_actions = int(np.prod(tmp.action_space.shape))
+
+        obs_shape = tmp.observation_space.shape
         tmp.close()
 
-        # Environment
-        self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
+        # Detect image observations (3-D obs shape like (H, W, C))
+        if len(obs_shape) == 3:
+            self._use_cnn = True
+            in_channels = obs_shape[-1]  # (H, W, C) convention
+            img_h, img_w = obs_shape[0], obs_shape[1]
+            self.encoder = CNNEncoder(in_channels=in_channels)
+            # Compute encoder output dim via dummy forward pass
+            dummy = torch.zeros(1, in_channels, img_h, img_w)
+            self._embed_dim = self.encoder(dummy).shape[-1]
+            embed_dim = self._embed_dim
+        else:
+            self._use_cnn = False
+            embed_dim = obs_dim
+            self._embed_dim = embed_dim
 
-        # RSSM world model
+        # Environment -- use VecEnv for flat obs, gym-based env for images
+        if self._use_cnn:
+            self._gym_env = gym.make(env_id)
+            self.env = None  # VecEnv not used for image envs
+        else:
+            self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
+            self._gym_env = None
+
+        # RSSM world model -- obs_dim is the encoder embedding dim for CNN
         act_dim = self.n_actions if self._is_continuous else self.n_actions
         self.world_model = RSSM(
-            obs_dim=obs_dim,
+            obs_dim=embed_dim,
             act_dim=act_dim if self._is_continuous else n_actions,
             deter_dim=deter_dim,
             stoch_dim=stoch_dim,
@@ -467,8 +613,16 @@ class DreamerV3:
             hidden=max(64, deter_dim),
         )
 
-        # Latent actor-critic
+        # CNN decoder (reconstructs images from latent features)
         feat_dim = deter_dim + stoch_dim * stoch_classes
+        if self._use_cnn:
+            self.decoder = CNNDecoder(
+                feat_dim=feat_dim,
+                out_channels=in_channels,
+                img_size=img_h,
+            )
+
+        # Latent actor-critic
         self.actor_critic = LatentActorCritic(
             latent_dim=feat_dim,
             n_actions=self.n_actions,
@@ -476,22 +630,51 @@ class DreamerV3:
             hidden=max(64, deter_dim),
         )
 
-        # Replay buffer -- stores individual transitions for sequence slicing
-        self.buffer = rlox.ReplayBuffer(buffer_size, obs_dim, 1)
+        # Replay buffer -- flat buffer for MLP, sequence buffer for both
+        if not self._use_cnn:
+            self.buffer = rlox.ReplayBuffer(buffer_size, obs_dim, 1)
+        else:
+            # Flat ReplayBuffer doesn't support image obs; use seq buffer only
+            self.buffer = None
         # Also maintain a sequential buffer for sequence replay
         self._seq_buffer: list[dict[str, np.ndarray]] = []
         self._seq_buffer_maxlen = buffer_size
 
-        # Optimizers
-        self.wm_optimizer = torch.optim.Adam(
-            self.world_model.parameters(), lr=learning_rate
-        )
+        # Optimizers -- include CNN encoder/decoder params when using CNN
+        wm_params = list(self.world_model.parameters())
+        if self._use_cnn:
+            wm_params += list(self.encoder.parameters()) + list(self.decoder.parameters())
+        self.wm_optimizer = torch.optim.Adam(wm_params, lr=learning_rate)
         self.ac_optimizer = torch.optim.Adam(
             self.actor_critic.parameters(), lr=learning_rate
         )
 
+    def _encode_obs(self, obs_tensor: torch.Tensor) -> torch.Tensor:
+        """Encode observation through CNN encoder (if applicable) or pass through.
+
+        Parameters
+        ----------
+        obs_tensor : Tensor
+            Raw observation tensor. For CNN: (B, C, H, W) or (B, H, W, C).
+            For MLP: (B, obs_dim).
+
+        Returns
+        -------
+        Tensor of shape (B, embed_dim).
+        """
+        if self._use_cnn:
+            obs_tensor = preprocess_obs(obs_tensor, use_cnn=True)
+            return self.encoder(obs_tensor)
+        return obs_tensor
+
     def _collect_experience(self, n_steps: int) -> float:
         """Collect experience with the current policy and add to buffer."""
+        if self._use_cnn:
+            return self._collect_experience_cnn(n_steps)
+        return self._collect_experience_vec(n_steps)
+
+    def _collect_experience_vec(self, n_steps: int) -> float:
+        """Collect experience using VecEnv (flat observations)."""
         obs = self.env.reset_all()
         total_reward = 0.0
 
@@ -503,10 +686,8 @@ class DreamerV3:
         for _ in range(n_steps):
             obs_tensor = torch.as_tensor(obs, dtype=torch.float32)
 
-            # Encode through RSSM
             with torch.no_grad():
                 h, z = self.world_model.initial_state(obs_tensor.shape[0])
-                # Use a simple encode: posterior from initial state
                 h_new, z_post, _ = self.world_model.observe_step(
                     h, z,
                     torch.zeros(obs_tensor.shape[0], self.n_actions),
@@ -538,7 +719,6 @@ class DreamerV3:
                     next_obs[i].astype(np.float32),
                 )
 
-                # Store for sequence replay
                 episode_data[i]["obs"].append(obs[i].astype(np.float32))
                 episode_data[i]["actions"].append(
                     actions[i].cpu().numpy().astype(np.float32)
@@ -554,7 +734,6 @@ class DreamerV3:
             total_reward += step_result["rewards"].sum()
             obs = step_result["obs"].copy()
 
-        # Add collected sequences to sequential buffer
         for i in range(self.n_envs):
             if len(episode_data[i]["obs"]) > 0:
                 self._seq_buffer.append(
@@ -565,9 +744,69 @@ class DreamerV3:
                         "dones": np.array(episode_data[i]["dones"], dtype=np.float32),
                     }
                 )
-                # Trim buffer
                 while len(self._seq_buffer) > self._seq_buffer_maxlen:
                     self._seq_buffer.pop(0)
+
+        return total_reward
+
+    def _collect_experience_cnn(self, n_steps: int) -> float:
+        """Collect experience using a single gym env (image observations)."""
+        obs, _ = self._gym_env.reset()
+        total_reward = 0.0
+
+        episode_data: dict[str, list[Any]] = {
+            "obs": [], "actions": [], "rewards": [], "dones": [],
+        }
+
+        for _ in range(n_steps):
+            obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+
+            with torch.no_grad():
+                embedded = self._encode_obs(obs_tensor)
+                h, z = self.world_model.initial_state(1)
+                h_new, z_post, _ = self.world_model.observe_step(
+                    h, z,
+                    torch.zeros(1, self.n_actions),
+                    embedded,
+                )
+                feat = self.world_model.get_feature(h_new, z_post)
+                dist = self.actor_critic.policy(feat)
+                actions = dist.sample()
+
+            if self._is_continuous:
+                action_np = actions.squeeze(0).cpu().numpy().astype(np.float32)
+            else:
+                action_np = actions.item()
+
+            next_obs, reward, terminated, truncated, _ = self._gym_env.step(action_np)
+
+            episode_data["obs"].append(obs.astype(np.float32) if isinstance(obs, np.ndarray) else obs)
+            episode_data["actions"].append(
+                actions.squeeze(0).cpu().numpy().astype(np.float32)
+                if self._is_continuous
+                else np.array(float(actions.item()), dtype=np.float32)
+            )
+            episode_data["rewards"].append(float(reward))
+            episode_data["dones"].append(bool(terminated) or bool(truncated))
+
+            total_reward += float(reward)
+
+            if terminated or truncated:
+                obs, _ = self._gym_env.reset()
+            else:
+                obs = next_obs
+
+        if len(episode_data["obs"]) > 0:
+            self._seq_buffer.append(
+                {
+                    "obs": np.stack(episode_data["obs"]),
+                    "actions": np.stack(episode_data["actions"]),
+                    "rewards": np.array(episode_data["rewards"], dtype=np.float32),
+                    "dones": np.array(episode_data["dones"], dtype=np.float32),
+                }
+            )
+            while len(self._seq_buffer) > self._seq_buffer_maxlen:
+                self._seq_buffer.pop(0)
 
         return total_reward
 
@@ -643,8 +882,8 @@ class DreamerV3:
         """Train world model on sequence data from replay."""
         seqs = self._sample_sequences(self.batch_size, self.seq_len)
         if seqs is None:
-            # Fall back to individual transitions
-            if len(self.buffer) < self.batch_size:
+            # Fall back to individual transitions (MLP path only)
+            if self.buffer is None or len(self.buffer) < self.batch_size:
                 return 0.0
             batch = self.buffer.sample(
                 self.batch_size, seed=np.random.randint(0, 2**31)
@@ -673,7 +912,7 @@ class DreamerV3:
             return loss.item()
 
         # Sequence-based training
-        obs = seqs["obs"]  # (batch, seq_len, obs_dim)
+        obs = seqs["obs"]  # (batch, seq_len, obs_dim) or (batch, seq_len, H, W, C)
         actions = seqs["actions"]  # (batch, seq_len, ...)
         rewards = seqs["rewards"]  # (batch, seq_len)
         dones = seqs["dones"]  # (batch, seq_len)
@@ -690,6 +929,13 @@ class DreamerV3:
             obs_t = obs[:, t]
             act_t = actions[:, t]
 
+            # Encode image observations through CNN
+            if self._use_cnn:
+                obs_t_raw = preprocess_obs(obs_t, use_cnn=True)
+                obs_t_encoded = self.encoder(obs_t_raw)
+            else:
+                obs_t_encoded = obs_t
+
             # Ensure action has correct shape
             if act_t.dim() == 1:
                 if self._is_continuous:
@@ -699,11 +945,19 @@ class DreamerV3:
             elif not self._is_continuous and act_t.shape[-1] != self.n_actions:
                 act_t = F.one_hot(act_t.long().squeeze(-1), self.n_actions).float()
 
-            h, z_post, z_prior = self.world_model.observe_step(h, z, act_t, obs_t)
+            h, z_post, z_prior = self.world_model.observe_step(
+                h, z, act_t, obs_t_encoded,
+            )
 
             feat = self.world_model.get_feature(h, z_post)
-            pred_obs = self.world_model.decode(feat)
-            total_recon_loss = total_recon_loss + F.mse_loss(pred_obs, obs_t)
+
+            # Reconstruction loss: CNN decoder for images, MLP decoder for flat
+            if self._use_cnn:
+                pred_img = self.decoder(feat)
+                total_recon_loss = total_recon_loss + F.mse_loss(pred_img, obs_t_raw)
+            else:
+                pred_obs = self.world_model.decode(feat)
+                total_recon_loss = total_recon_loss + F.mse_loss(pred_obs, obs_t)
 
             pred_reward = self.world_model.predict_reward(feat)
             total_reward_loss = total_reward_loss + F.mse_loss(
@@ -723,18 +977,29 @@ class DreamerV3:
         loss = total_recon_loss + total_reward_loss
         self.wm_optimizer.zero_grad(set_to_none=True)
         loss.backward()
-        nn.utils.clip_grad_norm_(self.world_model.parameters(), 100.0)
+        # Clip all trainable parameters (includes encoder/decoder for CNN)
+        params = list(self.world_model.parameters())
+        if self._use_cnn:
+            params += list(self.encoder.parameters()) + list(self.decoder.parameters())
+        nn.utils.clip_grad_norm_(params, 100.0)
         self.wm_optimizer.step()
 
         return loss.item()
 
     def _train_actor_critic(self) -> dict[str, float]:
         """Train actor-critic via imagination rollouts in latent space."""
-        if len(self.buffer) < self.batch_size:
-            return {}
-
-        batch = self.buffer.sample(self.batch_size, seed=np.random.randint(0, 2**31))
-        obs = torch.as_tensor(np.array(batch["obs"]), dtype=torch.float32)
+        if self._use_cnn:
+            # Use sequence buffer for image observations
+            seqs = self._sample_sequences(self.batch_size, 1)
+            if seqs is None:
+                return {}
+            obs_raw = seqs["obs"][:, 0]  # (batch, H, W, C) or (batch, obs_dim)
+            obs = self._encode_obs(obs_raw).detach()
+        else:
+            if self.buffer is None or len(self.buffer) < self.batch_size:
+                return {}
+            batch = self.buffer.sample(self.batch_size, seed=np.random.randint(0, 2**31))
+            obs = torch.as_tensor(np.array(batch["obs"]), dtype=torch.float32)
 
         # Freeze world model during imagination
         for p in self.world_model.parameters():

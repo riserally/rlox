@@ -1,4 +1,5 @@
 pub mod columnar;
+pub mod concurrent;
 pub mod episode;
 pub mod extra_columns;
 pub mod her;

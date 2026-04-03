@@ -178,6 +178,7 @@ def _register_builtins() -> None:
     from rlox.algorithms.qmix import QMIX
     from rlox.algorithms.calql import CalQL
     from rlox.algorithms.trpo import TRPO
+    from rlox.algorithms.diffusion_policy import DiffusionPolicy
 
     for name, cls in [
         ("ppo", PPO),
@@ -192,6 +193,7 @@ def _register_builtins() -> None:
         ("qmix", QMIX),
         ("calql", CalQL),
         ("trpo", TRPO),
+        ("diffusion", DiffusionPolicy),
     ]:
         if name not in ALGORITHM_REGISTRY:
             ALGORITHM_REGISTRY[name] = cls

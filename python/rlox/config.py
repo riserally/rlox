@@ -797,7 +797,60 @@ class TRPOConfig(ConfigMixin):
         _validate_min("vf_epochs", self.vf_epochs, 1)
 
 
-_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo"}
+@dataclass
+class DiffusionPolicyConfig(ConfigMixin):
+    """Configuration for Diffusion Policy training.
+
+    Attributes
+    ----------
+    n_diffusion_steps : int
+        Number of diffusion timesteps T (default 50).
+    action_horizon : int
+        Number of future actions to predict (default 8).
+    obs_horizon : int
+        Number of past observations to condition on (default 2).
+    hidden_dim : int
+        Hidden layer width (default 256).
+    learning_rate : float
+        Adam learning rate (default 1e-4).
+    batch_size : int
+        Minibatch size (default 256).
+    noise_schedule : str
+        ``"cosine"`` or ``"linear"`` (default ``"cosine"``).
+    beta_start : float
+        Starting beta for linear schedule (default 0.0001).
+    beta_end : float
+        Ending beta for linear schedule (default 0.02).
+    buffer_size : int
+        Replay buffer capacity (default 1_000_000).
+    n_inference_steps : int
+        Denoising steps at inference (default 10).
+    """
+
+    n_diffusion_steps: int = 50
+    action_horizon: int = 8
+    obs_horizon: int = 2
+    hidden_dim: int = 256
+    learning_rate: float = 1e-4
+    batch_size: int = 256
+    noise_schedule: str = "cosine"
+    beta_start: float = 0.0001
+    beta_end: float = 0.02
+    buffer_size: int = 1_000_000
+    n_inference_steps: int = 10
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("n_diffusion_steps", self.n_diffusion_steps, 1)
+        _validate_min("action_horizon", self.action_horizon, 1)
+        _validate_min("obs_horizon", self.obs_horizon, 1)
+        _validate_min("hidden_dim", self.hidden_dim, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+        _validate_min("buffer_size", self.buffer_size, 1)
+        _validate_min("n_inference_steps", self.n_inference_steps, 1)
+
+
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo", "diffusion"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
 

@@ -36,6 +36,7 @@ from rlox.algorithms.dreamer import DreamerV3
 from rlox.algorithms.impala import IMPALA, DistributedIMPALA
 from rlox.algorithms.awr import AWR
 from rlox.algorithms.trpo import TRPO
+from rlox.algorithms.diffusion_policy import DiffusionPolicy
 
 __all__ = [
     "PPO",
@@ -54,4 +55,5 @@ __all__ = [
     "DistributedIMPALA",
     "AWR",
     "TRPO",
+    "DiffusionPolicy",
 ]

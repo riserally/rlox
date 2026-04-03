@@ -1,0 +1,8 @@
+[package]
+name = "rlox-examples"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rlox-core = { path = "../../crates/rlox-core" }

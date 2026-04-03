@@ -9,6 +9,7 @@ members = [
     "crates/rlox-bench",
     "crates/rlox-grpc",
 ]
+exclude = ["examples/rust"]
 
 [profile.release]
 lto = "thin"

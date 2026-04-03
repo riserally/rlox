@@ -125,6 +125,16 @@ impl ReplayBuffer {
         self.extra.push(handle, pos, values)
     }
 
+    /// Observation dimensionality.
+    pub fn obs_dim(&self) -> usize {
+        self.obs_dim
+    }
+
+    /// Action dimensionality.
+    pub fn act_dim(&self) -> usize {
+        self.act_dim
+    }
+
     /// Number of valid transitions currently stored.
     pub fn len(&self) -> usize {
         self.count

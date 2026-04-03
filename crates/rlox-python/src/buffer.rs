@@ -306,6 +306,36 @@ impl PyReplayBuffer {
         }
         Ok(builder.build())
     }
+
+    /// Sample a batch as flat contiguous f32 arrays optimized for GPU transfer.
+    ///
+    /// Returns a dict where all values (including terminated/truncated) are
+    /// f32 numpy arrays. Booleans are encoded as 0.0/1.0. Observations and
+    /// actions are 2D; scalars are 1D.
+    ///
+    /// This avoids the bool→numpy overhead and produces arrays that can be
+    /// directly passed to ``torch.from_numpy(...).pin_memory().to(device)``.
+    #[cfg(feature = "gpu")]
+    #[pyo3(signature = (batch_size, seed))]
+    fn sample_flat<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py
+            .allow_threads(|| self.inner.sample_flat(batch_size, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.obs, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d("next_obs", batch.next_obs, batch.batch_size, batch.obs_dim)?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_1d_f32("terminated", batch.terminated)?;
+        builder.add_1d_f32("truncated", batch.truncated)?;
+        Ok(builder.build())
+    }
 }
 
 // ---------- PrioritizedReplayBuffer ----------

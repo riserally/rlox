@@ -19,7 +19,9 @@ crossbeam-channel = "0.5"
 
 [features]
 default = []
+gpu = []     # Enable GPU-friendly flat batch sampling and pinned memory buffers
 mujoco = []  # Enable when MuJoCo C library is installed
+simd = []    # Enable SIMD-accelerated buffer and training operations
 
 [dev-dependencies]
 proptest = "1"

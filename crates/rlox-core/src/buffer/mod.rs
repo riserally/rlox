@@ -2,6 +2,8 @@ pub mod columnar;
 pub mod concurrent;
 pub mod episode;
 pub mod extra_columns;
+#[cfg(feature = "gpu")]
+pub mod flat;
 pub mod her;
 pub mod mixed;
 pub mod mmap;

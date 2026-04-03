@@ -28,6 +28,7 @@ dependencies = ["numpy>=1.21"]
 
 [project.optional-dependencies]
 all = ["torch>=2.0", "gymnasium>=0.29"]
+gpu = ["torch>=2.0"]
 
 [project.scripts]
 rlox = "rlox.__main__:main"

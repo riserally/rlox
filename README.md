@@ -13,6 +13,7 @@
   <a href="https://github.com/riserally/rlox/actions/workflows/ci.yml"><img src="https://github.com/riserally/rlox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://deepwiki.com/riserally/rlox"><img src="https://img.shields.io/badge/DeepWiki-rlox-blue.svg" alt="DeepWiki"></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License"></a>
+  <a href="https://pepy.tech/project/rlox"><img src="https://static.pepy.tech/badge/rlox" alt="Downloads"></a>
 </p>
 
 ## Why rlox?

@@ -13,7 +13,6 @@ import queue
 import threading
 from typing import Any
 
-import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -24,19 +23,7 @@ from rlox.callbacks import Callback, CallbackList
 from rlox.distributed.remote_env import RemoteEnvPool
 from rlox.logging import LoggerCallback
 from rlox.policies import DiscretePolicy
-
-
-def _detect_env_spaces(env_id: str) -> tuple[int, Any, bool]:
-    """Detect obs_dim, action_space, and whether the env is discrete.
-
-    Returns (obs_dim, action_space, is_discrete).
-    """
-    tmp = gym.make(env_id)
-    obs_dim = int(np.prod(tmp.observation_space.shape))
-    action_space = tmp.action_space
-    is_discrete = isinstance(action_space, gym.spaces.Discrete)
-    tmp.close()
-    return obs_dim, action_space, is_discrete
+from rlox.utils import detect_env_spaces as _detect_env_spaces
 
 
 def _compute_vtrace_batched(

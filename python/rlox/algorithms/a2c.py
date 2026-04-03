@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +11,7 @@ from rlox.callbacks import Callback, CallbackList
 from rlox.collectors import RolloutCollector
 from rlox.logging import LoggerCallback
 from rlox.policies import DiscretePolicy
+from rlox.utils import detect_env_spaces as _detect_env_spaces
 
 
 class A2C:
@@ -55,19 +55,16 @@ class A2C:
         if policy is not None:
             self.policy = policy
         else:
-            tmp = gym.make(env_id)
-            obs_dim = int(np.prod(tmp.observation_space.shape))
-            is_discrete = isinstance(tmp.action_space, gym.spaces.Discrete)
+            obs_dim, action_space, is_discrete = _detect_env_spaces(env_id)
             if is_discrete:
                 self.policy = DiscretePolicy(
-                    obs_dim=obs_dim, n_actions=int(tmp.action_space.n)
+                    obs_dim=obs_dim, n_actions=int(action_space.n)
                 )
             else:
                 from rlox.policies import ContinuousPolicy
 
-                act_dim = int(np.prod(tmp.action_space.shape))
+                act_dim = int(np.prod(action_space.shape))
                 self.policy = ContinuousPolicy(obs_dim=obs_dim, act_dim=act_dim)
-            tmp.close()
 
         self.optimizer = torch.optim.RMSprop(
             self.policy.parameters(), lr=learning_rate, eps=1e-5, alpha=0.99

@@ -17,23 +17,11 @@ from rlox.gym_vec_env import GymVecEnv
 from rlox.logging import LoggerCallback
 from rlox.losses import PPOLoss
 from rlox.policies import DiscretePolicy
+from rlox.utils import detect_env_spaces as _detect_env_spaces
 from rlox.vec_normalize import VecNormalize
 
 
 _RUST_NATIVE_ENVS = {"CartPole-v1", "CartPole"}
-
-
-def _detect_env_spaces(env_id: str) -> tuple[int, Any, bool]:
-    """Detect obs_dim, action_space, and whether the env is discrete.
-
-    Returns (obs_dim, action_space, is_discrete).
-    """
-    tmp = gym.make(env_id)
-    obs_dim = int(np.prod(tmp.observation_space.shape))
-    action_space = tmp.action_space
-    is_discrete = isinstance(action_space, gym.spaces.Discrete)
-    tmp.close()
-    return obs_dim, action_space, is_discrete
 
 
 class PPO:

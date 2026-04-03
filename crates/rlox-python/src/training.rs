@@ -1,13 +1,16 @@
-use numpy::{PyArray1, PyReadonlyArray1};
+use numpy::{PyArray1, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use rlox_core::pipeline::channel::{Pipeline, RolloutBatch};
+use rlox_core::training::augmentation;
 use rlox_core::training::gae;
 use rlox_core::training::normalization::{RunningStats, RunningStatsVec};
 use rlox_core::training::packing;
+use rlox_core::training::reward_shaping;
 use rlox_core::training::vtrace;
+use rlox_core::training::weight_ops;
 
 /// Compute Generalized Advantage Estimation (GAE).
 ///
@@ -616,4 +619,166 @@ impl PyPipeline {
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2: Image Augmentation
+// ---------------------------------------------------------------------------
+
+/// Apply random shift augmentation to a batch of images (DrQ-v2).
+///
+/// Args:
+///     images: flat f32 numpy array of shape (B * C * H * W,)
+///     batch_size: number of images
+///     channels: number of channels
+///     height: image height
+///     width: image width
+///     pad: padding size (pixels)
+///     seed: RNG seed
+///
+/// Returns:
+///     Augmented images as flat f32 numpy array, same shape as input.
+#[pyfunction]
+#[pyo3(signature = (images, batch_size, channels, height, width, pad, seed))]
+pub fn random_shift_batch<'py>(
+    py: Python<'py>,
+    images: PyReadonlyArray1<'py, f32>,
+    batch_size: usize,
+    channels: usize,
+    height: usize,
+    width: usize,
+    pad: usize,
+    seed: u64,
+) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    let images_owned = images.as_slice()?.to_vec();
+    let result = py
+        .allow_threads(|| {
+            augmentation::random_shift_batch(
+                &images_owned,
+                batch_size,
+                channels,
+                height,
+                width,
+                pad,
+                seed,
+            )
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2: Reward Shaping
+// ---------------------------------------------------------------------------
+
+/// Compute PBRS shaped rewards: r' = r + gamma * Phi(s') - Phi(s).
+///
+/// At episode boundaries (dones[i] == 1.0), the potential difference
+/// is zeroed out: r'_i = r_i (no shaping across episode boundaries).
+#[pyfunction]
+#[pyo3(signature = (rewards, potentials_current, potentials_next, gamma, dones))]
+pub fn shape_rewards_pbrs<'py>(
+    py: Python<'py>,
+    rewards: PyReadonlyArray1<'py, f64>,
+    potentials_current: PyReadonlyArray1<'py, f64>,
+    potentials_next: PyReadonlyArray1<'py, f64>,
+    gamma: f64,
+    dones: PyReadonlyArray1<'py, f64>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let r = rewards.as_slice()?.to_vec();
+    let pc = potentials_current.as_slice()?.to_vec();
+    let pn = potentials_next.as_slice()?.to_vec();
+    let d = dones.as_slice()?.to_vec();
+    let result = py
+        .allow_threads(|| reward_shaping::shape_rewards_pbrs(&r, &pc, &pn, gamma, &d))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+/// Compute goal-distance potentials: Phi(s) = -scale * ||s[goal_slice] - goal||_2.
+#[pyfunction]
+#[pyo3(signature = (observations, goal, obs_dim, goal_start, goal_dim, scale))]
+pub fn compute_goal_distance_potentials<'py>(
+    py: Python<'py>,
+    observations: PyReadonlyArray1<'py, f64>,
+    goal: PyReadonlyArray1<'py, f64>,
+    obs_dim: usize,
+    goal_start: usize,
+    goal_dim: usize,
+    scale: f64,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let obs = observations.as_slice()?.to_vec();
+    let g = goal.as_slice()?.to_vec();
+    let result = py
+        .allow_threads(|| {
+            reward_shaping::compute_goal_distance_potentials(
+                &obs, &g, obs_dim, goal_start, goal_dim, scale,
+            )
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2: Weight Operations
+// ---------------------------------------------------------------------------
+
+/// Reptile weight update: meta_params += lr * (task_params - meta_params).
+///
+/// Modifies meta_params in-place.
+#[pyfunction]
+#[pyo3(signature = (meta_params, task_params, meta_lr))]
+pub fn reptile_update<'py>(
+    _py: Python<'py>,
+    meta_params: &Bound<'py, PyArray1<f32>>,
+    task_params: PyReadonlyArray1<'py, f32>,
+    meta_lr: f32,
+) -> PyResult<()> {
+    let task_slice = task_params.as_slice()?;
+    // SAFETY: We have the GIL and no other references to this array exist
+    // during the mutable borrow. PyArray1::readwrite gives exclusive access.
+    let mut rw = unsafe { meta_params.as_array_mut() };
+    let meta_slice = rw.as_slice_mut().ok_or_else(|| {
+        PyRuntimeError::new_err("meta_params must be a contiguous array")
+    })?;
+    weight_ops::reptile_update(meta_slice, task_slice, meta_lr)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Polyak (EMA) update: target = tau * source + (1-tau) * target.
+///
+/// Modifies target in-place.
+#[pyfunction]
+#[pyo3(signature = (target, source, tau))]
+pub fn polyak_update<'py>(
+    _py: Python<'py>,
+    target: &Bound<'py, PyArray1<f32>>,
+    source: PyReadonlyArray1<'py, f32>,
+    tau: f32,
+) -> PyResult<()> {
+    let source_slice = source.as_slice()?;
+    // SAFETY: Same as reptile_update above.
+    let mut rw = unsafe { target.as_array_mut() };
+    let target_slice = rw.as_slice_mut().ok_or_else(|| {
+        PyRuntimeError::new_err("target must be a contiguous array")
+    })?;
+    weight_ops::polyak_update(target_slice, source_slice, tau)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Average weight vectors. Returns a new numpy array.
+#[pyfunction]
+#[pyo3(signature = (vectors,))]
+pub fn average_weight_vectors<'py>(
+    py: Python<'py>,
+    vectors: Vec<PyReadonlyArray1<'py, f32>>,
+) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    let owned: Vec<Vec<f32>> = vectors
+        .iter()
+        .map(|v| v.as_slice().map(|s| s.to_vec()))
+        .collect::<Result<_, _>>()?;
+    let slices: Vec<&[f32]> = owned.iter().map(|v| v.as_slice()).collect();
+    let result = weight_ops::average_weight_vectors(&slices)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    Ok(PyArray1::from_vec(py, result))
 }

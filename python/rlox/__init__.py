@@ -86,6 +86,15 @@ from rlox._rlox_core import (
     pack_sequences,
     ActorCritic,
     CandleCollector,
+    # Wave 2/3: new Rust bindings
+    random_shift_batch,
+    shape_rewards_pbrs,
+    compute_goal_distance_potentials,
+    reptile_update,
+    average_weight_vectors,
+    SequenceReplayBuffer,
+    HERBuffer,
+    py_sample_mixed,
 )
 
 # -- Python Layer 1 -----------------------------------------------------------
@@ -148,7 +157,19 @@ from rlox.protocols import (
     ExplorationStrategy,
     ReplayBufferProtocol,
     VecEnv as VecEnvProtocol,
+    Augmentation,
+    RewardShaper,
+    IntrinsicMotivation,
+    MetaLearner,
 )
+
+# -- Wave 4: Python wrappers --------------------------------------------------
+from rlox.augmentation import RandomShift
+from rlox.reward_shaping import PotentialShaping, GoalDistanceShaping
+from rlox.networks import apply_spectral_norm
+from rlox.intrinsic import RND
+from rlox.meta import Reptile
+from rlox.offline_to_online import OfflineToOnline
 
 # -- Exploration ---------------------------------------------------------------
 from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise
@@ -225,6 +246,15 @@ __all__ = [
     "pack_sequences",
     "ActorCritic",
     "CandleCollector",
+    # Wave 2/3 Rust bindings
+    "random_shift_batch",
+    "shape_rewards_pbrs",
+    "compute_goal_distance_potentials",
+    "reptile_update",
+    "average_weight_vectors",
+    "SequenceReplayBuffer",
+    "HERBuffer",
+    "py_sample_mixed",
     # Python Layer 1
     "RolloutBatch",
     "RolloutCollector",
@@ -274,6 +304,18 @@ __all__ = [
     "ExplorationStrategy",
     "ReplayBufferProtocol",
     "VecEnvProtocol",
+    "Augmentation",
+    "RewardShaper",
+    "IntrinsicMotivation",
+    "MetaLearner",
+    # Wave 4 Python wrappers
+    "RandomShift",
+    "PotentialShaping",
+    "GoalDistanceShaping",
+    "apply_spectral_norm",
+    "RND",
+    "Reptile",
+    "OfflineToOnline",
     # Exploration
     "GaussianNoise",
     "EpsilonGreedy",

@@ -23,6 +23,30 @@ def polyak_update(source: nn.Module, target: nn.Module, tau: float = 0.005) -> N
         torch._foreach_add_(target_params, source_params, alpha=tau)
 
 
+def apply_spectral_norm(module: nn.Module) -> nn.Module:
+    """Apply spectral normalization to all Linear and Conv2d layers.
+
+    Recursively walks the module tree and wraps any ``nn.Linear`` or
+    ``nn.Conv2d`` child with ``torch.nn.utils.spectral_norm``.
+
+    Parameters
+    ----------
+    module : nn.Module
+        The module to transform (modified in-place).
+
+    Returns
+    -------
+    nn.Module
+        The same module, for call-chaining.
+    """
+    for name, child in module.named_children():
+        if isinstance(child, (nn.Linear, nn.Conv2d)):
+            nn.utils.spectral_norm(child)
+        else:
+            apply_spectral_norm(child)
+    return module
+
+
 class QNetwork(nn.Module):
     """Twin Q-value network for SAC / TD3.
 

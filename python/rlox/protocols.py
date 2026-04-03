@@ -262,3 +262,117 @@ class ReplayBufferProtocol(Protocol):
     def __len__(self) -> int:
         """Return number of stored transitions."""
         ...
+
+
+@runtime_checkable
+class Augmentation(Protocol):
+    """Protocol for observation augmentation transforms.
+
+    Any callable with a ``pad`` attribute and ``__call__(obs, seed)`` works.
+    """
+
+    pad: int
+
+    def __call__(self, obs: torch.Tensor, seed: int) -> torch.Tensor:
+        """Augment a batch of observations.
+
+        Parameters
+        ----------
+        obs : (B, C, H, W) tensor
+        seed : RNG seed for reproducibility
+
+        Returns
+        -------
+        augmented : (B, C, H, W) tensor
+        """
+        ...
+
+
+@runtime_checkable
+class RewardShaper(Protocol):
+    """Protocol for reward shaping transforms."""
+
+    def shape(
+        self,
+        rewards: np.ndarray,
+        obs: np.ndarray,
+        next_obs: np.ndarray,
+        dones: np.ndarray,
+    ) -> np.ndarray:
+        """Compute shaped rewards.
+
+        Parameters
+        ----------
+        rewards : (N,) base rewards
+        obs : (N, obs_dim) current observations
+        next_obs : (N, obs_dim) next observations
+        dones : (N,) episode termination flags
+
+        Returns
+        -------
+        shaped_rewards : (N,) array
+        """
+        ...
+
+
+@runtime_checkable
+class IntrinsicMotivation(Protocol):
+    """Protocol for intrinsic motivation modules (RND, ICM, etc.)."""
+
+    def compute_intrinsic_reward(self, obs: torch.Tensor) -> torch.Tensor:
+        """Compute intrinsic reward for a batch of observations.
+
+        Parameters
+        ----------
+        obs : (B, obs_dim) tensor
+
+        Returns
+        -------
+        intrinsic_reward : (B,) tensor
+        """
+        ...
+
+    def update(self, obs: torch.Tensor) -> dict[str, float]:
+        """Update the intrinsic motivation module.
+
+        Parameters
+        ----------
+        obs : (B, obs_dim) tensor
+
+        Returns
+        -------
+        info : dict with loss values
+        """
+        ...
+
+
+@runtime_checkable
+class MetaLearner(Protocol):
+    """Protocol for meta-learning outer loops (Reptile, MAML, etc.)."""
+
+    def meta_train(self, n_iterations: int) -> dict[str, float]:
+        """Run the meta-training loop.
+
+        Parameters
+        ----------
+        n_iterations : number of outer-loop iterations
+
+        Returns
+        -------
+        metrics : dict with training metrics
+        """
+        ...
+
+    def adapt(self, env_id: str, n_steps: int) -> Algorithm:
+        """Adapt meta-learned weights to a specific task.
+
+        Parameters
+        ----------
+        env_id : gymnasium environment ID
+        n_steps : number of adaptation steps
+
+        Returns
+        -------
+        algorithm : adapted Algorithm instance
+        """
+        ...

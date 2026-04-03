@@ -866,3 +866,311 @@ class ActorCritic:
 
     @learning_rate.setter
     def learning_rate(self, lr: float) -> None: ...
+
+# ---------------------------------------------------------------------------
+# Wave 2: Image Augmentation
+# ---------------------------------------------------------------------------
+
+def random_shift_batch(
+    images: npt.NDArray[np.float32],
+    batch_size: int,
+    channels: int,
+    height: int,
+    width: int,
+    pad: int,
+    seed: int,
+) -> npt.NDArray[np.float32]:
+    """Apply DrQ-v2 random shift augmentation to a batch of images.
+
+    Parameters
+    ----------
+    images : flat f32 array of shape (B * C * H * W,)
+    batch_size : number of images
+    channels : number of channels
+    height : image height
+    width : image width
+    pad : padding size in pixels
+    seed : RNG seed
+
+    Returns
+    -------
+    Augmented images as flat f32 array, same shape as input.
+    """
+    ...
+
+# ---------------------------------------------------------------------------
+# Wave 2: Reward Shaping
+# ---------------------------------------------------------------------------
+
+def shape_rewards_pbrs(
+    rewards: npt.NDArray[np.float64],
+    potentials_current: npt.NDArray[np.float64],
+    potentials_next: npt.NDArray[np.float64],
+    gamma: float,
+    dones: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    """Compute PBRS shaped rewards: r' = r + gamma * Phi(s') - Phi(s).
+
+    At episode boundaries (dones[i] == 1.0), shaping is zeroed out.
+
+    Parameters
+    ----------
+    rewards : f64 array of shape (N,)
+    potentials_current : f64 array of shape (N,) -- Phi(s_t)
+    potentials_next : f64 array of shape (N,) -- Phi(s_{t+1})
+    gamma : discount factor
+    dones : f64 array of shape (N,) -- 1.0 = done
+
+    Returns
+    -------
+    shaped_rewards : f64 array of shape (N,)
+    """
+    ...
+
+def compute_goal_distance_potentials(
+    observations: npt.NDArray[np.float64],
+    goal: npt.NDArray[np.float64],
+    obs_dim: int,
+    goal_start: int,
+    goal_dim: int,
+    scale: float,
+) -> npt.NDArray[np.float64]:
+    """Compute goal-distance potentials: Phi(s) = -scale * ||s[goal_slice] - goal||_2.
+
+    Parameters
+    ----------
+    observations : flat f64 array of shape (N * obs_dim,)
+    goal : f64 array of shape (goal_dim,)
+    obs_dim : observation dimensionality
+    goal_start : starting index of goal-relevant dims within obs
+    goal_dim : number of goal-relevant dimensions
+    scale : scaling factor
+
+    Returns
+    -------
+    potentials : f64 array of shape (N,)
+    """
+    ...
+
+# ---------------------------------------------------------------------------
+# Wave 2: Weight Operations
+# ---------------------------------------------------------------------------
+
+def reptile_update(
+    meta_params: npt.NDArray[np.float32],
+    task_params: npt.NDArray[np.float32],
+    meta_lr: float,
+) -> None:
+    """Reptile weight update: meta_params += lr * (task_params - meta_params).
+
+    Modifies meta_params in-place.
+    """
+    ...
+
+def polyak_update(
+    target: npt.NDArray[np.float32],
+    source: npt.NDArray[np.float32],
+    tau: float,
+) -> None:
+    """Polyak (EMA) update: target = tau * source + (1-tau) * target.
+
+    Modifies target in-place.
+    """
+    ...
+
+def average_weight_vectors(
+    vectors: list[npt.NDArray[np.float32]],
+) -> npt.NDArray[np.float32]:
+    """Average weight vectors element-wise. Returns a new array."""
+    ...
+
+# ---------------------------------------------------------------------------
+# Wave 2: Episode Tracker
+# ---------------------------------------------------------------------------
+
+class EpisodeTracker:
+    """Tracks episode boundaries within a ring buffer.
+
+    Used internally by SequenceReplayBuffer and HERBuffer, but also
+    exposed directly for advanced use cases.
+
+    Parameters
+    ----------
+    ring_capacity : int
+        Capacity of the ring buffer being tracked.
+    """
+    def __init__(self, ring_capacity: int) -> None: ...
+    def notify_push(self, write_pos: int, done: bool) -> None:
+        """Notify that a transition was pushed at write_pos."""
+        ...
+    def invalidate_overwritten(self, write_pos: int, count: int) -> None:
+        """Invalidate episodes overlapping with overwritten region."""
+        ...
+    def num_complete_episodes(self) -> int:
+        """Return the number of complete episodes tracked."""
+        ...
+    def sample_windows(
+        self,
+        batch_size: int,
+        seq_len: int,
+        seed: int,
+    ) -> list[tuple[int, int, int]]:
+        """Sample contiguous windows within episodes.
+
+        Returns list of (episode_idx, ring_start, length) tuples.
+        """
+        ...
+
+# ---------------------------------------------------------------------------
+# Wave 3: Sequence Replay Buffer
+# ---------------------------------------------------------------------------
+
+class SequenceReplayBuffer:
+    """Replay buffer that samples contiguous sequences of transitions.
+
+    Wraps a ring buffer with episode tracking so that sampled sequences
+    never cross episode boundaries. Used by DreamerV3, R2D2, etc.
+
+    Parameters
+    ----------
+    capacity : int
+        Maximum number of transitions.
+    obs_dim : int
+        Observation dimensionality.
+    act_dim : int
+        Action dimensionality.
+    """
+    def __init__(self, capacity: int, obs_dim: int, act_dim: int) -> None: ...
+    def __len__(self) -> int: ...
+    def num_complete_episodes(self) -> int:
+        """Return the number of complete episodes tracked."""
+        ...
+    def push(
+        self,
+        obs: npt.NDArray[np.float32],
+        next_obs: npt.NDArray[np.float32],
+        action: npt.NDArray[np.float32],
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+    ) -> None:
+        """Push a single transition."""
+        ...
+    def sample_sequences(
+        self,
+        batch_size: int,
+        seq_len: int,
+        seed: int,
+    ) -> dict[str, object]:
+        """Sample contiguous sequences within episodes.
+
+        Returns dict with keys: obs (B, T, obs_dim), next_obs, actions,
+        rewards (B, T), terminated (B, T), truncated (B, T).
+        """
+        ...
+    def sample(self, batch_size: int, seed: int) -> dict[str, object]:
+        """Standard i.i.d. sampling (delegates to inner buffer)."""
+        ...
+
+# ---------------------------------------------------------------------------
+# Wave 3: HER Buffer
+# ---------------------------------------------------------------------------
+
+class HERBuffer:
+    """Hindsight Experience Replay buffer (Andrychowicz et al., 2017).
+
+    Stores transitions with goal information and performs goal relabeling
+    during sampling. Supports Final, Future(k), and Episode strategies.
+
+    Parameters
+    ----------
+    capacity : int
+        Maximum transitions.
+    obs_dim : int
+        Full observation dimension (includes goal components).
+    act_dim : int
+        Action dimension.
+    goal_dim : int
+        Goal vector dimension.
+    achieved_goal_start : int
+        Index within obs where achieved goal starts.
+    desired_goal_start : int
+        Index within obs where desired goal starts.
+    strategy : str
+        'final', 'future', or 'episode'.
+    k : int
+        Number of relabeled goals per transition (for 'future' strategy).
+    goal_tolerance : float
+        Tolerance for sparse reward computation.
+    """
+    def __init__(
+        self,
+        capacity: int,
+        obs_dim: int,
+        act_dim: int,
+        goal_dim: int,
+        achieved_goal_start: int,
+        desired_goal_start: int,
+        strategy: str = "future",
+        k: int = 4,
+        goal_tolerance: float = 0.05,
+    ) -> None: ...
+    def __len__(self) -> int: ...
+    def num_complete_episodes(self) -> int: ...
+    def push(
+        self,
+        obs: npt.NDArray[np.float32],
+        next_obs: npt.NDArray[np.float32],
+        action: npt.NDArray[np.float32],
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+    ) -> None:
+        """Push a single transition."""
+        ...
+    def sample(
+        self,
+        batch_size: int,
+        her_ratio: float = 0.8,
+        seed: int = 42,
+    ) -> dict[str, object]:
+        """Sample with HER relabeling.
+
+        Returns dict with standard keys: obs, next_obs, actions, rewards,
+        terminated, truncated.
+        """
+        ...
+
+# ---------------------------------------------------------------------------
+# Wave 3: Mixed Sampling
+# ---------------------------------------------------------------------------
+
+def py_sample_mixed(
+    buffer_a: ReplayBuffer,
+    buffer_b: ReplayBuffer,
+    ratio: float,
+    batch_size: int,
+    seed: int,
+) -> dict[str, object]:
+    """Sample a mixed batch from two ReplayBuffers.
+
+    Draws ceil(batch_size * ratio) from buffer_a and the rest from buffer_b.
+
+    Parameters
+    ----------
+    buffer_a : ReplayBuffer
+        First buffer (e.g., offline dataset).
+    buffer_b : ReplayBuffer
+        Second buffer (e.g., online replay).
+    ratio : float
+        Fraction from buffer_a, in [0.0, 1.0].
+    batch_size : int
+        Total transitions to sample.
+    seed : int
+        RNG seed.
+
+    Returns
+    -------
+    dict with standard batch keys.
+    """
+    ...

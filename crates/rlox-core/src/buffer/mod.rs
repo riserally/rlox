@@ -1,10 +1,14 @@
 pub mod columnar;
+pub mod episode;
 pub mod extra_columns;
+pub mod her;
+pub mod mixed;
 pub mod mmap;
 pub mod offline;
 pub mod priority;
 pub mod provenance;
 pub mod ringbuf;
+pub mod sequence;
 pub mod varlen;
 
 /// A single experience record to push into a buffer.

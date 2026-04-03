@@ -1,14 +1,18 @@
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1};
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use rlox_core::buffer::columnar::ExperienceTable;
+use rlox_core::buffer::episode::EpisodeTracker;
 use rlox_core::buffer::extra_columns::ColumnHandle;
+use rlox_core::buffer::her::{HERBuffer, HERStrategy};
 use rlox_core::buffer::mmap::MmapReplayBuffer;
+use rlox_core::buffer::mixed;
 use rlox_core::buffer::offline::OfflineDatasetBuffer;
 use rlox_core::buffer::priority::PrioritizedReplayBuffer;
 use rlox_core::buffer::ringbuf::ReplayBuffer;
+use rlox_core::buffer::sequence::SequenceReplayBuffer;
 use rlox_core::buffer::varlen::VarLenStore;
 use rlox_core::buffer::ExperienceRecord;
 
@@ -782,4 +786,336 @@ impl PyOfflineDatasetBuffer {
         dict.set_item("mean_episode_length", s.mean_episode_length)?;
         Ok(dict)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2: EpisodeTracker
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "EpisodeTracker")]
+pub struct PyEpisodeTracker {
+    inner: EpisodeTracker,
+}
+
+#[pymethods]
+impl PyEpisodeTracker {
+    #[new]
+    fn new(ring_capacity: usize) -> Self {
+        Self {
+            inner: EpisodeTracker::new(ring_capacity),
+        }
+    }
+
+    fn notify_push(&mut self, write_pos: usize, done: bool) {
+        self.inner.notify_push(write_pos, done);
+    }
+
+    fn invalidate_overwritten(&mut self, write_pos: usize, count: usize) {
+        self.inner.invalidate_overwritten(write_pos, count);
+    }
+
+    fn num_complete_episodes(&self) -> usize {
+        self.inner.num_complete_episodes()
+    }
+
+    /// Sample windows. Returns list of (episode_idx, ring_start, length) tuples.
+    fn sample_windows(
+        &self,
+        batch_size: usize,
+        seq_len: usize,
+        seed: u64,
+    ) -> PyResult<Vec<(usize, usize, usize)>> {
+        let windows = self
+            .inner
+            .sample_windows(batch_size, seq_len, seed)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(windows
+            .into_iter()
+            .map(|w| (w.episode_idx, w.ring_start, w.length))
+            .collect())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 3: SequenceReplayBuffer
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "SequenceReplayBuffer")]
+pub struct PySequenceReplayBuffer {
+    inner: SequenceReplayBuffer,
+}
+
+#[pymethods]
+impl PySequenceReplayBuffer {
+    #[new]
+    fn new(capacity: usize, obs_dim: usize, act_dim: usize) -> Self {
+        Self {
+            inner: SequenceReplayBuffer::new(capacity, obs_dim, act_dim),
+        }
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn num_complete_episodes(&self) -> usize {
+        self.inner.num_complete_episodes()
+    }
+
+    #[pyo3(signature = (obs, next_obs, action, reward, terminated, truncated))]
+    fn push(
+        &mut self,
+        obs: PyReadonlyArray1<f32>,
+        next_obs: PyReadonlyArray1<f32>,
+        action: PyReadonlyArray1<f32>,
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+    ) -> PyResult<()> {
+        self.inner
+            .push_slices(
+                obs.as_slice()?,
+                next_obs.as_slice()?,
+                action.as_slice()?,
+                reward,
+                terminated,
+                truncated,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Sample contiguous sequences. Returns dict with 3D obs/actions and 2D rewards.
+    #[pyo3(signature = (batch_size, seq_len, seed))]
+    fn sample_sequences<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seq_len: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py
+            .allow_threads(|| self.inner.sample_sequences(batch_size, seq_len, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let dict = PyDict::new(py);
+        let obs_dim = batch.obs_dim;
+        let act_dim = batch.act_dim;
+
+        let obs_arr = PyArray1::from_vec(py, batch.observations);
+        let obs_3d = obs_arr
+            .reshape([batch_size, seq_len, obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("obs", obs_3d)?;
+
+        let next_obs_arr = PyArray1::from_vec(py, batch.next_observations);
+        let next_obs_3d = next_obs_arr
+            .reshape([batch_size, seq_len, obs_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("next_obs", next_obs_3d)?;
+
+        let act_arr = PyArray1::from_vec(py, batch.actions);
+        let act_3d = act_arr
+            .reshape([batch_size, seq_len, act_dim])
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("actions", act_3d)?;
+
+        let rew_arr = PyArray1::from_vec(py, batch.rewards);
+        dict.set_item(
+            "rewards",
+            rew_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
+
+        let term_u8: Vec<u8> = batch.terminated.iter().map(|&b| b as u8).collect();
+        let term_arr = PyArray1::from_vec(py, term_u8);
+        dict.set_item(
+            "terminated",
+            term_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
+
+        let trunc_u8: Vec<u8> = batch.truncated.iter().map(|&b| b as u8).collect();
+        let trunc_arr = PyArray1::from_vec(py, trunc_u8);
+        dict.set_item(
+            "truncated",
+            trunc_arr
+                .reshape([batch_size, seq_len])
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )?;
+
+        Ok(dict)
+    }
+
+    /// Standard i.i.d. sampling (delegates to inner ReplayBuffer).
+    #[pyo3(signature = (batch_size, seed))]
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py
+            .allow_threads(|| self.inner.sample(batch_size, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d(
+            "next_obs",
+            batch.next_observations,
+            batch.batch_size,
+            batch.obs_dim,
+        )?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_bool("terminated", &batch.terminated)?;
+        builder.add_bool("truncated", &batch.truncated)?;
+        Ok(builder.build())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 3: HERBuffer
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "HERBuffer")]
+pub struct PyHERBuffer {
+    inner: HERBuffer,
+}
+
+#[pymethods]
+impl PyHERBuffer {
+    #[new]
+    #[pyo3(signature = (capacity, obs_dim, act_dim, goal_dim, achieved_goal_start, desired_goal_start, strategy="future", k=4, goal_tolerance=0.05))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        capacity: usize,
+        obs_dim: usize,
+        act_dim: usize,
+        goal_dim: usize,
+        achieved_goal_start: usize,
+        desired_goal_start: usize,
+        strategy: &str,
+        k: usize,
+        goal_tolerance: f32,
+    ) -> PyResult<Self> {
+        let strat = match strategy {
+            "final" => HERStrategy::Final,
+            "future" => HERStrategy::Future { k },
+            "episode" => HERStrategy::Episode,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "unknown HER strategy: {strategy}. Expected 'final', 'future', or 'episode'"
+                )));
+            }
+        };
+        Ok(Self {
+            inner: HERBuffer::new(
+                capacity,
+                obs_dim,
+                act_dim,
+                goal_dim,
+                achieved_goal_start,
+                desired_goal_start,
+                strat,
+                goal_tolerance,
+            ),
+        })
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn num_complete_episodes(&self) -> usize {
+        self.inner.num_complete_episodes()
+    }
+
+    #[pyo3(signature = (obs, next_obs, action, reward, terminated, truncated))]
+    fn push(
+        &mut self,
+        obs: PyReadonlyArray1<f32>,
+        next_obs: PyReadonlyArray1<f32>,
+        action: PyReadonlyArray1<f32>,
+        reward: f32,
+        terminated: bool,
+        truncated: bool,
+    ) -> PyResult<()> {
+        self.inner
+            .push_slices(
+                obs.as_slice()?,
+                next_obs.as_slice()?,
+                action.as_slice()?,
+                reward,
+                terminated,
+                truncated,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Sample with HER relabeling. Returns dict with numpy arrays.
+    #[pyo3(signature = (batch_size, her_ratio=0.8, seed=42))]
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        her_ratio: f32,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py
+            .allow_threads(|| self.inner.sample_with_relabeling(batch_size, her_ratio, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d(
+            "next_obs",
+            batch.next_observations,
+            batch.batch_size,
+            batch.obs_dim,
+        )?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_bool("terminated", &batch.terminated)?;
+        builder.add_bool("truncated", &batch.truncated)?;
+        Ok(builder.build())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wave 3: sample_mixed
+// ---------------------------------------------------------------------------
+
+/// Sample a mixed batch from two ReplayBuffers.
+///
+/// Draws ceil(batch_size * ratio) from buffer_a and the remainder from buffer_b.
+#[pyfunction]
+#[pyo3(signature = (buffer_a, buffer_b, ratio, batch_size, seed))]
+pub fn py_sample_mixed<'py>(
+    py: Python<'py>,
+    buffer_a: &PyReplayBuffer,
+    buffer_b: &PyReplayBuffer,
+    ratio: f64,
+    batch_size: usize,
+    seed: u64,
+) -> PyResult<Bound<'py, PyDict>> {
+    let batch = py
+        .allow_threads(|| mixed::sample_mixed(&buffer_a.inner, &buffer_b.inner, ratio, batch_size, seed))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let builder = BatchDictBuilder::new(py);
+    builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+    builder.add_2d(
+        "next_obs",
+        batch.next_observations,
+        batch.batch_size,
+        batch.obs_dim,
+    )?;
+    builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+    builder.add_1d_f32("rewards", batch.rewards)?;
+    builder.add_bool("terminated", &batch.terminated)?;
+    builder.add_bool("truncated", &batch.truncated)?;
+    Ok(builder.build())
 }

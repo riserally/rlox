@@ -7,8 +7,9 @@ mod training;
 use pyo3::prelude::*;
 
 use buffer::{
-    PyExperienceTable, PyMmapReplayBuffer, PyOfflineDatasetBuffer, PyPrioritizedReplayBuffer,
-    PyReplayBuffer, PyVarLenStore,
+    PyEpisodeTracker, PyExperienceTable, PyHERBuffer, PyMmapReplayBuffer,
+    PyOfflineDatasetBuffer, PyPrioritizedReplayBuffer, PyReplayBuffer,
+    PySequenceReplayBuffer, PyVarLenStore,
 };
 use env::{PyCartPole, PyGymEnv, PyVecEnv};
 use llm::PyDPOPair;
@@ -26,6 +27,9 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMmapReplayBuffer>()?;
     m.add_class::<PyOfflineDatasetBuffer>()?;
     m.add_class::<PyVarLenStore>()?;
+    m.add_class::<PyEpisodeTracker>()?;
+    m.add_class::<PySequenceReplayBuffer>()?;
+    m.add_class::<PyHERBuffer>()?;
     m.add_class::<PyDPOPair>()?;
     m.add_class::<PyRunningStats>()?;
     m.add_class::<PyRunningStatsVec>()?;
@@ -38,6 +42,16 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(training::compute_gae_batched_f32, m)?)?;
     m.add_function(wrap_pyfunction!(training::compute_vtrace, m)?)?;
     m.add_function(wrap_pyfunction!(training::pack_sequences, m)?)?;
+    m.add_function(wrap_pyfunction!(training::random_shift_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(training::shape_rewards_pbrs, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        training::compute_goal_distance_potentials,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(training::reptile_update, m)?)?;
+    m.add_function(wrap_pyfunction!(training::polyak_update, m)?)?;
+    m.add_function(wrap_pyfunction!(training::average_weight_vectors, m)?)?;
+    m.add_function(wrap_pyfunction!(buffer::py_sample_mixed, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_group_advantages, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_token_kl, m)?)?;
     m.add_function(wrap_pyfunction!(llm::compute_batch_group_advantages, m)?)?;

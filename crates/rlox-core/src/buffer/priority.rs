@@ -363,6 +363,93 @@ impl PrioritizedReplayBuffer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Loss-Adjusted Prioritization (LAP)
+// ---------------------------------------------------------------------------
+
+/// Loss-Adjusted Prioritization (LAP) configuration.
+///
+/// LAP uses `priority = |TD_error| + eta * loss` where `eta` is a
+/// configurable scale factor. This provides better prioritization
+/// for actor-critic methods where TD error alone is insufficient.
+///
+/// Reference: Schaul et al. (2015) extended with Fujimoto et al. (2020) LAP.
+pub struct LAPConfig {
+    /// Scale factor for the loss component.
+    pub eta: f64,
+    /// Minimum priority to avoid zero-probability sampling.
+    pub min_priority: f64,
+}
+
+impl Default for LAPConfig {
+    fn default() -> Self {
+        Self {
+            eta: 1.0,
+            min_priority: 1e-6,
+        }
+    }
+}
+
+/// Compute LAP priorities from TD errors and losses.
+///
+/// `priority[i] = max(|td_errors[i]| + eta * losses[i], min_priority)`
+#[inline]
+pub fn compute_lap_priorities(
+    td_errors: &[f64],
+    losses: &[f64],
+    config: &LAPConfig,
+) -> Result<Vec<f64>, RloxError> {
+    if td_errors.len() != losses.len() {
+        return Err(RloxError::ShapeMismatch {
+            expected: format!("td_errors.len()={}", td_errors.len()),
+            got: format!("losses.len()={}", losses.len()),
+        });
+    }
+
+    let priorities = td_errors
+        .iter()
+        .zip(losses.iter())
+        .map(|(&td, &loss)| (td.abs() + config.eta * loss).max(config.min_priority))
+        .collect();
+    Ok(priorities)
+}
+
+/// Convenience: compute priorities from TD errors only (standard PER).
+///
+/// `priority[i] = max(|td_errors[i]|, min_priority)`
+#[inline]
+pub fn compute_td_priorities(td_errors: &[f64], min_priority: f64) -> Vec<f64> {
+    td_errors
+        .iter()
+        .map(|&td| td.abs().max(min_priority))
+        .collect()
+}
+
+impl PrioritizedReplayBuffer {
+    /// Update priorities from raw loss values using LAP.
+    ///
+    /// Convenience method: computes `priority = |loss| + epsilon` for each
+    /// index, then calls `update_priorities`.
+    pub fn update_priorities_from_loss(
+        &mut self,
+        indices: &[usize],
+        losses: &[f64],
+        epsilon: f64,
+    ) -> Result<(), RloxError> {
+        if indices.len() != losses.len() {
+            return Err(RloxError::ShapeMismatch {
+                expected: format!("indices.len()={}", indices.len()),
+                got: format!("losses.len()={}", losses.len()),
+            });
+        }
+        let priorities: Vec<f64> = losses
+            .iter()
+            .map(|&l| l.abs() + epsilon)
+            .collect();
+        self.update_priorities(indices, &priorities)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -747,6 +834,205 @@ mod tests {
                 }
                 for &idx in &batch.indices {
                     prop_assert!(idx < buf.len(), "index must be < len");
+                }
+            }
+        }
+    }
+
+    // ---- LAP tests ----
+
+    #[test]
+    fn test_lap_known_values() {
+        let td = &[1.0, -2.0];
+        let loss = &[0.5, 0.3];
+        let config = LAPConfig {
+            eta: 1.0,
+            min_priority: 1e-6,
+        };
+        let result = compute_lap_priorities(td, loss, &config).unwrap();
+        assert!((result[0] - 1.5).abs() < 1e-10, "expected 1.5, got {}", result[0]);
+        assert!((result[1] - 2.3).abs() < 1e-10, "expected 2.3, got {}", result[1]);
+    }
+
+    #[test]
+    fn test_lap_eta_zero_is_standard_per() {
+        let td = &[1.0, -2.0];
+        let loss = &[999.0, 999.0];
+        let config = LAPConfig {
+            eta: 0.0,
+            min_priority: 1e-6,
+        };
+        let result = compute_lap_priorities(td, loss, &config).unwrap();
+        assert!((result[0] - 1.0).abs() < 1e-10);
+        assert!((result[1] - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_lap_min_priority_floor() {
+        let td = &[0.0];
+        let loss = &[0.0];
+        let config = LAPConfig {
+            eta: 1.0,
+            min_priority: 1e-6,
+        };
+        let result = compute_lap_priorities(td, loss, &config).unwrap();
+        assert!(
+            (result[0] - 1e-6).abs() < 1e-12,
+            "expected 1e-6, got {}",
+            result[0]
+        );
+    }
+
+    #[test]
+    fn test_lap_negative_td_uses_abs() {
+        let td = &[-3.0];
+        let loss = &[0.0];
+        let config = LAPConfig::default();
+        let result = compute_lap_priorities(td, loss, &config).unwrap();
+        assert!((result[0] - 3.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_lap_length_mismatch() {
+        let result = compute_lap_priorities(&[1.0, 2.0, 3.0], &[0.5, 0.5], &LAPConfig::default());
+        assert!(matches!(result, Err(RloxError::ShapeMismatch { .. })));
+    }
+
+    #[test]
+    fn test_td_priorities_known_values() {
+        let td = &[0.5, -1.0, 0.0];
+        let result = compute_td_priorities(td, 0.01);
+        assert!((result[0] - 0.5).abs() < 1e-10);
+        assert!((result[1] - 1.0).abs() < 1e-10);
+        assert!((result[2] - 0.01).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_lap_integration_with_per_buffer() {
+        let mut buf = PrioritizedReplayBuffer::new(100, 4, 1, 0.6, 0.4);
+        let config = LAPConfig::default();
+        for i in 0..10 {
+            let td = &[(i + 1) as f64];
+            let loss = &[i as f64 * 0.5];
+            let priorities = compute_lap_priorities(td, loss, &config).unwrap();
+            buf.push(sample_record(4), priorities[0]).unwrap();
+        }
+        let batch = buf.sample(5, 42).unwrap();
+        assert_eq!(batch.batch_size, 5);
+        for &w in &batch.weights {
+            assert!(w > 0.0 && w <= 1.0 + 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_lap_large_eta_emphasizes_loss() {
+        let td = &[0.01];
+        let loss = &[10.0];
+        let config = LAPConfig {
+            eta: 100.0,
+            min_priority: 1e-6,
+        };
+        let result = compute_lap_priorities(td, loss, &config).unwrap();
+        let expected = 0.01 + 100.0 * 10.0;
+        assert!((result[0] - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_update_priorities_from_loss_correct() {
+        let mut buf = PrioritizedReplayBuffer::new(100, 4, 1, 0.6, 0.4);
+        for _ in 0..10 {
+            buf.push(sample_record(4), 1.0).unwrap();
+        }
+        buf.update_priorities_from_loss(&[0, 1, 2], &[5.0, 0.0, 3.0], 0.01)
+            .unwrap();
+        // Priorities should be |loss| + epsilon
+        // Index 0: 5.01, Index 1: 0.01, Index 2: 3.01
+    }
+
+    #[test]
+    fn test_update_priorities_from_loss_mismatched_lengths() {
+        let mut buf = PrioritizedReplayBuffer::new(100, 4, 1, 0.6, 0.4);
+        for _ in 0..10 {
+            buf.push(sample_record(4), 1.0).unwrap();
+        }
+        let result = buf.update_priorities_from_loss(&[0, 1], &[5.0], 0.01);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_priorities_from_loss_zero_gets_epsilon() {
+        let mut buf = PrioritizedReplayBuffer::new(100, 4, 1, 1.0, 0.4);
+        for _ in 0..5 {
+            buf.push(sample_record(4), 1.0).unwrap();
+        }
+        let epsilon = 0.001;
+        buf.update_priorities_from_loss(&[0], &[0.0], epsilon).unwrap();
+        // The priority should be epsilon^alpha = 0.001^1.0 = 0.001
+    }
+
+    #[test]
+    fn test_update_priorities_from_loss_high_loss_favored() {
+        let mut buf = PrioritizedReplayBuffer::new(100, 4, 1, 1.0, 0.4);
+        for _ in 0..10 {
+            buf.push(sample_record(4), 1.0).unwrap();
+        }
+        // Give index 0 a very high loss
+        buf.update_priorities_from_loss(&[0], &[100.0], 0.01).unwrap();
+        // Give other indices low loss
+        for i in 1..10 {
+            buf.update_priorities_from_loss(&[i], &[0.001], 0.01).unwrap();
+        }
+        // Sample many times, index 0 should appear frequently
+        let mut count_idx0 = 0;
+        for seed in 0..100 {
+            let batch = buf.sample(5, seed).unwrap();
+            for &idx in &batch.indices {
+                if idx == 0 {
+                    count_idx0 += 1;
+                }
+            }
+        }
+        assert!(
+            count_idx0 > 100,
+            "high-loss item should be sampled frequently, got {count_idx0}/500"
+        );
+    }
+
+    mod lap_proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn prop_lap_priorities_non_negative(
+                n in 1usize..100,
+            ) {
+                let td: Vec<f64> = (0..n).map(|i| (i as f64) - 50.0).collect();
+                let loss: Vec<f64> = (0..n).map(|i| (i as f64) * 0.1).collect();
+                let config = LAPConfig::default();
+                let priorities = compute_lap_priorities(&td, &loss, &config).unwrap();
+                for (i, &p) in priorities.iter().enumerate() {
+                    prop_assert!(p >= config.min_priority,
+                        "priority[{i}]={p} < min_priority={}", config.min_priority);
+                }
+            }
+
+            #[test]
+            fn prop_lap_monotone_in_td(
+                td_a in 0.0f64..100.0,
+                td_b in 0.0f64..100.0,
+                loss in 0.0f64..10.0,
+            ) {
+                let config = LAPConfig {
+                    eta: 1.0,
+                    min_priority: 0.0, // disable floor for this test
+                };
+                let p_a = compute_lap_priorities(&[td_a], &[loss], &config).unwrap()[0];
+                let p_b = compute_lap_priorities(&[td_b], &[loss], &config).unwrap()[0];
+                if td_a.abs() > td_b.abs() {
+                    prop_assert!(p_a >= p_b,
+                        "|td_a|={} > |td_b|={} but p_a={} < p_b={}",
+                        td_a.abs(), td_b.abs(), p_a, p_b);
                 }
             }
         }

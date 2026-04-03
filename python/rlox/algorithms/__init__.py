@@ -34,6 +34,7 @@ from rlox.algorithms.best_of_n import BestOfN
 from rlox.algorithms.mappo import MAPPO
 from rlox.algorithms.dreamer import DreamerV3
 from rlox.algorithms.impala import IMPALA, DistributedIMPALA
+from rlox.algorithms.awr import AWR
 
 __all__ = [
     "PPO",
@@ -50,4 +51,5 @@ __all__ = [
     "DreamerV3",
     "IMPALA",
     "DistributedIMPALA",
+    "AWR",
 ]

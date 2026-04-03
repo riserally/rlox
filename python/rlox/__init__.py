@@ -120,6 +120,9 @@ from rlox.config import (
     CalQLConfig,
     PBTConfig,
     TRPOConfig,
+    SelfPlayConfig,
+    GoExploreConfig,
+    MPOConfig,
     TrainingConfig,
 )
 
@@ -179,8 +182,11 @@ from rlox.offline_to_online import OfflineToOnline
 # -- Population-Based Training -------------------------------------------------
 from rlox.pbt import PBT
 
+# -- Self-Play -----------------------------------------------------------------
+from rlox.self_play import SelfPlay
+
 # -- Exploration ---------------------------------------------------------------
-from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise
+from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise, GoExplore
 
 # -- Collectors ----------------------------------------------------------------
 from rlox.off_policy_collector import OffPolicyCollector, CollectorProtocol
@@ -285,6 +291,9 @@ __all__ = [
     "CalQLConfig",
     "PBTConfig",
     "TRPOConfig",
+    "SelfPlayConfig",
+    "GoExploreConfig",
+    "MPOConfig",
     "TrainingConfig",
     # Unified Trainer
     "Trainer",
@@ -331,10 +340,12 @@ __all__ = [
     "Reptile",
     "OfflineToOnline",
     "PBT",
+    "SelfPlay",
     # Exploration
     "GaussianNoise",
     "EpsilonGreedy",
     "OUNoise",
+    "GoExplore",
     # Off-policy collectors
     "OffPolicyCollector",
     "CollectorProtocol",

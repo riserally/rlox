@@ -37,6 +37,7 @@ from rlox.algorithms.impala import IMPALA, DistributedIMPALA
 from rlox.algorithms.awr import AWR
 from rlox.algorithms.trpo import TRPO
 from rlox.algorithms.diffusion_policy import DiffusionPolicy
+from rlox.algorithms.mpo import MPO
 
 __all__ = [
     "PPO",
@@ -56,4 +57,5 @@ __all__ = [
     "AWR",
     "TRPO",
     "DiffusionPolicy",
+    "MPO",
 ]

@@ -850,7 +850,126 @@ class DiffusionPolicyConfig(ConfigMixin):
         _validate_min("n_inference_steps", self.n_inference_steps, 1)
 
 
-_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo", "diffusion"}
+@dataclass
+class SelfPlayConfig(ConfigMixin):
+    """Configuration for Self-Play training.
+
+    Attributes
+    ----------
+    pool_size : int
+        Maximum number of historical policy snapshots (default 20).
+    snapshot_freq : int
+        Steps between policy snapshots (default 10_000).
+    matchmaking : str
+        Opponent selection strategy: ``"uniform"``, ``"latest"``, or
+        ``"elo"`` (default ``"uniform"``).
+    initial_elo : float
+        Starting Elo rating for new pool entries (default 1000.0).
+    elo_k : float
+        Elo K-factor controlling rating volatility (default 32.0).
+    opponent_fraction : float
+        Fraction of games played against pool opponents vs self (default 0.8).
+    """
+
+    pool_size: int = 20
+    snapshot_freq: int = 10_000
+    matchmaking: str = "uniform"
+    initial_elo: float = 1000.0
+    elo_k: float = 32.0
+    opponent_fraction: float = 0.8
+
+    def __post_init__(self):
+        _validate_min("pool_size", self.pool_size, 1)
+        _validate_min("snapshot_freq", self.snapshot_freq, 1)
+        if self.matchmaking not in ("uniform", "latest", "elo"):
+            raise ValueError(
+                f"matchmaking must be 'uniform', 'latest', or 'elo', "
+                f"got {self.matchmaking!r}"
+            )
+
+
+@dataclass
+class GoExploreConfig(ConfigMixin):
+    """Configuration for Go-Explore archive-based exploration.
+
+    Attributes
+    ----------
+    archive_size : int
+        Maximum number of cells in the archive (default 100_000).
+    cell_resolution : int
+        Discretization granularity for observations (default 8).
+    exploration_steps : int
+        Random exploration steps from each archived state (default 100).
+    score_weight : float
+        Weight for score when selecting cells (default 0.3).
+    novelty_weight : float
+        Weight for novelty (inverse visit count) when selecting cells
+        (default 0.7).
+    """
+
+    archive_size: int = 100_000
+    cell_resolution: int = 8
+    exploration_steps: int = 100
+    score_weight: float = 0.3
+    novelty_weight: float = 0.7
+
+    def __post_init__(self):
+        _validate_min("archive_size", self.archive_size, 1)
+        _validate_min("cell_resolution", self.cell_resolution, 1)
+        _validate_min("exploration_steps", self.exploration_steps, 1)
+
+
+@dataclass
+class MPOConfig(ConfigMixin):
+    """Configuration for Maximum a Posteriori Policy Optimization.
+
+    Attributes
+    ----------
+    learning_rate : float
+        Adam learning rate for actor and critic (default 3e-4).
+    buffer_size : int
+        Replay buffer capacity (default 1_000_000).
+    batch_size : int
+        Minibatch size (default 256).
+    gamma : float
+        Discount factor (default 0.99).
+    tau : float
+        Polyak averaging coefficient for target networks (default 0.005).
+    n_action_samples : int
+        Number of action samples for the E-step (default 20).
+    epsilon : float
+        KL constraint for the M-step (default 0.1).
+    epsilon_penalty : float
+        KL penalty coefficient (default 0.001).
+    dual_lr : float
+        Learning rate for dual variables (default 1e-2).
+    hidden : int
+        Hidden layer width (default 256).
+    learning_starts : int
+        Random exploration steps before training (default 1000).
+    """
+
+    learning_rate: float = 3e-4
+    buffer_size: int = 1_000_000
+    batch_size: int = 256
+    gamma: float = 0.99
+    tau: float = 0.005
+    n_action_samples: int = 20
+    epsilon: float = 0.1
+    epsilon_penalty: float = 0.001
+    dual_lr: float = 1e-2
+    hidden: int = 256
+    learning_starts: int = 1000
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("buffer_size", self.buffer_size, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+        _validate_min("n_action_samples", self.n_action_samples, 1)
+        _validate_positive("dual_lr", self.dual_lr)
+
+
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo", "diffusion", "mpo"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
 

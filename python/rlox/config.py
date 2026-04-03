@@ -590,7 +590,134 @@ class IMPALAConfig(ConfigMixin):
         _validate_min("n_envs_per_actor", self.n_envs_per_actor, 1)
 
 
-_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala"}
+@dataclass
+class DecisionTransformerConfig(ConfigMixin):
+    """Configuration for Decision Transformer training.
+
+    Attributes
+    ----------
+    context_length : int
+        Number of timesteps in the context window (default 20).
+    n_heads : int
+        Number of attention heads (default 4).
+    n_layers : int
+        Number of transformer layers (default 3).
+    embed_dim : int
+        Embedding dimension (default 128).
+    learning_rate : float
+        Adam learning rate (default 1e-4).
+    batch_size : int
+        Minibatch size for offline training (default 64).
+    dropout : float
+        Dropout rate (default 0.1).
+    target_return : float
+        Desired return for evaluation (default 200.0).
+    warmup_steps : int
+        Data collection steps before training (default 500).
+    """
+
+    context_length: int = 20
+    n_heads: int = 4
+    n_layers: int = 3
+    embed_dim: int = 128
+    learning_rate: float = 1e-4
+    batch_size: int = 64
+    dropout: float = 0.1
+    target_return: float = 200.0
+    warmup_steps: int = 500
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("context_length", self.context_length, 1)
+        _validate_min("n_heads", self.n_heads, 1)
+        _validate_min("n_layers", self.n_layers, 1)
+        _validate_min("embed_dim", self.embed_dim, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+
+
+@dataclass
+class QMIXConfig(ConfigMixin):
+    """Configuration for QMIX training.
+
+    Attributes
+    ----------
+    n_agents : int
+        Number of agents (default 3).
+    hidden_dim : int
+        Hidden dimension for agent Q-networks (default 64).
+    mixing_embed_dim : int
+        Mixing network hidden dimension (default 32).
+    lr : float
+        Adam learning rate (default 5e-4).
+    buffer_size : int
+        Replay buffer capacity (default 50_000).
+    gamma : float
+        Discount factor (default 0.99).
+    target_update_freq : int
+        Steps between target network updates (default 200).
+    batch_size : int
+        Minibatch size (default 32).
+    """
+
+    n_agents: int = 3
+    hidden_dim: int = 64
+    mixing_embed_dim: int = 32
+    lr: float = 5e-4
+    buffer_size: int = 50_000
+    gamma: float = 0.99
+    target_update_freq: int = 200
+    batch_size: int = 32
+
+    def __post_init__(self):
+        _validate_positive("lr", self.lr)
+        _validate_min("n_agents", self.n_agents, 1)
+        _validate_min("hidden_dim", self.hidden_dim, 1)
+        _validate_min("mixing_embed_dim", self.mixing_embed_dim, 1)
+        _validate_min("buffer_size", self.buffer_size, 1)
+        _validate_min("target_update_freq", self.target_update_freq, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+
+
+@dataclass
+class CalQLConfig(ConfigMixin):
+    """Configuration for Cal-QL (Calibrated Conservative Q-Learning).
+
+    Attributes
+    ----------
+    learning_rate : float
+        Learning rate for all optimisers (default 3e-4).
+    buffer_size : int
+        Replay buffer capacity (default 100_000).
+    batch_size : int
+        Minibatch size (default 256).
+    gamma : float
+        Discount factor (default 0.99).
+    tau : float
+        Polyak averaging coefficient (default 0.005).
+    cql_alpha : float
+        CQL penalty weight (default 5.0).
+    calibration_tau : float
+        Quantile for calibration threshold (default 0.5).
+    auto_alpha : bool
+        Whether to auto-tune cql_alpha (default False).
+    """
+
+    learning_rate: float = 3e-4
+    buffer_size: int = 100_000
+    batch_size: int = 256
+    gamma: float = 0.99
+    tau: float = 0.005
+    cql_alpha: float = 5.0
+    calibration_tau: float = 0.5
+    auto_alpha: bool = False
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_min("buffer_size", self.buffer_size, 1)
+        _validate_min("batch_size", self.batch_size, 1)
+
+
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
 

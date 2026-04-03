@@ -115,6 +115,9 @@ from rlox.config import (
     MAPPOConfig,
     DreamerV3Config,
     IMPALAConfig,
+    DecisionTransformerConfig,
+    QMIXConfig,
+    CalQLConfig,
     TrainingConfig,
 )
 
@@ -272,6 +275,9 @@ __all__ = [
     "MAPPOConfig",
     "DreamerV3Config",
     "IMPALAConfig",
+    "DecisionTransformerConfig",
+    "QMIXConfig",
+    "CalQLConfig",
     "TrainingConfig",
     # Unified Trainer
     "Trainer",

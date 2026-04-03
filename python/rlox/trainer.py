@@ -165,7 +165,7 @@ class Trainer:
 # ---------------------------------------------------------------------------
 
 def _register_builtins() -> None:
-    """Import and register all 8 built-in algorithms."""
+    """Import and register all built-in algorithms."""
     from rlox.algorithms.ppo import PPO
     from rlox.algorithms.sac import SAC
     from rlox.algorithms.dqn import DQN
@@ -174,6 +174,9 @@ def _register_builtins() -> None:
     from rlox.algorithms.mappo import MAPPO
     from rlox.algorithms.dreamer import DreamerV3
     from rlox.algorithms.impala import IMPALA
+    from rlox.algorithms.decision_transformer import DecisionTransformer
+    from rlox.algorithms.qmix import QMIX
+    from rlox.algorithms.calql import CalQL
 
     for name, cls in [
         ("ppo", PPO),
@@ -184,6 +187,9 @@ def _register_builtins() -> None:
         ("mappo", MAPPO),
         ("dreamer", DreamerV3),
         ("impala", IMPALA),
+        ("dt", DecisionTransformer),
+        ("qmix", QMIX),
+        ("calql", CalQL),
     ]:
         if name not in ALGORITHM_REGISTRY:
             ALGORITHM_REGISTRY[name] = cls

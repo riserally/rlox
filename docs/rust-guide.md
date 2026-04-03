@@ -7,9 +7,9 @@ This guide documents `rlox-core`, the pure-Rust crate that powers rlox's data pl
 ```
 rlox-core/
   src/
-    env/         # Environment trait + CartPole + VecEnv
-    buffer/      # Columnar table, ring buffer, PER, VarLenStore
-    training/    # GAE, V-trace, KL controller, sequence packing
+    env/         # RLEnv trait + CartPole + Pendulum + MuJoCo + VecEnv
+    buffer/      # Ring, PER, Sequence, HER, Concurrent, Mmap, Mixed, Flat/GPU
+    training/    # GAE, V-trace, augmentation, reward shaping, weight ops, SIMD
     llm/         # GRPO, DPO, token KL
     error.rs     # Unified error type
     seed.rs      # Deterministic seeding utilities
@@ -427,6 +427,217 @@ let pair = DPOPair::new(
 
 assert_eq!(pair.chosen_len(), 2);
 assert_eq!(pair.rejected_len(), 3);
+```
+
+---
+
+## Advanced Buffers
+
+### SequenceReplayBuffer (Episode-Aware)
+
+Wraps `ReplayBuffer` + `EpisodeTracker` for sampling contiguous sequences within episodes. Essential for DreamerV3, Decision Transformer, and R2D2:
+
+```rust
+use rlox_core::buffer::sequence::SequenceReplayBuffer;
+
+let mut buf = SequenceReplayBuffer::new(10_000, 4, 1); // capacity, obs_dim, act_dim
+
+// Push transitions — mark episode boundaries with done=true
+for step in 0..100 {
+    let done = step % 20 == 19; // episodes of length 20
+    buf.push_slices(
+        &[step as f32; 4],  // obs
+        &[(step + 1) as f32; 4], // next_obs
+        &[0.5],             // action
+        1.0, false, done,   // reward, terminated, truncated (done)
+    ).unwrap();
+}
+
+assert_eq!(buf.num_complete_episodes(), 5);
+
+// Sample contiguous sequences of length 10 (never crosses episode boundaries)
+let batch = buf.sample_sequences(8, 10, /*seed=*/42).unwrap();
+assert_eq!(batch.batch_size, 8);
+assert_eq!(batch.seq_len, 10);
+assert_eq!(batch.observations.len(), 8 * 10 * 4); // flat [B * T * obs_dim]
+```
+
+### HERBuffer (Hindsight Experience Replay)
+
+Goal-conditioned buffer with automatic goal relabeling for sparse-reward robotics:
+
+```rust
+use rlox_core::buffer::her::{HERBuffer, HERStrategy};
+
+let mut buf = HERBuffer::new(
+    10_000, 4, 1, 3, // capacity, obs_dim, act_dim, goal_dim
+    HERStrategy::Future { k: 4 }, // relabel with 4 future achieved goals
+    0.5, // her_ratio: 50% relabeled, 50% original
+    0.05, // goal tolerance for sparse reward
+);
+
+// Push goal-conditioned transitions
+buf.push_slices(
+    &[0.1, 0.2, 0.3, 0.4], // obs
+    &[0.2, 0.3, 0.4, 0.5], // next_obs
+    &[0.5],                  // action
+    -1.0, false, false,      // reward (sparse: -1 until goal reached)
+    &[0.2, 0.3, 0.4],       // achieved_goal
+    &[1.0, 1.0, 1.0],       // desired_goal
+).unwrap();
+```
+
+**Relabeling strategies:**
+- `HERStrategy::Final` — relabel with the final achieved goal in the episode
+- `HERStrategy::Future { k }` — relabel with k random future achieved goals
+- `HERStrategy::Episode` — relabel with any achieved goal from the same episode
+
+### ConcurrentReplayBuffer (Lock-Free)
+
+Multi-producer, single-consumer buffer for IMPALA-style actor-learner architectures:
+
+```rust
+use rlox_core::buffer::concurrent::ConcurrentReplayBuffer;
+use std::sync::Arc;
+use std::thread;
+
+let buf = Arc::new(ConcurrentReplayBuffer::new(100_000, 4, 1));
+
+// Multiple actor threads push concurrently — no locks
+let handles: Vec<_> = (0..4).map(|actor_id| {
+    let buf = Arc::clone(&buf);
+    thread::spawn(move || {
+        for i in 0..1000 {
+            buf.push(
+                &[actor_id as f32; 4], // obs
+                &[0.0; 4],             // next_obs
+                &[0.5],                // action
+                1.0, false, false,     // reward, terminated, truncated
+            ).unwrap();
+        }
+    })
+}).collect();
+
+for h in handles { h.join().unwrap(); }
+assert_eq!(buf.len(), 4000);
+
+// Single learner thread samples
+let batch = buf.sample(32, 42).unwrap();
+assert_eq!(batch.batch_size, 32);
+```
+
+Uses `AtomicUsize` for lock-free slot claiming with per-slot commit flags.
+
+---
+
+## Training Extensions
+
+### Image Augmentation (DrQ-v2)
+
+Random spatial shift for pixel-based RL. Operates on flat `f32` image arrays for zero-copy integration:
+
+```rust
+use rlox_core::training::augmentation::{RandomShift, ImageAugmentation};
+
+let augmenter = RandomShift { pad: 4 };
+
+// Batch of 16 RGB images, 84x84
+let images = vec![0.5f32; 16 * 3 * 84 * 84];
+let augmented = augmenter.augment_batch(&images, 16, 3, 84, 84, /*seed=*/42).unwrap();
+assert_eq!(augmented.len(), images.len()); // same shape
+```
+
+The `ImageAugmentation` trait allows adding custom augmentations (CutMix, color jitter, etc.) without modifying existing code.
+
+### Reward Shaping (PBRS)
+
+Potential-Based Reward Shaping — guaranteed to preserve optimal policy (Ng et al., 1999):
+
+```rust
+use rlox_core::training::reward_shaping::shape_rewards_pbrs;
+
+let rewards = &[1.0, 1.0, 1.0, 1.0];
+let phi_current = &[0.5, 0.6, 0.7, 0.8]; // potential of current state
+let phi_next = &[0.6, 0.7, 0.8, 0.9];    // potential of next state
+let gamma = 0.99;
+let dones = &[0.0, 0.0, 0.0, 1.0];
+
+// r' = r + gamma * phi(s') - phi(s), zeroed at episode boundaries
+let shaped = shape_rewards_pbrs(rewards, phi_current, phi_next, gamma, dones).unwrap();
+assert_eq!(shaped.len(), 4);
+assert!((shaped[3] - 1.0).abs() < 1e-10); // done=1 → raw reward only
+```
+
+### Weight Operations (Meta-Learning)
+
+Vectorized weight updates for Reptile, Polyak, and averaging:
+
+```rust
+use rlox_core::training::weight_ops::{reptile_update, polyak_update, average_weight_vectors};
+
+// Reptile outer step: params += lr * (task_params - params)
+let mut meta_params = vec![1.0f32, 2.0, 3.0];
+let task_params = vec![4.0f32, 5.0, 6.0];
+reptile_update(&mut meta_params, &task_params, 0.1);
+// meta_params is now [1.3, 2.3, 3.3]
+
+// Polyak target update: target = tau * source + (1-tau) * target
+let mut target = vec![0.0f32; 3];
+let source = vec![1.0f32; 3];
+polyak_update(&mut target, &source, 0.005);
+// target is now [0.005, 0.005, 0.005]
+
+// Average multiple weight vectors (meta-learning batch)
+let v1 = vec![1.0f32, 2.0, 3.0];
+let v2 = vec![3.0f32, 2.0, 1.0];
+let avg = average_weight_vectors(&[&v1, &v2]);
+assert!((avg[0] - 2.0).abs() < 1e-6);
+```
+
+### SIMD-Accelerated Operations
+
+Vectorized versions of hot-path operations using `chunks_exact` patterns for LLVM auto-vectorization:
+
+```rust
+use rlox_core::training::simd_ops::{
+    reptile_update_simd,
+    polyak_update_simd,
+    pbrs_simd,
+    compute_priorities_simd,
+    average_weights_simd,
+};
+
+// Process 8 f32s at a time (AVX2 = 256-bit = 8 x f32)
+let mut target = vec![0.0f32; 1000];
+let source = vec![1.0f32; 1000];
+reptile_update_simd(&mut target, &source, 0.01);
+
+// Process 4 f64s at a time for reward shaping
+let rewards = vec![1.0f64; 500];
+let phi = vec![0.5f64; 500];
+let phi_next = vec![0.6f64; 500];
+let dones = vec![0.0f64; 500];
+let shaped = pbrs_simd(&rewards, &phi, &phi_next, 0.99, &dones);
+```
+
+### EpisodeTracker
+
+Reusable episode boundary tracker shared by `SequenceReplayBuffer` and `HERBuffer`:
+
+```rust
+use rlox_core::buffer::episode::EpisodeTracker;
+
+let mut tracker = EpisodeTracker::new(10_000); // ring capacity
+
+// Notify on each push
+tracker.notify_push(0, false); // step 0, not done
+tracker.notify_push(1, false); // step 1, not done
+tracker.notify_push(2, true);  // step 2, episode ends
+
+assert_eq!(tracker.num_complete_episodes(), 1);
+
+// Sample windows of length 2 from complete episodes
+let windows = tracker.sample_windows(4, 2, /*seed=*/42).unwrap();
 ```
 
 ---

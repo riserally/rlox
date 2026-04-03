@@ -25,11 +25,23 @@ The result: **3-50x faster** than SB3/TorchRL on data-plane operations, with the
 
 ## Quick Start
 
+### Prerequisites
+
+- **Rust 1.75+** -- install via [rustup](https://rustup.rs/):
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+- **Python 3.10-3.13**
+- **Optional**: `pip install gymnasium[mujoco]` for MuJoCo environments
+- **Optional**: `pip install pettingzoo` for multi-agent environments
+
+### Installation
+
 ```bash
 pip install rlox
 ```
 
-Or build from source (requires Rust 1.75+):
+Or build from source:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -40,9 +52,9 @@ maturin develop --release
 **Train PPO on CartPole in 3 lines:**
 
 ```python
-from rlox.trainers import PPOTrainer
+from rlox import Trainer
 
-trainer = PPOTrainer(env="CartPole-v1", seed=42)
+trainer = Trainer("ppo", env="CartPole-v1", seed=42)
 metrics = trainer.train(total_timesteps=50_000)
 print(f"Mean reward: {metrics['mean_reward']:.1f}")
 ```
@@ -50,11 +62,13 @@ print(f"Mean reward: {metrics['mean_reward']:.1f}")
 **Train SAC on Pendulum:**
 
 ```python
-from rlox.trainers import SACTrainer
+from rlox import Trainer
 
-trainer = SACTrainer(env="Pendulum-v1", config={"learning_starts": 500})
+trainer = Trainer("sac", env="Pendulum-v1", config={"learning_starts": 500})
 metrics = trainer.train(total_timesteps=20_000)
 ```
+
+> **Note:** Per-algorithm trainers (`PPOTrainer`, `SACTrainer`, etc.) are deprecated. Use the unified `Trainer("algo", ...)` API instead.
 
 **Config-driven training (YAML):**
 
@@ -141,11 +155,25 @@ All benchmarks on Apple M4 with bootstrap 95% CI (10,000 resamples). All results
 | GAE (32K steps) | 147x vs NumPy | **1,700x** | [docs/benchmark/gae.md](docs/benchmark/gae.md) |
 | Buffer push (10K) | **9.7x** | **148x** | [docs/benchmark/buffer-ops.md](docs/benchmark/buffer-ops.md) |
 | Buffer sample (1024) | **8.1x** | **10x** | [docs/benchmark/buffer-ops.md](docs/benchmark/buffer-ops.md) |
-| E2E rollout (256×2048) | **3.9x** | **53x** | [docs/benchmark/e2e-rollout.md](docs/benchmark/e2e-rollout.md) |
+| E2E rollout (256x2048) | **3.9x** | **53x** | [docs/benchmark/e2e-rollout.md](docs/benchmark/e2e-rollout.md) |
 | GRPO advantages | 35x vs NumPy | 34x vs PyTorch | [docs/benchmark/llm-ops.md](docs/benchmark/llm-ops.md) |
-| Env stepping (512 envs) | — | — | [2.7M steps/s](docs/benchmark/env-stepping.md) |
+| Env stepping (512 envs) | -- | -- | [2.7M steps/s](docs/benchmark/env-stepping.md) |
 
 > **Full methodology, raw data, and reproducibility instructions**: [docs/benchmark/](docs/benchmark/)
+
+### Performance
+
+Key numbers at a glance (Apple M4, single-threaded unless noted):
+
+| Operation | rlox | SB3/NumPy | Speedup |
+|-----------|------|-----------|---------|
+| GAE (32K steps) | ~0.02 ms | ~3 ms | **147x** |
+| Buffer push (10K) | ~0.1 ms | ~1 ms | **9.7x** |
+| Buffer sample (1024) | ~0.03 ms | ~0.25 ms | **8.1x** |
+| PPO SPS (8 envs, CartPole) | 9,121 | 4,026 | **2.3x** |
+| A2C SPS (8 envs, CartPole) | 10,445 | 4,206 | **2.5x** |
+| VecEnv throughput (512 envs) | 2.7M steps/s | -- | -- |
+| GRPO advantages (batch) | ~0.01 ms | ~0.35 ms | **35x** |
 
 ### Convergence (rlox vs SB3)
 
@@ -191,14 +219,21 @@ Same hyperparameters (rl-zoo3 defaults), 5 seeds per experiment. On-policy algor
 ## Running Tests
 
 ```bash
-# All tests (Rust + Python)
-./scripts/test.sh
+# Rust tests (412 tests across all crates)
+cargo test --workspace
 
-# Rust only
+# Python tests (900+ tests, after maturin develop)
+pip install -e ".[all]"
+pytest tests/python/ -q
+
+# Quick smoke test (skip slow tests)
+pytest tests/python/ -m "not slow" -q
+
+# Single crate
 cargo test --package rlox-core
 
-# Python only (after maturin develop)
-.venv/bin/python -m pytest tests/python/ -v
+# All tests (Rust + Python)
+./scripts/test.sh
 
 # Full benchmark suite (rlox vs TorchRL vs SB3)
 .venv/bin/python benchmarks/run_all.py

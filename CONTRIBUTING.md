@@ -26,17 +26,21 @@ python -c "import rlox; print('rlox ready')"
 ## Running Tests
 
 ```bash
-# Rust tests (all crates)
+# Rust tests (412 tests across all crates)
 cargo test --workspace
 
-# Python tests
-python -m pytest tests/ -x
+# Python tests (900+ tests, after maturin develop)
+pip install -e ".[all]"
+pytest tests/python/ -q
 
-# Quick smoke test
-python -m pytest tests/python/test_algorithm_smoke.py -v
+# Quick smoke test (skip slow integration tests)
+pytest tests/python/ -m "not slow" -q
 
 # Specific test file
-python -m pytest tests/python/test_offline_rl.py -v
+pytest tests/python/test_offline_rl.py -v
+
+# Quick algorithm smoke test
+pytest tests/python/test_algorithm_smoke.py -v
 ```
 
 ## Code Style

@@ -1,3 +1,18 @@
+//! rlox-python: PyO3 bindings exposing rlox Rust primitives to Python.
+//!
+//! Builds the `_rlox_core` native extension module that powers the `rlox`
+//! Python package. All compute-heavy operations release the GIL.
+//!
+//! Exposed functionality:
+//! - **Environments**: `CartPole`, `VecEnv`, `GymEnv`
+//! - **Buffers**: `ReplayBuffer`, `PrioritizedReplayBuffer`, `MmapReplayBuffer`,
+//!   `SequenceReplayBuffer`, `HERBuffer`, `OfflineDatasetBuffer`, and more.
+//! - **Training ops**: `compute_gae`, `compute_vtrace`, `shape_rewards_pbrs`,
+//!   `reptile_update`, `polyak_update`, `RunningStats`.
+//! - **LLM ops**: `compute_group_advantages`, `compute_token_kl`, `pack_sequences`.
+//! - **NN**: `ActorCritic` (Candle), `CandleCollector` for hybrid Rust collection.
+//! - **Pipeline**: Async rollout collector with `Pipeline` and `RolloutBatch`.
+
 mod buffer;
 mod env;
 mod llm;

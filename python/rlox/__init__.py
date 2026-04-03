@@ -118,6 +118,8 @@ from rlox.config import (
     DecisionTransformerConfig,
     QMIXConfig,
     CalQLConfig,
+    PBTConfig,
+    TRPOConfig,
     TrainingConfig,
 )
 
@@ -170,9 +172,12 @@ from rlox.protocols import (
 from rlox.augmentation import RandomShift
 from rlox.reward_shaping import PotentialShaping, GoalDistanceShaping
 from rlox.networks import apply_spectral_norm
-from rlox.intrinsic import RND
+from rlox.intrinsic import RND, ICM
 from rlox.meta import Reptile
 from rlox.offline_to_online import OfflineToOnline
+
+# -- Population-Based Training -------------------------------------------------
+from rlox.pbt import PBT
 
 # -- Exploration ---------------------------------------------------------------
 from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise
@@ -278,6 +283,8 @@ __all__ = [
     "DecisionTransformerConfig",
     "QMIXConfig",
     "CalQLConfig",
+    "PBTConfig",
+    "TRPOConfig",
     "TrainingConfig",
     # Unified Trainer
     "Trainer",
@@ -320,8 +327,10 @@ __all__ = [
     "GoalDistanceShaping",
     "apply_spectral_norm",
     "RND",
+    "ICM",
     "Reptile",
     "OfflineToOnline",
+    "PBT",
     # Exploration
     "GaussianNoise",
     "EpsilonGreedy",

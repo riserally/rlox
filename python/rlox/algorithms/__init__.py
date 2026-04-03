@@ -35,6 +35,7 @@ from rlox.algorithms.mappo import MAPPO
 from rlox.algorithms.dreamer import DreamerV3
 from rlox.algorithms.impala import IMPALA, DistributedIMPALA
 from rlox.algorithms.awr import AWR
+from rlox.algorithms.trpo import TRPO
 
 __all__ = [
     "PPO",
@@ -52,4 +53,5 @@ __all__ = [
     "IMPALA",
     "DistributedIMPALA",
     "AWR",
+    "TRPO",
 ]

@@ -717,7 +717,87 @@ class CalQLConfig(ConfigMixin):
         _validate_min("batch_size", self.batch_size, 1)
 
 
-_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql"}
+@dataclass
+class PBTConfig(ConfigMixin):
+    """Configuration for Population-Based Training.
+
+    Attributes
+    ----------
+    population_size : int
+        Number of agents in the population (default 8).
+    interval : int
+        Training timesteps between exploit/explore cycles (default 10_000).
+    n_iterations : int
+        Number of PBT iterations (default 20).
+    exploit_fraction : float
+        Bottom fraction of population replaced each cycle (default 0.2).
+    perturb_factor : float
+        Hyperparameter perturbation range (default 0.2).
+    """
+
+    population_size: int = 8
+    interval: int = 10_000
+    n_iterations: int = 20
+    exploit_fraction: float = 0.2
+    perturb_factor: float = 0.2
+
+    def __post_init__(self):
+        _validate_min("population_size", self.population_size, 2)
+        _validate_min("interval", self.interval, 1)
+        _validate_min("n_iterations", self.n_iterations, 1)
+
+
+@dataclass
+class TRPOConfig(ConfigMixin):
+    """Configuration for Trust Region Policy Optimization.
+
+    Attributes
+    ----------
+    max_kl : float
+        Maximum KL divergence per update (default 0.01).
+    damping : float
+        Damping coefficient for Fisher vector product (default 0.1).
+    cg_iters : int
+        Conjugate gradient iterations (default 10).
+    line_search_steps : int
+        Backtracking line search steps (default 10).
+    n_envs : int
+        Number of parallel environments (default 8).
+    n_steps : int
+        Rollout length per environment per update (default 2048).
+    gamma : float
+        Discount factor (default 0.99).
+    gae_lambda : float
+        GAE lambda (default 0.97).
+    vf_lr : float
+        Value function learning rate (default 1e-3).
+    vf_epochs : int
+        Value function SGD epochs per update (default 5).
+    """
+
+    max_kl: float = 0.01
+    damping: float = 0.1
+    cg_iters: int = 10
+    line_search_steps: int = 10
+    n_envs: int = 8
+    n_steps: int = 2048
+    gamma: float = 0.99
+    gae_lambda: float = 0.97
+    vf_lr: float = 1e-3
+    vf_epochs: int = 5
+
+    def __post_init__(self):
+        _validate_positive("max_kl", self.max_kl)
+        _validate_positive("damping", self.damping)
+        _validate_min("cg_iters", self.cg_iters, 1)
+        _validate_min("line_search_steps", self.line_search_steps, 1)
+        _validate_min("n_envs", self.n_envs, 1)
+        _validate_min("n_steps", self.n_steps, 1)
+        _validate_positive("vf_lr", self.vf_lr)
+        _validate_min("vf_epochs", self.vf_epochs, 1)
+
+
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
 

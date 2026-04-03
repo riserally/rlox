@@ -317,14 +317,21 @@ class RewardShaper(Protocol):
 
 @runtime_checkable
 class IntrinsicMotivation(Protocol):
-    """Protocol for intrinsic motivation modules (RND, ICM, etc.)."""
+    """Protocol for intrinsic motivation modules (RND, ICM, etc.).
 
-    def compute_intrinsic_reward(self, obs: torch.Tensor) -> torch.Tensor:
+    RND only needs ``obs``; ICM needs ``(obs, next_obs, actions)``.
+    Both signatures are valid -- extra args are passed through.
+    """
+
+    def compute_intrinsic_reward(
+        self, obs: torch.Tensor, *args: Any, **kwargs: Any
+    ) -> torch.Tensor:
         """Compute intrinsic reward for a batch of observations.
 
         Parameters
         ----------
         obs : (B, obs_dim) tensor
+        *args : additional tensors (next_obs, actions for ICM)
 
         Returns
         -------
@@ -332,12 +339,13 @@ class IntrinsicMotivation(Protocol):
         """
         ...
 
-    def update(self, obs: torch.Tensor) -> dict[str, float]:
+    def update(self, obs: torch.Tensor, *args: Any, **kwargs: Any) -> dict[str, float]:
         """Update the intrinsic motivation module.
 
         Parameters
         ----------
         obs : (B, obs_dim) tensor
+        *args : additional tensors (next_obs, actions for ICM)
 
         Returns
         -------

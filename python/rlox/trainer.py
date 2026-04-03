@@ -177,6 +177,7 @@ def _register_builtins() -> None:
     from rlox.algorithms.decision_transformer import DecisionTransformer
     from rlox.algorithms.qmix import QMIX
     from rlox.algorithms.calql import CalQL
+    from rlox.algorithms.trpo import TRPO
 
     for name, cls in [
         ("ppo", PPO),
@@ -190,6 +191,7 @@ def _register_builtins() -> None:
         ("dt", DecisionTransformer),
         ("qmix", QMIX),
         ("calql", CalQL),
+        ("trpo", TRPO),
     ]:
         if name not in ALGORITHM_REGISTRY:
             ALGORITHM_REGISTRY[name] = cls

@@ -340,16 +340,26 @@ This is how rlox computes it -- both in Rust (for speed) and Python
     /// across environments with Rayon.
     pub fn compute_gae(
         rewards: &[f64],
-        values: &[f64],   // len = T + 1
+        values: &[f64],   // len = T
         dones: &[f64],
+        last_value: f64,  // V(s_{T+1}) bootstrap
         gamma: f64,
         gae_lambda: f64,
     ) -> (Vec<f64>, Vec<f64>) {
-        let t_len = rewards.len();
-        let mut advantages = vec![0.0; t_len];
-        let mut last_gae = 0.0;
+        let n = rewards.len();
+        if n == 0 {
+            return (Vec::new(), Vec::new());
+        }
+        let mut advantages = vec![0.0; n];
 
-        for t in (0..t_len).rev() {
+        // Last step uses bootstrap value
+        let last_nt = 1.0 - dones[n - 1];
+        let last_delta = rewards[n - 1]
+            + gamma * last_value * last_nt - values[n - 1];
+        let mut last_gae = last_delta;
+        advantages[n - 1] = last_gae;
+
+        for t in (0..n - 1).rev() {
             let non_terminal = 1.0 - dones[t];
             let delta = rewards[t]
                 + gamma * values[t + 1] * non_terminal
@@ -361,7 +371,7 @@ This is how rlox computes it -- both in Rust (for speed) and Python
 
         let returns: Vec<f64> = advantages
             .iter()
-            .zip(&values[..t_len])
+            .zip(values.iter())
             .map(|(a, v)| a + v)
             .collect();
 

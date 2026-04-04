@@ -54,7 +54,7 @@ algorithm IMPALA:
         compute V-trace targets v_s
         compute advantages A_t = rho_t * (r_t + gamma * v_{t+1} - V(x_t))
 
-        L_policy  = -mean(rho_t * log pi_theta(a|s) * A_t)
+        L_policy  = -mean(log pi_theta(a|s) * A_t)
         L_value   = mean((V_theta(s) - v_s)^2)
         L_entropy = -H[pi_theta]
 

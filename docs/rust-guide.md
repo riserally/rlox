@@ -299,14 +299,16 @@ Off-policy correction for distributed RL (Espeholt et al., 2018). Used by IMPALA
 ```rust
 use rlox_core::training::vtrace::compute_vtrace;
 
-let log_rhos = &[0.2, -0.3, 0.8]; // log(pi/mu)
-let rewards  = &[1.0, 2.0, 3.0];
-let values   = &[0.5, 1.0, 1.5];
+let log_rhos = &[0.2f32, -0.3, 0.8]; // log(pi/mu)
+let rewards  = &[1.0f32, 2.0, 3.0];
+let values   = &[0.5f32, 1.0, 1.5];
+let dones    = &[0.0f32, 0.0, 0.0];  // no episode boundaries
 
 let (vs, pg_advantages) = compute_vtrace(
     log_rhos,
     rewards,
     values,
+    dones,
     2.0,   // bootstrap_value
     0.99,  // gamma
     1.0,   // rho_bar: importance weight clip for values
@@ -320,6 +322,8 @@ assert_eq!(pg_advantages.len(), 3);
 The implementation clips importance weights at both `rho_bar` and `c_bar` thresholds:
 - `rho_bar` limits the variance of value updates
 - `c_bar` controls how far back the trace propagates
+
+Episode boundaries are handled via the `dones` slice (1.0 = terminal), which zeros out bootstrap values and trace propagation at episode ends.
 
 When on-policy (`log_rhos = 0`), V-trace reduces to GAE with `lambda = 1`.
 

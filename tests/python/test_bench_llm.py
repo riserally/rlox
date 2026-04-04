@@ -149,7 +149,13 @@ class TestBenchTokenKL:
         # At small seq_len rlox is >3x faster; at large seq_len (8192+)
         # NumPy's SIMD-vectorized exp() closes the gap. Require at least
         # 1.2x to catch real regressions without flaking on large sizes.
-        min_speedup = 1.2 if seq_len >= 8192 else 1.5
+        # Relax thresholds for CI shared runners (variable CPU performance)
+        if seq_len >= 8192:
+            min_speedup = 1.2
+        elif seq_len >= 2048:
+            min_speedup = 1.3
+        else:
+            min_speedup = 1.5
         lo, _ = comp.speedup_ci_95
         assert lo > min_speedup, f"Token KL not fast enough: {comp.speedup:.1f}x (need >{min_speedup}x)"
 

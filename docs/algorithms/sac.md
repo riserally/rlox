@@ -15,7 +15,7 @@ $$
 Soft Bellman backup for twin Q-functions:
 
 $$
-Q_\text{target}(s_t, a_t) = r_t + \gamma \left( \min_{i=1,2} Q_{\phi_i'}(s_{t+1}, \tilde{a}_{t+1}) - \alpha \log \pi_\theta(\tilde{a}_{t+1} | s_{t+1}) \right)
+Q_\text{target}(s_t, a_t) = r_t + \gamma (1 - d_t) \left( \min_{i=1,2} Q_{\phi_i'}(s_{t+1}, \tilde{a}_{t+1}) - \alpha \log \pi_\theta(\tilde{a}_{t+1} | s_{t+1}) \right)
 $$
 
 where $\tilde{a}_{t+1} \sim \pi_\theta(\cdot | s_{t+1})$.

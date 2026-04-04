@@ -9,7 +9,7 @@ TD3 extends DDPG with three key techniques to address overestimation bias and tr
 Twin Q-network target (take the minimum to combat overestimation):
 
 $$
-y = r + \gamma \min_{i=1,2} Q_{\phi_i'}(s', \tilde{a}')
+y = r + \gamma (1 - d) \min_{i=1,2} Q_{\phi_i'}(s', \tilde{a}')
 $$
 
 Target policy smoothing (regularize the target):

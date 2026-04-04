@@ -142,7 +142,10 @@ These reuse past experience via replay buffers:
 1. **[DQN](algorithms/dqn.md)** -- Deep Q-Network. Value-based, discrete actions only. Includes Double DQN, Dueling, PER, N-step extensions.
 2. **[TD3](algorithms/td3.md)** -- Twin Delayed DDPG. Deterministic policy for continuous control with twin critics and delayed updates.
 3. **[SAC](algorithms/sac.md)** -- Soft Actor-Critic. Maximum entropy framework for continuous control. The default off-policy choice.
-4. **[IMPALA](algorithms/impala.md)** -- Distributed actor-learner architecture with V-trace correction. For large-scale training.
+
+### Distributed methods
+
+4. **[IMPALA](algorithms/impala.md)** -- Distributed actor-learner architecture with V-trace off-policy correction. For large-scale training.
 
 ### Model-based and multi-agent
 

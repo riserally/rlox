@@ -19,8 +19,10 @@ where $r_t^i = \frac{\pi_{\theta_i}(a_t^i | o_t^i)}{\pi_{\theta_i^{\text{old}}}(
 Centralized advantage estimation using global state:
 
 $$
-\hat{A}_t^i = \sum_{l=0}^{T-t} (\gamma \lambda)^l \delta_{t+l}^i, \quad \delta_t^i = r_t^i + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)
+\hat{A}_t^i = \sum_{l=0}^{T-t} (\gamma \lambda)^l \delta_{t+l}^i, \quad \delta_t^i = R_t^i + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)
 $$
+
+where $R_t^i$ denotes the per-agent reward (not to be confused with the policy ratio $r_t^i$ above).
 
 With parameter sharing (optional), all agents share a single policy network $\pi_\theta$ conditioned on agent ID.
 

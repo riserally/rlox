@@ -31,7 +31,7 @@ where $\epsilon$ is the target KL constraint.
 **Critic update:** Standard clipped double Q-learning:
 
 $$
-L_{\text{critic}} = \mathbb{E}\!\left[\left(Q_1(s,a) - y\right)^2 + \left(Q_2(s,a) - y\right)^2\right], \quad y = r + \gamma \min(Q_1^-, Q_2^-)(s', a')
+L_{\text{critic}} = \mathbb{E}\!\left[\left(Q_1(s,a) - y\right)^2 + \left(Q_2(s,a) - y\right)^2\right], \quad y = r + \gamma (1 - d) \min(Q_1^-, Q_2^-)(s', a')
 $$
 
 ## Pseudocode

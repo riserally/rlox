@@ -84,7 +84,7 @@ metrics = agent.train(n_updates=100_000)
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `expectile` | `0.7` | Expectile $\tau$ for value function regression (higher = more optimistic) |
-| `temperature` | `3.0` | $\beta$ for advantage-weighted actor extraction |
+| `temperature` | `3.0` | Inverse temperature $\beta$ for advantage-weighted actor extraction (higher = sharper weighting) |
 | `hidden` | `256` | Hidden layer width |
 | `learning_rate` | `3e-4` | Learning rate for all networks |
 | `tau` | `0.005` | Soft target update rate |

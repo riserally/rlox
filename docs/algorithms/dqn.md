@@ -9,20 +9,22 @@ DQN approximates the optimal action-value function $Q^*(s, a)$ with a neural net
 The Bellman optimality target:
 
 $$
-y_t = r_t + \gamma \max_{a'} Q_{\phi'}(s_{t+1}, a')
+y_t = r_t + \gamma (1 - d_t) \max_{a'} Q_{\phi'}(s_{t+1}, a')
 $$
 
 **Double DQN** decouples action selection from evaluation to reduce overestimation:
 
 $$
-y_t = r_t + \gamma \, Q_{\phi'}(s_{t+1}, \arg\max_{a'} Q_\phi(s_{t+1}, a'))
+y_t = r_t + \gamma (1 - d_t) \, Q_{\phi'}(s_{t+1}, \arg\max_{a'} Q_\phi(s_{t+1}, a'))
 $$
 
 **N-step returns** extend the target horizon:
 
 $$
-y_t^{(n)} = \sum_{k=0}^{n-1} \gamma^k r_{t+k} + \gamma^n \max_{a'} Q_{\phi'}(s_{t+n}, a')
+y_t^{(n)} = \sum_{k=0}^{n-1} \gamma^k r_{t+k} + \gamma^n (1 - d_{t+n}) \max_{a'} Q_{\phi'}(s_{t+n}, a')
 $$
+
+where $d_{t+n}$ is the terminal flag (1 if episode ended, 0 otherwise).
 
 **Dueling architecture** decomposes Q into value and advantage:
 

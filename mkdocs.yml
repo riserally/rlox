@@ -79,16 +79,36 @@ nav:
     - Examples: examples.md
   - Algorithms:
     - Overview: algorithms/index.md
-    - VPG: algorithms/vpg.md
-    - A2C: algorithms/a2c.md
-    - PPO: algorithms/ppo.md
-    - TRPO: algorithms/trpo.md
-    - DQN: algorithms/dqn.md
-    - TD3: algorithms/td3.md
-    - SAC: algorithms/sac.md
-    - IMPALA: algorithms/impala.md
-    - DreamerV3: algorithms/dreamer.md
-    - MAPPO: algorithms/mappo.md
+    - On-Policy:
+      - VPG: algorithms/vpg.md
+      - A2C: algorithms/a2c.md
+      - PPO: algorithms/ppo.md
+      - TRPO: algorithms/trpo.md
+    - Off-Policy:
+      - DQN: algorithms/dqn.md
+      - TD3: algorithms/td3.md
+      - SAC: algorithms/sac.md
+      - MPO: algorithms/mpo.md
+    - Multi-Agent:
+      - MAPPO: algorithms/mappo.md
+      - QMIX: algorithms/qmix.md
+    - Model-Based:
+      - DreamerV3: algorithms/dreamer.md
+    - Distributed:
+      - IMPALA: algorithms/impala.md
+    - Offline RL:
+      - CQL: algorithms/cql.md
+      - Cal-QL: algorithms/calql.md
+      - IQL: algorithms/iql.md
+      - TD3+BC: algorithms/td3bc.md
+      - BC: algorithms/bc.md
+      - AWR: algorithms/awr.md
+      - Decision Transformer: algorithms/dt.md
+    - Policy as Diffusion:
+      - Diffusion Policy: algorithms/diffusion.md
+    - LLM Post-Training:
+      - GRPO: algorithms/grpo.md
+      - DPO: algorithms/dpo.md
     - LLM Post-Training (DPO/GRPO): llm-post-training.md
     - Math Reference: math-reference.md
   - Tutorials:

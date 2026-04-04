@@ -536,13 +536,14 @@ impl PyMmapReplayBuffer {
     }
 
     fn sample<'py>(
-        &self,
+        &mut self,
         py: Python<'py>,
         batch_size: usize,
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let batch = py
-            .allow_threads(|| self.inner.sample(batch_size, seed))
+        let batch = self
+            .inner
+            .sample(batch_size, seed)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);

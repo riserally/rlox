@@ -57,16 +57,32 @@ impl Observation {
         Observation::Flat(data)
     }
 
+    /// Try to view as a flat f32 slice.
+    ///
+    /// Returns `Some(&[f32])` for the `Flat` variant, `None` for `Dict`.
+    /// Prefer this over [`as_slice`](Self::as_slice) when handling observations
+    /// that may be either variant.
+    pub fn try_as_slice(&self) -> Option<&[f32]> {
+        match self {
+            Observation::Flat(v) => Some(v),
+            Observation::Dict(_) => None,
+        }
+    }
+
     /// View as a flat f32 slice.
     ///
     /// For `Flat`, returns the inner data directly.
-    /// For `Dict`, this panics — use `flatten()` instead if you need a
-    /// contiguous copy.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the observation is the `Dict` variant. Use
+    /// [`try_as_slice`](Self::try_as_slice) for a fallible alternative, or
+    /// [`flatten`](Self::flatten) if you need a contiguous copy.
     pub fn as_slice(&self) -> &[f32] {
         match self {
             Observation::Flat(v) => v,
             Observation::Dict(_) => {
-                panic!("Observation::as_slice() called on Dict variant; use flatten() instead")
+                panic!("Observation::as_slice() called on Dict variant; use try_as_slice() or flatten() instead")
             }
         }
     }
@@ -304,6 +320,25 @@ mod tests {
         // Flat obs should not match Dict space
         let flat = Observation::Flat(vec![0.0; 791]);
         assert!(!space.contains(&flat));
+    }
+
+    #[test]
+    fn test_try_as_slice_flat_returns_some() {
+        let obs = Observation::Flat(vec![1.0, 2.0, 3.0]);
+        assert_eq!(obs.try_as_slice(), Some([1.0, 2.0, 3.0].as_slice()));
+    }
+
+    #[test]
+    fn test_try_as_slice_dict_returns_none() {
+        let obs = Observation::Dict(vec![("a".into(), vec![1.0])]);
+        assert_eq!(obs.try_as_slice(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Dict variant")]
+    fn test_as_slice_dict_panics() {
+        let obs = Observation::Dict(vec![("a".into(), vec![1.0])]);
+        let _ = obs.as_slice();
     }
 
     #[test]

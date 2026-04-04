@@ -16,6 +16,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 memmap2 = "0.9"
 crossbeam-channel = "0.5"
+parking_lot = "0.12"
 
 [features]
 default = []

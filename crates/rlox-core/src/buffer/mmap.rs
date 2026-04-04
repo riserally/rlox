@@ -1,8 +1,7 @@
 use std::fs::{File, OpenOptions};
-use std::io::Write;
 use std::path::PathBuf;
 
-use memmap2::Mmap;
+use memmap2::{Mmap, MmapMut};
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -26,7 +25,12 @@ pub struct MmapReplayBuffer {
     hot: ReplayBuffer,
     cold_path: PathBuf,
     cold_file: Option<File>,
+    /// Read-only mmap for sampling. Created lazily on first sample after cold
+    /// file is initialized.
     cold_mmap: Option<Mmap>,
+    /// Mutable mmap for writes. Pre-allocated to full cold capacity so no
+    /// remap is ever needed during push.
+    cold_mmap_mut: Option<MmapMut>,
     /// Number of valid records in cold storage (saturates at cold_capacity).
     cold_count: usize,
     /// Next write position in cold ring-buffer (wraps at cold_capacity).
@@ -35,6 +39,8 @@ pub struct MmapReplayBuffer {
     act_dim: usize,
     hot_capacity: usize,
     total_capacity: usize,
+    /// Whether the read mmap needs to be refreshed before the next sample.
+    mmap_stale: bool,
 }
 
 impl MmapReplayBuffer {
@@ -66,12 +72,14 @@ impl MmapReplayBuffer {
             cold_path,
             cold_file: None,
             cold_mmap: None,
+            cold_mmap_mut: None,
             cold_count: 0,
             cold_write_pos: 0,
             obs_dim,
             act_dim,
             hot_capacity,
             total_capacity,
+            mmap_stale: false,
         })
     }
 
@@ -127,6 +135,12 @@ impl MmapReplayBuffer {
     ///
     /// `obs_batch` shape: `[n * obs_dim]`, `next_obs_batch`: same,
     /// `actions_batch`: `[n * act_dim]`, others: `[n]`.
+    ///
+    /// # `terminated` / `truncated` convention
+    ///
+    /// These take `&[f32]` (not `bool`) for compatibility with numpy arrays
+    /// from the Python side. Non-zero values are treated as `true`.
+    /// This differs from [`push`](Self::push) which accepts native `bool`.
     pub fn push_batch(
         &mut self,
         obs_batch: &[f32],
@@ -175,7 +189,7 @@ impl MmapReplayBuffer {
 
     /// Sample `batch_size` records uniformly from hot + cold storage.
     /// Uses ChaCha8Rng seeded with `seed` for deterministic reproducibility.
-    pub fn sample(&self, batch_size: usize, seed: u64) -> Result<SampledBatch, RloxError> {
+    pub fn sample(&mut self, batch_size: usize, seed: u64) -> Result<SampledBatch, RloxError> {
         let total = self.len();
         if batch_size > total {
             return Err(RloxError::BufferError(format!(
@@ -188,6 +202,11 @@ impl MmapReplayBuffer {
         let mut batch = SampledBatch::with_capacity(batch_size, self.obs_dim, self.act_dim);
 
         let cold_len = self.cold_count;
+
+        // Refresh the read mmap if any writes occurred since last sample.
+        if cold_len > 0 {
+            self.refresh_read_mmap()?;
+        }
 
         for _ in 0..batch_size {
             let idx = rng.random_range(0..total);
@@ -206,8 +225,9 @@ impl MmapReplayBuffer {
 
     /// Unmap the cold file and delete it from disk.
     pub fn close(&mut self) -> Result<(), RloxError> {
-        // Drop the mmap first so the file can be removed.
+        // Drop mmaps first so the file can be removed.
         self.cold_mmap.take();
+        self.cold_mmap_mut.take();
         self.cold_file.take();
         if self.cold_path.exists() {
             std::fs::remove_file(&self.cold_path)?;
@@ -247,37 +267,39 @@ impl MmapReplayBuffer {
 
     /// Write a record to the cold ring-buffer at `cold_write_pos`, then advance.
     ///
-    /// When the cold file is not yet at capacity, this extends the file.
-    /// Once full, it overwrites the oldest record (ring-buffer wrap).
+    /// Uses a pre-allocated `MmapMut` so no remap is needed per push.
+    /// The file is pre-allocated to full cold capacity via `ftruncate`.
     fn write_to_cold(&mut self, record: &ExperienceRecord) -> Result<(), RloxError> {
-        use std::io::Seek;
-
         self.ensure_cold_file()?;
 
         let cold_capacity = self.total_capacity - self.hot_capacity;
-
-        // Serialize record.
         let record_size = self.record_byte_size();
-        let mut buf = Vec::with_capacity(record_size);
+
+        // Serialize record into the mmap directly.
+        let file_offset = HEADER_SIZE + self.cold_write_pos * record_size;
+        let mmap = self
+            .cold_mmap_mut
+            .as_mut()
+            .expect("cold_mmap_mut must be set after ensure_cold_file");
+
+        let dst = &mut mmap[file_offset..file_offset + record_size];
+        let mut pos = 0;
         for &v in &record.obs {
-            buf.extend_from_slice(&v.to_le_bytes());
+            dst[pos..pos + 4].copy_from_slice(&v.to_le_bytes());
+            pos += 4;
         }
         for &v in &record.next_obs {
-            buf.extend_from_slice(&v.to_le_bytes());
+            dst[pos..pos + 4].copy_from_slice(&v.to_le_bytes());
+            pos += 4;
         }
         for &v in &record.action {
-            buf.extend_from_slice(&v.to_le_bytes());
+            dst[pos..pos + 4].copy_from_slice(&v.to_le_bytes());
+            pos += 4;
         }
-        buf.extend_from_slice(&record.reward.to_le_bytes());
-        buf.push(record.terminated as u8);
-        buf.push(record.truncated as u8);
-
-        // Seek to the correct slot in the ring-buffer.
-        let file_offset = HEADER_SIZE + self.cold_write_pos * record_size;
-        let file = self.cold_file.as_mut().expect("cold_file must be open");
-        file.seek(std::io::SeekFrom::Start(file_offset as u64))?;
-        file.write_all(&buf)?;
-        file.flush()?;
+        dst[pos..pos + 4].copy_from_slice(&record.reward.to_le_bytes());
+        pos += 4;
+        dst[pos] = record.terminated as u8;
+        dst[pos + 1] = record.truncated as u8;
 
         // Advance ring-buffer position.
         self.cold_write_pos = (self.cold_write_pos + 1) % cold_capacity;
@@ -285,55 +307,82 @@ impl MmapReplayBuffer {
             self.cold_count += 1;
         }
 
-        // Update header with new record count.
-        self.write_cold_header()?;
+        // Update header in the mmap.
+        self.write_cold_header_mmap();
 
-        // Re-mmap the file.
-        self.remap_cold()?;
+        // Mark read mmap as stale so it refreshes before next sample.
+        self.mmap_stale = true;
 
         Ok(())
     }
 
-    /// Ensure the cold file is open and has a header written.
-    fn ensure_cold_file(&mut self) -> Result<&mut File, RloxError> {
-        if self.cold_file.is_none() {
-            let file = OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .truncate(true)
-                .open(&self.cold_path)?;
-            self.cold_file = Some(file);
-            // Write initial header.
-            self.write_cold_header()?;
+    /// Ensure the cold file is open, pre-allocated to full capacity, and mapped.
+    ///
+    /// The file is sized to `HEADER_SIZE + cold_capacity * record_byte_size`
+    /// via `ftruncate` at creation time. A single `MmapMut` covers the entire
+    /// file, eliminating per-push remap overhead.
+    fn ensure_cold_file(&mut self) -> Result<(), RloxError> {
+        if self.cold_file.is_some() {
+            return Ok(());
         }
-        Ok(self.cold_file.as_mut().expect("just created"))
-    }
 
-    /// Write/overwrite the 24-byte header.
-    fn write_cold_header(&mut self) -> Result<(), RloxError> {
-        use std::io::Seek;
-        let file = self.cold_file.as_mut().expect("cold_file must be open");
-        file.seek(std::io::SeekFrom::Start(0))?;
-        file.write_all(&(self.obs_dim as u64).to_le_bytes())?;
-        file.write_all(&(self.act_dim as u64).to_le_bytes())?;
-        file.write_all(&(self.cold_count as u64).to_le_bytes())?;
-        file.flush()?;
-        // Seek back to end for future appends.
-        file.seek(std::io::SeekFrom::End(0))?;
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.cold_path)?;
+
+        let cold_capacity = self.total_capacity - self.hot_capacity;
+        let total_file_size = HEADER_SIZE + cold_capacity * self.record_byte_size();
+        file.set_len(total_file_size as u64)?;
+
+        // SAFETY: The file is exclusively owned by this buffer. No other
+        // process or thread accesses it. We write through `cold_mmap_mut`
+        // and read through a separate `cold_mmap` (refreshed lazily).
+        let mmap_mut = unsafe { MmapMut::map_mut(&file)? };
+
+        self.cold_file = Some(file);
+        self.cold_mmap_mut = Some(mmap_mut);
+
+        // Write initial header (cold_count = 0).
+        self.write_cold_header_mmap();
+
         Ok(())
     }
 
-    /// Re-create the mmap over the cold file.
-    fn remap_cold(&mut self) -> Result<(), RloxError> {
-        // Drop old mmap first.
+    /// Write the 24-byte header directly into the mutable mmap.
+    fn write_cold_header_mmap(&mut self) {
+        let mmap = self
+            .cold_mmap_mut
+            .as_mut()
+            .expect("cold_mmap_mut must be set");
+        mmap[0..8].copy_from_slice(&(self.obs_dim as u64).to_le_bytes());
+        mmap[8..16].copy_from_slice(&(self.act_dim as u64).to_le_bytes());
+        mmap[16..24].copy_from_slice(&(self.cold_count as u64).to_le_bytes());
+    }
+
+    /// Refresh the read-only mmap from the file.
+    ///
+    /// Called lazily before sampling when writes have occurred since the
+    /// last refresh. Since the file is pre-allocated, this does not change
+    /// the file size — it just picks up the bytes written via `cold_mmap_mut`.
+    fn refresh_read_mmap(&mut self) -> Result<(), RloxError> {
+        if !self.mmap_stale && self.cold_mmap.is_some() {
+            return Ok(());
+        }
+        // Flush the mutable mmap so reads see the latest data.
+        if let Some(ref mmap_mut) = self.cold_mmap_mut {
+            mmap_mut.flush()?;
+        }
+        // Drop old read mmap.
         self.cold_mmap.take();
         let file = self.cold_file.as_ref().expect("cold_file must be open");
-        // SAFETY: The file is exclusively owned by this buffer. We only
-        // write via `append_to_cold` which flushes before we remap. No
-        // concurrent writers exist.
+        // SAFETY: The file is exclusively owned by this buffer. The mutable
+        // mmap has been flushed above, so all writes are visible.
         let mmap = unsafe { Mmap::map(file)? };
         self.cold_mmap = Some(mmap);
+        self.mmap_stale = false;
         Ok(())
     }
 

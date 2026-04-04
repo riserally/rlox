@@ -731,9 +731,7 @@ pub fn reptile_update<'py>(
     meta_lr: f32,
 ) -> PyResult<()> {
     let task_slice = task_params.as_slice()?;
-    // SAFETY: We have the GIL and no other references to this array exist
-    // during the mutable borrow. PyArray1::readwrite gives exclusive access.
-    let mut rw = unsafe { meta_params.as_array_mut() };
+    let mut rw = meta_params.readwrite();
     let meta_slice = rw
         .as_slice_mut()
         .ok_or_else(|| PyRuntimeError::new_err("meta_params must be a contiguous array"))?;
@@ -753,8 +751,7 @@ pub fn polyak_update<'py>(
     tau: f32,
 ) -> PyResult<()> {
     let source_slice = source.as_slice()?;
-    // SAFETY: Same as reptile_update above.
-    let mut rw = unsafe { target.as_array_mut() };
+    let mut rw = target.readwrite();
     let target_slice = rw
         .as_slice_mut()
         .ok_or_else(|| PyRuntimeError::new_err("target must be a contiguous array"))?;

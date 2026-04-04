@@ -27,8 +27,17 @@ def _validate_min(name: str, value: int, minimum: int) -> None:
 
 
 def _load_toml(path: str | Path) -> dict[str, Any]:
-    """Read a TOML file using tomllib (3.11+)."""
-    import tomllib
+    """Read a TOML file using tomllib (3.11+) or tomli fallback."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            raise ImportError(
+                "TOML support requires Python 3.11+ or the 'tomli' package: "
+                "pip install tomli"
+            )
 
     with open(path, "rb") as f:
         return tomllib.load(f)

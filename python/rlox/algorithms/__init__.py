@@ -2,6 +2,7 @@
 
 On-policy (use VecEnv + compute_gae):
     - :class:`PPO` — Proximal Policy Optimization (clipped surrogate)
+    - :class:`VPG` — Vanilla Policy Gradient (REINFORCE with baseline + GAE)
     - :class:`A2C` — Advantage Actor-Critic (single gradient step)
 
 Off-policy (use ReplayBuffer + gymnasium):
@@ -22,8 +23,9 @@ Multi-agent / advanced:
 """
 
 from rlox.algorithms.ppo import PPO
-from rlox.config import PPOConfig
+from rlox.config import PPOConfig, VPGConfig
 from rlox.algorithms.a2c import A2C
+from rlox.algorithms.vpg import VPG
 from rlox.algorithms.grpo import GRPO
 from rlox.algorithms.dpo import DPO
 from rlox.algorithms.sac import SAC
@@ -42,6 +44,8 @@ from rlox.algorithms.mpo import MPO
 __all__ = [
     "PPO",
     "PPOConfig",
+    "VPG",
+    "VPGConfig",
     "A2C",
     "GRPO",
     "DPO",

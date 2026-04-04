@@ -71,15 +71,28 @@ extra_javascript:
 
 nav:
   - Home: index.md
+  - Learning Path: learning-path.md
   - Learn:
     - Getting Started: getting-started.md
     - RL Introduction: rl-introduction.md
     - Python User Guide: python-guide.md
     - Examples: examples.md
   - Algorithms:
+    - Overview: algorithms/index.md
+    - VPG: algorithms/vpg.md
+    - A2C: algorithms/a2c.md
+    - PPO: algorithms/ppo.md
+    - TRPO: algorithms/trpo.md
+    - DQN: algorithms/dqn.md
+    - TD3: algorithms/td3.md
+    - SAC: algorithms/sac.md
+    - IMPALA: algorithms/impala.md
+    - DreamerV3: algorithms/dreamer.md
+    - MAPPO: algorithms/mappo.md
     - LLM Post-Training (DPO/GRPO): llm-post-training.md
     - Math Reference: math-reference.md
   - Tutorials:
+    - Policy Gradient Fundamentals: tutorials/policy-gradient-fundamentals.md
     - Custom Components: tutorials/custom-components.md
     - Custom Rewards & Training Loops: tutorials/custom-rewards-and-training-loops.md
     - Migrating from SB3: tutorials/migration-sb3.md

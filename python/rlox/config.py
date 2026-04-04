@@ -798,6 +798,54 @@ class TRPOConfig(ConfigMixin):
 
 
 @dataclass
+class VPGConfig(ConfigMixin):
+    """Configuration for Vanilla Policy Gradient (REINFORCE with baseline).
+
+    Attributes
+    ----------
+    learning_rate : float
+        Policy optimizer learning rate (default 3e-4).
+    vf_lr : float
+        Value function learning rate (default 1e-3).
+    n_envs : int
+        Number of parallel environments (default 8).
+    n_steps : int
+        Rollout length per environment per update (default 2048).
+    gamma : float
+        Discount factor (default 0.99).
+    gae_lambda : float
+        GAE lambda for bias-variance tradeoff (default 0.97).
+    vf_epochs : int
+        Value function SGD epochs per rollout (default 5).
+    max_grad_norm : float
+        Maximum gradient norm for clipping (default 0.5).
+    ent_coef : float
+        Entropy bonus coefficient (default 0.0 -- no entropy bonus).
+    hidden : int
+        Hidden layer size for auto-created policies (default 64).
+    """
+
+    learning_rate: float = 3e-4
+    vf_lr: float = 1e-3
+    n_envs: int = 8
+    n_steps: int = 2048
+    gamma: float = 0.99
+    gae_lambda: float = 0.97
+    vf_epochs: int = 5
+    max_grad_norm: float = 0.5
+    ent_coef: float = 0.0
+    hidden: int = 64
+
+    def __post_init__(self):
+        _validate_positive("learning_rate", self.learning_rate)
+        _validate_positive("vf_lr", self.vf_lr)
+        _validate_min("n_envs", self.n_envs, 1)
+        _validate_min("n_steps", self.n_steps, 1)
+        _validate_min("vf_epochs", self.vf_epochs, 1)
+        _validate_min("hidden", self.hidden, 1)
+
+
+@dataclass
 class DiffusionPolicyConfig(ConfigMixin):
     """Configuration for Diffusion Policy training.
 

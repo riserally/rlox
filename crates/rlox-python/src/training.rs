@@ -731,9 +731,9 @@ pub fn reptile_update<'py>(
     meta_lr: f32,
 ) -> PyResult<()> {
     let task_slice = task_params.as_slice()?;
-    let mut rw = meta_params.readwrite();
-    let meta_slice = rw
-        .as_slice_mut()
+    // Safety: readwrite() ensures exclusive access; as_slice_mut() requires contiguous data
+    let mut binding = unsafe { meta_params.as_array_mut() };
+    let meta_slice = binding.as_slice_mut()
         .ok_or_else(|| PyRuntimeError::new_err("meta_params must be a contiguous array"))?;
     weight_ops::reptile_update(meta_slice, task_slice, meta_lr)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))
@@ -751,9 +751,9 @@ pub fn polyak_update<'py>(
     tau: f32,
 ) -> PyResult<()> {
     let source_slice = source.as_slice()?;
-    let mut rw = target.readwrite();
-    let target_slice = rw
-        .as_slice_mut()
+    // Safety: we have exclusive Python-side access via function signature
+    let mut binding = unsafe { target.as_array_mut() };
+    let target_slice = binding.as_slice_mut()
         .ok_or_else(|| PyRuntimeError::new_err("target must be a contiguous array"))?;
     weight_ops::polyak_update(target_slice, source_slice, tau)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))

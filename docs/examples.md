@@ -306,95 +306,261 @@ for prompts in dataloader:
     metrics = grpo.train_step(prompts)
 ```
 
-## Rust Primitives (Low-Level)
+## Core Primitives
 
-### Fast GAE Computation
+### Environment Stepping
 
-```python
-import rlox
-import numpy as np
+=== "Python"
 
-# Single environment
-rewards = np.random.randn(2048)
-values = np.random.randn(2048)
-dones = np.zeros(2048)
-adv, ret = rlox.compute_gae(rewards, values, dones, last_value=0.0, gamma=0.99, lam=0.95)
+    ```python
+    import rlox
 
-# Batched (8 envs, Rayon-parallel)
-rewards_flat = np.random.randn(8 * 2048)  # env-major layout
-values_flat = np.random.randn(8 * 2048)
-dones_flat = np.zeros(8 * 2048)
-last_vals = np.random.randn(8)
-adv, ret = rlox.compute_gae_batched(rewards_flat, values_flat, dones_flat, last_vals, 2048, 0.99, 0.95)
+    # Native Rust CartPole (fastest)
+    env = rlox.VecEnv(n=1024, seed=42)
+    result = env.step_all(actions)  # actions: numpy uint32 array
+    # result["obs"]: (1024, 4) float32
 
-# f32 variant (1.5x faster at 64 envs)
-adv, ret = rlox.compute_gae_batched_f32(
-    rewards_flat.astype(np.float32), values_flat.astype(np.float32),
-    dones_flat.astype(np.float32), last_vals.astype(np.float32),
-    2048, 0.99, 0.95,
-)
-```
+    # Gymnasium wrapper (any env)
+    from rlox import GymVecEnv
+    env = GymVecEnv("HalfCheetah-v4", n_envs=8)
+    result = env.step_all(actions)
+    ```
+
+=== "Rust"
+
+    ```rust
+    use rlox_core::env::builtins::CartPole;
+    use rlox_core::env::parallel::VecEnv;
+    use rlox_core::env::spaces::Action;
+    use rlox_core::env::RLEnv;
+    use rlox_core::seed::derive_seed;
+
+    // Create 64 parallel CartPole environments
+    let envs: Vec<Box<dyn RLEnv>> = (0..64)
+        .map(|i| Box::new(CartPole::new(Some(derive_seed(42, i)))) as _)
+        .collect();
+    let mut vec_env = VecEnv::new(envs);
+
+    let observations = vec_env.reset_all(Some(42)).unwrap();
+    let actions: Vec<Action> = (0..64)
+        .map(|i| Action::Discrete((i % 2) as u32))
+        .collect();
+    let batch = vec_env.step_all(&actions).unwrap();
+    assert_eq!(batch.obs.len(), 64);
+    ```
+
+### Continuous Actions (Pendulum)
+
+=== "Python"
+
+    ```python
+    import rlox
+    import numpy as np
+
+    env = rlox.VecEnv(n=4, seed=42, env_id="Pendulum-v1")
+    obs = env.reset_all()  # (4, 3) — cos(θ), sin(θ), ω
+
+    actions = np.array([[0.5], [-1.0], [2.0], [0.0]], dtype=np.float32)
+    result = env.step_all(actions)
+    ```
+
+=== "Rust"
+
+    ```rust
+    use rlox_core::env::builtins::Pendulum;
+    use rlox_core::env::spaces::Action;
+    use rlox_core::env::RLEnv;
+
+    let mut env = Pendulum::new(Some(42));
+    let obs = env.reset(Some(42)).unwrap();
+    println!("obs: {:?}", obs.as_slice()); // [cos θ, sin θ, ω]
+
+    let t = env.step(&Action::Continuous(vec![1.5])).unwrap();
+    println!("reward: {:.2}", t.reward);
+    ```
+
+### GAE Computation
+
+=== "Python"
+
+    ```python
+    import rlox
+    import numpy as np
+
+    rewards = np.random.randn(2048)
+    values = np.random.randn(2048)
+    dones = np.zeros(2048)
+    adv, ret = rlox.compute_gae(rewards, values, dones,
+                                 last_value=0.0, gamma=0.99, lam=0.95)
+
+    # Batched (8 envs, Rayon-parallel)
+    rewards_flat = np.random.randn(8 * 2048)
+    values_flat = np.random.randn(8 * 2048)
+    dones_flat = np.zeros(8 * 2048)
+    last_vals = np.random.randn(8)
+    adv, ret = rlox.compute_gae_batched(rewards_flat, values_flat,
+                                         dones_flat, last_vals, 2048, 0.99, 0.95)
+    ```
+
+=== "Rust"
+
+    ```rust
+    use rlox_core::training::gae::compute_gae;
+
+    let rewards = &[1.0, 1.0, 1.0, 0.0, 1.0];
+    let values  = &[0.5, 0.6, 0.7, 0.3, 0.8];
+    let dones   = &[0.0, 0.0, 0.0, 1.0, 0.0];
+
+    let (advantages, returns) = compute_gae(
+        rewards, values, dones,
+        0.9,   // last_value
+        0.99,  // gamma
+        0.95,  // gae_lambda
+    );
+
+    // Invariant: returns[t] == advantages[t] + values[t]
+    for t in 0..5 {
+        assert!((returns[t] - (advantages[t] + values[t])).abs() < 1e-10);
+    }
+    ```
 
 ### Replay Buffers
 
-```python
-import rlox
-import numpy as np
+=== "Python"
 
-# Standard ring buffer
-buf = rlox.ReplayBuffer(capacity=100_000, obs_dim=4, act_dim=1)
+    ```python
+    import rlox
+    import numpy as np
 
-obs = np.zeros(4, dtype=np.float32)
-action = np.zeros(1, dtype=np.float32)
-buf.push(obs, action, reward=1.0, terminated=False, truncated=False, next_obs=obs)
+    buf = rlox.ReplayBuffer(capacity=100_000, obs_dim=4, act_dim=1)
+    obs = np.zeros(4, dtype=np.float32)
+    buf.push(obs, np.zeros(1), reward=1.0, terminated=False,
+             truncated=False, next_obs=obs)
 
-batch = buf.sample(batch_size=256, seed=42)
-# batch["obs"], batch["actions"], batch["rewards"], batch["next_obs"], etc.
+    batch = buf.sample(batch_size=256, seed=42)
+    # batch["obs"], batch["actions"], batch["rewards"], ...
 
-# Prioritized replay
-pbuf = rlox.PrioritizedReplayBuffer(100_000, obs_dim=4, act_dim=1, alpha=0.6, beta=0.4)
-pbuf.push(obs, action, 1.0, False, False, obs, priority=1.0)
-batch = pbuf.sample(256, seed=42)
-# batch["weights"], batch["indices"] for importance sampling
+    # Prioritized replay
+    pbuf = rlox.PrioritizedReplayBuffer(100_000, 4, 1, alpha=0.6, beta=0.4)
+    pbuf.push(obs, np.zeros(1), 1.0, False, False, obs, priority=1.0)
+    batch = pbuf.sample(256, seed=42)
+    # batch["weights"], batch["indices"]
+    ```
 
-# Memory-mapped buffer (for Atari-scale observations)
-mmap_buf = rlox.MmapReplayBuffer(
-    hot_capacity=10_000,      # in-memory
-    total_capacity=1_000_000, # total (hot + disk)
-    obs_dim=84*84*4,
-    act_dim=1,
-    cold_path="/tmp/replay_cold.bin",
-)
-```
+=== "Rust"
 
-### VecEnv Stepping
+    ```rust
+    use rlox_core::buffer::ringbuf::ReplayBuffer;
+    use rlox_core::buffer::priority::PrioritizedReplayBuffer;
+    use rlox_core::buffer::ExperienceRecord;
 
-```python
-import rlox
+    // Uniform replay buffer
+    let mut buf = ReplayBuffer::new(100_000, 4, 1);
+    buf.push(ExperienceRecord {
+        obs: vec![0.1, 0.2, 0.3, 0.4],
+        next_obs: vec![0.2, 0.3, 0.4, 0.5],
+        action: vec![0.0],
+        reward: 1.0,
+        terminated: false,
+        truncated: false,
+    }).unwrap();
 
-# Native Rust CartPole (fastest)
-env = rlox.VecEnv(n=1024, seed=42)
-result = env.step_all(actions)  # actions: numpy uint32 array
-# result["obs"]: (1024, 4) float32 — contiguous flat buffer
+    let batch = buf.sample(32, 42).unwrap();
+    assert_eq!(batch.batch_size, 32);
 
-# Gymnasium wrapper (any env)
-from rlox import GymVecEnv
-env = GymVecEnv("HalfCheetah-v4", n_envs=8)
-result = env.step_all(actions)
-```
+    // Prioritized replay
+    let mut per = PrioritizedReplayBuffer::new(100_000, 4, 1, 0.6, 0.4);
+    per.push(ExperienceRecord {
+        obs: vec![0.1; 4], next_obs: vec![0.2; 4],
+        action: vec![0.0], reward: 1.0,
+        terminated: false, truncated: false,
+    }, 1.0).unwrap();
+    ```
+
+### Reward Shaping (PBRS)
+
+=== "Python"
+
+    ```python
+    import rlox
+    import numpy as np
+
+    rewards = np.array([1.0, 1.0, 1.0])
+    phi = np.array([0.5, 0.6, 0.7])       # potential of current state
+    phi_next = np.array([0.6, 0.7, 0.8])   # potential of next state
+    dones = np.array([0.0, 0.0, 1.0])
+
+    shaped = rlox.shape_rewards_pbrs(rewards, phi, phi_next, gamma=0.99, dones=dones)
+    ```
+
+=== "Rust"
+
+    ```rust
+    use rlox_core::training::reward_shaping::shape_rewards_pbrs;
+
+    let rewards = &[1.0, 1.0, 1.0];
+    let phi = &[0.5, 0.6, 0.7];
+    let phi_next = &[0.6, 0.7, 0.8];
+    let dones = &[0.0, 0.0, 1.0];
+
+    let shaped = shape_rewards_pbrs(rewards, phi, phi_next, 0.99, dones).unwrap();
+    // done=1 → raw reward only (no shaping at episode boundary)
+    assert!((shaped[2] - 1.0).abs() < 1e-10);
+    ```
+
+### Weight Operations (Meta-Learning)
+
+=== "Python"
+
+    ```python
+    import rlox
+    import numpy as np
+
+    meta = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    task = np.array([4.0, 5.0, 6.0], dtype=np.float32)
+    rlox.reptile_update(meta, task, lr=0.1)  # in-place
+    # meta is now [1.3, 2.3, 3.3]
+    ```
+
+=== "Rust"
+
+    ```rust
+    use rlox_core::training::weight_ops::{reptile_update, polyak_update};
+
+    let mut meta = vec![1.0f32, 2.0, 3.0];
+    let task = vec![4.0f32, 5.0, 6.0];
+    reptile_update(&mut meta, &task, 0.1);
+    // meta is now [1.3, 2.3, 3.3]
+
+    let mut target = vec![0.0f32; 3];
+    let source = vec![1.0f32; 3];
+    polyak_update(&mut target, &source, 0.005);
+    ```
 
 ### KL Divergence
 
-```python
-import rlox
-import numpy as np
+=== "Python"
 
-# f32 batched (fastest for LLM workloads)
-log_p = np.random.randn(32 * 2048).astype(np.float32)
-log_q = np.random.randn(32 * 2048).astype(np.float32)
-kl = rlox.compute_batch_token_kl_schulman_f32(log_p, log_q, seq_len=2048)
-# kl: (32,) array of per-sequence KL values
-```
+    ```python
+    import rlox
+    import numpy as np
+
+    log_p = np.random.randn(32 * 2048).astype(np.float32)
+    log_q = np.random.randn(32 * 2048).astype(np.float32)
+    kl = rlox.compute_batch_token_kl_schulman_f32(log_p, log_q, seq_len=2048)
+    # kl: (32,) array of per-sequence KL values
+    ```
+
+=== "Rust"
+
+    ```rust
+    use rlox_core::training::kl::compute_token_kl;
+
+    let log_p = &[-1.0, -2.0, -0.5];
+    let log_q = &[-1.0, -2.0, -0.5];
+    let kl = compute_token_kl(log_p, log_q).unwrap();
+    assert!(kl.abs() < 1e-15); // identical distributions → KL = 0
+    ```
 
 ## Monitoring & Profiling
 

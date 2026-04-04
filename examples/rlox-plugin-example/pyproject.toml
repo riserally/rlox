@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlox-plugin-example"
+version = "0.1.0"
+description = "Example rlox plugin: custom environment and buffer wrapper"
+requires-python = ">=3.10"
+dependencies = ["rlox", "gymnasium"]
+
+[project.entry-points.rlox_plugins]
+example = "rlox_plugin_example:register_all"

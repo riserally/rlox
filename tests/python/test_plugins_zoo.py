@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+import difflib
+
 import pytest
 from dataclasses import fields
 from unittest.mock import MagicMock, patch
@@ -28,7 +31,8 @@ class TestPluginRegistry:
 
         @register_env("custom-env-v0")
         class CustomEnv:
-            pass
+            def step(self, action): pass
+            def reset(self): pass
 
         assert "custom-env-v0" in ENV_REGISTRY
         assert ENV_REGISTRY["custom-env-v0"] is CustomEnv
@@ -40,6 +44,8 @@ class TestPluginRegistry:
         @register_env("my-env")
         class MyEnv:
             sentinel = 42
+            def step(self, action): pass
+            def reset(self): pass
 
         assert MyEnv.sentinel == 42
 
@@ -48,7 +54,9 @@ class TestPluginRegistry:
 
         @register_buffer("custom-buffer")
         class CustomBuffer:
-            pass
+            def push(self, *args): pass
+            def sample(self, n): pass
+            def __len__(self): return 0
 
         assert "custom-buffer" in BUFFER_REGISTRY
         assert BUFFER_REGISTRY["custom-buffer"] is CustomBuffer
@@ -58,7 +66,7 @@ class TestPluginRegistry:
 
         @register_reward("curiosity")
         class CuriosityReward:
-            pass
+            def shape(self, rewards, obs, next_obs, dones): return rewards
 
         assert "curiosity" in REWARD_REGISTRY
         assert REWARD_REGISTRY["curiosity"] is CuriosityReward
@@ -73,15 +81,18 @@ class TestPluginRegistry:
 
         @register_env("env-a")
         class A:
-            pass
+            def step(self, action): pass
+            def reset(self): pass
 
         @register_buffer("buf-b")
         class B:
-            pass
+            def push(self, *args): pass
+            def sample(self, n): pass
+            def __len__(self): return 0
 
         @register_reward("rew-c")
         class C:
-            pass
+            def shape(self, rewards, obs, next_obs, dones): return rewards
 
         result = list_registered()
         assert "environments" in result
@@ -107,11 +118,13 @@ class TestPluginRegistry:
 
         @register_env("dup")
         class First:
-            pass
+            def step(self, action): pass
+            def reset(self): pass
 
         @register_env("dup")
         class Second:
-            pass
+            def step(self, action): pass
+            def reset(self): pass
 
         assert ENV_REGISTRY["dup"] is Second
 
@@ -121,11 +134,13 @@ class TestPluginRegistry:
 
         @register_env("z-env")
         class Z:
-            pass
+            def step(self, action): pass
+            def reset(self): pass
 
         @register_env("a-env")
         class A:
-            pass
+            def step(self, action): pass
+            def reset(self): pass
 
         result = list_registered()
         assert result["environments"] == ["a-env", "z-env"]
@@ -367,3 +382,325 @@ class TestModelCard:
 
         card = ModelCard.from_trainer(mock_trainer, metrics)
         assert card.hyperparameters == {"lr": 1e-3, "batch_size": 64}
+
+
+# ---------------------------------------------------------------------------
+# TestPluginValidation -- Part 4: registration validates interface
+# ---------------------------------------------------------------------------
+
+
+class TestPluginValidation:
+    """Decorators reject classes missing required methods."""
+
+    def setup_method(self) -> None:
+        from rlox.plugins import ENV_REGISTRY, BUFFER_REGISTRY, REWARD_REGISTRY
+
+        ENV_REGISTRY.clear()
+        BUFFER_REGISTRY.clear()
+        REWARD_REGISTRY.clear()
+
+    def test_env_validation_rejects_missing_step(self) -> None:
+        from rlox.plugins import register_env
+
+        with pytest.raises(TypeError, match="step"):
+
+            @register_env("bad-env-v0")
+            class BadEnv:
+                def reset(self):
+                    pass
+
+    def test_env_validation_rejects_missing_reset(self) -> None:
+        from rlox.plugins import register_env
+
+        with pytest.raises(TypeError, match="reset"):
+
+            @register_env("bad-env-v1")
+            class BadEnv:
+                def step(self, action):
+                    pass
+
+    def test_env_validation_accepts_valid_env(self) -> None:
+        from rlox.plugins import ENV_REGISTRY, register_env
+
+        @register_env("good-env-v0")
+        class GoodEnv:
+            def step(self, action):
+                pass
+
+            def reset(self):
+                pass
+
+        assert "good-env-v0" in ENV_REGISTRY
+
+    def test_buffer_validation_rejects_missing_push(self) -> None:
+        from rlox.plugins import register_buffer
+
+        with pytest.raises(TypeError, match="push"):
+
+            @register_buffer("bad-buf")
+            class BadBuf:
+                def sample(self, n):
+                    pass
+
+                def __len__(self):
+                    return 0
+
+    def test_buffer_validation_rejects_missing_sample(self) -> None:
+        from rlox.plugins import register_buffer
+
+        with pytest.raises(TypeError, match="sample"):
+
+            @register_buffer("bad-buf")
+            class BadBuf:
+                def push(self, *args):
+                    pass
+
+                def __len__(self):
+                    return 0
+
+    def test_buffer_validation_rejects_missing_len(self) -> None:
+        from rlox.plugins import register_buffer
+
+        with pytest.raises(TypeError, match="__len__"):
+
+            @register_buffer("bad-buf")
+            class BadBuf:
+                def push(self, *args):
+                    pass
+
+                def sample(self, n):
+                    pass
+
+    def test_buffer_validation_accepts_valid_buffer(self) -> None:
+        from rlox.plugins import BUFFER_REGISTRY, register_buffer
+
+        @register_buffer("good-buf")
+        class GoodBuf:
+            def push(self, *args):
+                pass
+
+            def sample(self, n):
+                pass
+
+            def __len__(self):
+                return 0
+
+        assert "good-buf" in BUFFER_REGISTRY
+
+    def test_reward_validation_rejects_bad_class(self) -> None:
+        from rlox.plugins import register_reward
+
+        with pytest.raises(TypeError, match="shape.*__call__"):
+
+            @register_reward("bad-rew")
+            class BadRew:
+                pass
+
+    def test_reward_validation_accepts_shape_method(self) -> None:
+        from rlox.plugins import REWARD_REGISTRY, register_reward
+
+        @register_reward("good-rew")
+        class GoodRew:
+            def shape(self, rewards, obs, next_obs, dones):
+                return rewards
+
+        assert "good-rew" in REWARD_REGISTRY
+
+    def test_reward_validation_accepts_callable(self) -> None:
+        from rlox.plugins import REWARD_REGISTRY, register_reward
+
+        @register_reward("call-rew")
+        class CallRew:
+            def __call__(self, rewards, obs, next_obs, dones):
+                return rewards
+
+        assert "call-rew" in REWARD_REGISTRY
+
+
+# ---------------------------------------------------------------------------
+# TestRegistryHelpers -- Part 2 & 3: get_buffer, get_reward_shaper
+# ---------------------------------------------------------------------------
+
+
+class TestRegistryHelpers:
+    """Test helper functions for buffer and reward creation from registries."""
+
+    def setup_method(self) -> None:
+        from rlox.plugins import BUFFER_REGISTRY, REWARD_REGISTRY
+
+        BUFFER_REGISTRY.clear()
+        REWARD_REGISTRY.clear()
+
+    def test_get_buffer_creates_from_registry(self) -> None:
+        from rlox.plugins import BUFFER_REGISTRY, register_buffer, get_buffer
+
+        @register_buffer("test-buf")
+        class TestBuf:
+            def __init__(self, capacity, obs_dim, act_dim):
+                self.capacity = capacity
+                self.obs_dim = obs_dim
+                self.act_dim = act_dim
+
+            def push(self, *args):
+                pass
+
+            def sample(self, n):
+                pass
+
+            def __len__(self):
+                return 0
+
+        buf = get_buffer("test-buf", capacity=1000, obs_dim=4, act_dim=2)
+        assert isinstance(buf, TestBuf)
+        assert buf.capacity == 1000
+        assert buf.obs_dim == 4
+
+    def test_get_buffer_creates_builtin_replay(self) -> None:
+        from rlox.plugins import get_buffer
+
+        buf = get_buffer("replay", capacity=100, obs_dim=4, act_dim=1)
+        assert len(buf) == 0  # empty buffer
+
+    def test_get_buffer_unknown_raises(self) -> None:
+        from rlox.plugins import get_buffer
+
+        with pytest.raises(ValueError, match="Unknown buffer"):
+            get_buffer("nonexistent", capacity=100, obs_dim=4, act_dim=1)
+
+    def test_get_reward_shaper_creates_from_registry(self) -> None:
+        from rlox.plugins import REWARD_REGISTRY, register_reward, get_reward_shaper
+
+        @register_reward("test-rew")
+        class TestRew:
+            def __init__(self, scale=1.0):
+                self.scale = scale
+
+            def shape(self, rewards, obs, next_obs, dones):
+                return rewards * self.scale
+
+        shaper = get_reward_shaper("test-rew", scale=2.0)
+        assert isinstance(shaper, TestRew)
+        assert shaper.scale == 2.0
+
+    def test_get_reward_shaper_unknown_raises(self) -> None:
+        from rlox.plugins import get_reward_shaper
+
+        with pytest.raises(ValueError, match="Unknown reward shaper"):
+            get_reward_shaper("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# TestSuggestSimilar -- Part 8: fuzzy matching
+# ---------------------------------------------------------------------------
+
+
+class TestSuggestSimilar:
+    """Test 'Did you mean?' suggestions for typos."""
+
+    def test_suggest_similar_on_close_match(self) -> None:
+        from rlox.plugins import _suggest_similar
+
+        registry = {"ppo": object, "sac": object, "dqn": object}
+        suggestion = _suggest_similar("pppo", registry)
+        assert "ppo" in suggestion
+
+    def test_suggest_similar_no_match(self) -> None:
+        from rlox.plugins import _suggest_similar
+
+        registry = {"ppo": object, "sac": object}
+        suggestion = _suggest_similar("zzzzzzz", registry)
+        assert suggestion == ""
+
+    def test_suggest_similar_empty_registry(self) -> None:
+        from rlox.plugins import _suggest_similar
+
+        assert _suggest_similar("ppo", {}) == ""
+
+    def test_suggest_similar_used_in_get_buffer_error(self) -> None:
+        from rlox.plugins import get_buffer, BUFFER_REGISTRY
+
+        # Register a buffer so we have something to suggest
+        BUFFER_REGISTRY["prioritized"] = type("P", (), {})
+
+        with pytest.raises(ValueError, match="prioritized"):
+            get_buffer("prioitized", capacity=100, obs_dim=4, act_dim=1)
+
+    def test_suggest_similar_used_in_get_reward_error(self) -> None:
+        from rlox.plugins import get_reward_shaper, REWARD_REGISTRY
+
+        REWARD_REGISTRY["potential"] = type("P", (), {})
+
+        with pytest.raises(ValueError, match="potential"):
+            get_reward_shaper("potntial")
+
+
+# ---------------------------------------------------------------------------
+# TestResolveEnv -- Part 1: resolve_env_id registers with gymnasium
+# ---------------------------------------------------------------------------
+
+
+class TestResolveEnv:
+    """Test resolve_env_id integration."""
+
+    def setup_method(self) -> None:
+        from rlox.plugins import ENV_REGISTRY
+
+        ENV_REGISTRY.clear()
+
+    def test_resolve_env_registers_with_gymnasium(self) -> None:
+        import gymnasium as gym
+        from rlox.plugins import ENV_REGISTRY
+        from rlox.trainer import resolve_env_id
+
+        # Create a minimal gymnasium env
+        class _TestEnv(gym.Env):
+            def __init__(self, **kwargs):
+                super().__init__()
+                self.observation_space = gym.spaces.Box(-1, 1, shape=(2,))
+                self.action_space = gym.spaces.Discrete(2)
+
+            def step(self, action):
+                return self.observation_space.sample(), 0.0, False, False, {}
+
+            def reset(self, **kwargs):
+                return self.observation_space.sample(), {}
+
+        ENV_REGISTRY["test-env-v99"] = _TestEnv
+
+        result = resolve_env_id("test-env-v99")
+        assert result == "test-env-v99"
+        # Should now be in gymnasium registry
+        assert "test-env-v99" in gym.envs.registry
+
+        # Clean up
+        del gym.envs.registry["test-env-v99"]
+
+    def test_resolve_env_passthrough_for_standard_envs(self) -> None:
+        from rlox.trainer import resolve_env_id
+
+        result = resolve_env_id("CartPole-v1")
+        assert result == "CartPole-v1"
+
+    def test_resolve_env_idempotent(self) -> None:
+        """Calling resolve_env_id twice does not fail."""
+        import gymnasium as gym
+        from rlox.plugins import ENV_REGISTRY
+        from rlox.trainer import resolve_env_id
+
+        class _TestEnv2(gym.Env):
+            def __init__(self, **kwargs):
+                super().__init__()
+                self.observation_space = gym.spaces.Box(-1, 1, shape=(2,))
+                self.action_space = gym.spaces.Discrete(2)
+
+            def step(self, action):
+                return self.observation_space.sample(), 0.0, False, False, {}
+
+            def reset(self, **kwargs):
+                return self.observation_space.sample(), {}
+
+        ENV_REGISTRY["test-env-v100"] = _TestEnv2
+        resolve_env_id("test-env-v100")
+        resolve_env_id("test-env-v100")  # Should not raise
+
+        del gym.envs.registry["test-env-v100"]

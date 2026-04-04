@@ -44,6 +44,34 @@ def _accepts_param(cls: type, param: str) -> bool:
         return False
 
 
+def resolve_env_id(env_id: str) -> str:
+    """If *env_id* is in ENV_REGISTRY and not in gymnasium, register it.
+
+    This bridges the plugin registry with gymnasium so that algorithms
+    can continue to call ``gym.make(env_id)`` transparently.
+
+    Parameters
+    ----------
+    env_id : str
+        Environment identifier -- either a standard gymnasium env or a
+        name previously registered via ``@register_env``.
+
+    Returns
+    -------
+    str
+        The same *env_id*, now guaranteed to be resolvable by gymnasium
+        if it was in the plugin registry.
+    """
+    from rlox.plugins import ENV_REGISTRY
+
+    if env_id in ENV_REGISTRY:
+        import gymnasium as gym
+
+        if env_id not in gym.envs.registry:
+            gym.register(id=env_id, entry_point=ENV_REGISTRY[env_id])
+    return env_id
+
+
 # ---------------------------------------------------------------------------
 # Unified Trainer
 # ---------------------------------------------------------------------------
@@ -80,6 +108,9 @@ class Trainer:
         compile: bool = False,
     ):
         cfg = config or {}
+
+        # Resolve custom env: register with gymnasium if from plugin registry
+        env = resolve_env_id(env)
 
         # Resolve algorithm class
         if isinstance(algorithm, str):

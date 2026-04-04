@@ -371,6 +371,32 @@ class TestDeploy:
         )
         assert "my_config.yaml" in dockerfile
 
+    def test_dockerfile_has_multistage(self):
+        """Dockerfile uses multi-stage build (builder + runtime)."""
+        from rlox.deploy.docker import generate_dockerfile
+
+        dockerfile = generate_dockerfile(algo="ppo", env="CartPole-v1")
+        # Should have at least two FROM directives
+        from_count = dockerfile.count("FROM ")
+        assert from_count >= 2, f"Expected multi-stage build, found {from_count} FROM directive(s)"
+        assert "AS builder" in dockerfile or "as builder" in dockerfile
+
+    def test_dockerfile_has_healthcheck(self):
+        """Dockerfile includes a HEALTHCHECK instruction."""
+        from rlox.deploy.docker import generate_dockerfile
+
+        dockerfile = generate_dockerfile(algo="ppo", env="CartPole-v1")
+        assert "HEALTHCHECK" in dockerfile
+
+    def test_dockerfile_has_nonroot_user(self):
+        """Dockerfile runs as non-root user."""
+        from rlox.deploy.docker import generate_dockerfile
+
+        dockerfile = generate_dockerfile(algo="ppo", env="CartPole-v1")
+        assert "USER" in dockerfile
+        # Should have a non-root user directive
+        assert "useradd" in dockerfile.lower() or "adduser" in dockerfile.lower() or "USER rlox" in dockerfile
+
     def test_generate_k8s_job(self):
         """Generated K8s manifest is a valid dict with required fields."""
         from rlox.deploy.docker import generate_k8s_job
@@ -400,6 +426,54 @@ class TestDeploy:
         spec = manifest["spec"]["template"]["spec"]["containers"][0]
         assert "nvidia.com/gpu" in str(spec.get("resources", {}))
 
+    def test_k8s_job_has_volume_claim(self):
+        """K8s job includes a PVC for checkpoint storage."""
+        from rlox.deploy.docker import generate_k8s_job
+
+        manifest = generate_k8s_job(
+            name="rlox-vol",
+            image="rlox:latest",
+            config={"algo": "ppo"},
+        )
+        pod_spec = manifest["spec"]["template"]["spec"]
+        # Should have volumes and volumeMounts
+        assert "volumes" in pod_spec, "Job spec missing 'volumes'"
+        volume_names = [v["name"] for v in pod_spec["volumes"]]
+        assert "checkpoints" in volume_names or any("checkpoint" in v for v in volume_names)
+
+        container = pod_spec["containers"][0]
+        assert "volumeMounts" in container, "Container missing 'volumeMounts'"
+
+    def test_k8s_job_has_resource_requests(self):
+        """K8s job has resource requests/limits even without GPU."""
+        from rlox.deploy.docker import generate_k8s_job
+
+        manifest = generate_k8s_job(
+            name="rlox-res",
+            image="rlox:latest",
+            config={"algo": "ppo"},
+        )
+        container = manifest["spec"]["template"]["spec"]["containers"][0]
+        assert "resources" in container
+        assert "requests" in container["resources"]
+        assert "limits" in container["resources"]
+
+    def test_k8s_job_has_configmap(self):
+        """K8s job mounts training config as a ConfigMap volume."""
+        from rlox.deploy.docker import generate_k8s_job
+
+        manifest = generate_k8s_job(
+            name="rlox-cfg",
+            image="rlox:latest",
+            config={"algo": "ppo"},
+        )
+        pod_spec = manifest["spec"]["template"]["spec"]
+        volumes = pod_spec.get("volumes", [])
+        has_configmap = any(
+            "configMap" in v for v in volumes
+        )
+        assert has_configmap, "Job should mount config as ConfigMap volume"
+
     def test_sagemaker_estimator_constructs(self):
         """SageMakerEstimator can be instantiated."""
         from rlox.deploy.sagemaker import SageMakerEstimator
@@ -417,6 +491,27 @@ class TestDeploy:
 
         estimator = SageMakerEstimator(role="some-role")
         assert callable(getattr(estimator, "fit", None))
+
+    def test_sagemaker_entry_script_valid_python(self):
+        """Generated SageMaker entry script is valid Python."""
+        import ast
+        from rlox.deploy.sagemaker import generate_entry_script
+
+        script = generate_entry_script("s3://bucket/config.yaml")
+        assert isinstance(script, str)
+        # Should parse as valid Python
+        ast.parse(script)
+        # Should contain rlox import
+        assert "rlox" in script
+
+    def test_sagemaker_entry_script_is_a_file_path(self):
+        """SageMaker entry_point should be a file path, not a CLI command."""
+        from rlox.deploy.sagemaker import SageMakerEstimator
+
+        estimator = SageMakerEstimator(role="some-role")
+        # The entry_point property should return a .py path
+        entry = estimator.entry_point
+        assert entry.endswith(".py")
 
 
 # ============================================================================

@@ -5,10 +5,11 @@ on AWS SageMaker.
 """
 
 from rlox.deploy.docker import generate_dockerfile, generate_k8s_job
-from rlox.deploy.sagemaker import SageMakerEstimator
+from rlox.deploy.sagemaker import SageMakerEstimator, generate_entry_script
 
 __all__ = [
     "generate_dockerfile",
     "generate_k8s_job",
     "SageMakerEstimator",
+    "generate_entry_script",
 ]

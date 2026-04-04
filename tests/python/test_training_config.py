@@ -85,7 +85,7 @@ class TestTrainingConfigTOML:
         assert loaded.callbacks == ["checkpoint"]
 
     def test_toml_file_is_parseable(self, tmp_path: Path) -> None:
-        import tomllib
+        tomllib = pytest.importorskip("tomllib", reason="requires Python 3.11+")
 
         cfg = TrainingConfig(algorithm="ppo", env_id="CartPole-v1", n_envs=4)
         path = tmp_path / "cfg.toml"

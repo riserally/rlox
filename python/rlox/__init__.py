@@ -171,6 +171,19 @@ from rlox.protocols import (
     MetaLearner,
 )
 
+# -- Wrappers (Visual RL, Language-Conditioned) --------------------------------
+from rlox.wrappers import (
+    FrameStack,
+    ImagePreprocess,
+    AtariWrapper,
+    DMControlWrapper,
+    LanguageWrapper,
+    GoalConditionedWrapper,
+)
+
+# -- Deploy (Docker, K8s, SageMaker) ------------------------------------------
+from rlox.deploy import generate_dockerfile, generate_k8s_job, SageMakerEstimator
+
 # -- Wave 4: Python wrappers --------------------------------------------------
 from rlox.augmentation import RandomShift
 from rlox.reward_shaping import PotentialShaping, GoalDistanceShaping
@@ -220,6 +233,21 @@ from rlox.checkpoint import Checkpoint
 
 # -- Hub -----------------------------------------------------------------------
 from rlox.hub import push_to_hub, load_from_hub
+
+# -- Plugins -------------------------------------------------------------------
+from rlox.plugins import (
+    ENV_REGISTRY,
+    BUFFER_REGISTRY,
+    REWARD_REGISTRY,
+    register_env,
+    register_buffer,
+    register_reward,
+    discover_plugins,
+    list_registered,
+)
+
+# -- Model Zoo -----------------------------------------------------------------
+from rlox.zoo import ModelZoo, ModelCard
 
 # -- Compile -------------------------------------------------------------------
 from rlox.compile import compile_policy
@@ -378,10 +406,33 @@ __all__ = [
     # Hub
     "push_to_hub",
     "load_from_hub",
+    # Plugins
+    "ENV_REGISTRY",
+    "BUFFER_REGISTRY",
+    "REWARD_REGISTRY",
+    "register_env",
+    "register_buffer",
+    "register_reward",
+    "discover_plugins",
+    "list_registered",
+    # Model Zoo
+    "ModelZoo",
+    "ModelCard",
     # Compile
     "compile_policy",
     # Distributed
     "MultiGPUTrainer",
     "RemoteEnvPool",
     "launch_elastic",
+    # Wrappers (Visual RL, Language-Conditioned)
+    "FrameStack",
+    "ImagePreprocess",
+    "AtariWrapper",
+    "DMControlWrapper",
+    "LanguageWrapper",
+    "GoalConditionedWrapper",
+    # Deploy
+    "generate_dockerfile",
+    "generate_k8s_job",
+    "SageMakerEstimator",
 ]

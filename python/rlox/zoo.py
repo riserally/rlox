@@ -13,7 +13,7 @@ Example
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import rlox
@@ -154,8 +154,8 @@ class ModelCard:
             "",
             "## Performance",
             "",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "| Metric | Value |",
+            "|--------|-------|",
             f"| Mean Return | {self.mean_return} |",
             f"| Std Return | {self.std_return} |",
             f"| Total Timesteps | {self.total_timesteps} |",

@@ -37,6 +37,7 @@ class TestBufferPreconditions:
 # Benchmark: Push throughput (H2)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchBufferPush:
     """Buffer push throughput benchmarks."""
 
@@ -92,6 +93,7 @@ class TestBenchBufferPush:
 # Benchmark: Sample latency (H2)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchBufferSample:
     """Buffer sample latency benchmarks."""
 
@@ -125,6 +127,7 @@ class TestBenchBufferSample:
 # Benchmark: Zero-copy validation (H5)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchZeroCopy:
     """Validate zero-copy tensor bridge."""
 
@@ -181,6 +184,7 @@ class TestBenchZeroCopy:
 # Benchmark: Variable-length sequence storage (H7)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchVarLenStorage:
     """Variable-length sequence storage benchmarks."""
 

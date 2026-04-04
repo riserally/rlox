@@ -118,6 +118,7 @@ class TestGymnasiumEquivalence:
 # Benchmark: Single CartPole step latency
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchSingleStep:
     """Benchmark and validate single environment step latency."""
 
@@ -210,6 +211,7 @@ class TestBenchSingleStep:
 # Benchmark: VecEnv parallel stepping throughput
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchVecEnvThroughput:
     """Benchmark vectorized environment stepping."""
 
@@ -314,6 +316,7 @@ class TestBenchVecEnvThroughput:
 # Benchmark: VecEnv reset throughput
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchVecEnvReset:
     """Benchmark environment reset throughput."""
 
@@ -340,6 +343,7 @@ class TestBenchVecEnvReset:
 # Benchmark: Bridge overhead measurement
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchBridgeOverhead:
     """Measure PyO3 bridge overhead: rlox native vs rlox GymEnv wrapper."""
 
@@ -387,6 +391,7 @@ class TestBenchBridgeOverhead:
 # Benchmark: SB3 comparison (if available)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchSB3Comparison:
     """Compare rlox VecEnv against SB3 DummyVecEnv and SubprocVecEnv."""
 

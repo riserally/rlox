@@ -1,3 +1,4 @@
+import pytest
 """TDD tests for the benchmark framework itself.
 
 These validate that the benchmarking harness works correctly before
@@ -18,6 +19,7 @@ from conftest import BenchmarkResult, ComparisonResult, timed_run, system_info
 # BenchmarkResult tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchmarkResult:
     def test_empty_result(self):
         r = BenchmarkResult(name="test", category="unit", framework="rlox")

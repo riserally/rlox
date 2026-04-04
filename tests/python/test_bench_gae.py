@@ -94,6 +94,7 @@ class TestGAEPreconditions:
 # Benchmark: GAE computation time (H3)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchGAEComputation:
     """GAE computation benchmarks."""
 

@@ -64,6 +64,7 @@ class TestLLMPreconditions:
 # Benchmark: GRPO advantage computation (H6)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchGRPOAdvantages:
 
     @pytest.mark.parametrize("n_prompts,k_completions", [
@@ -114,6 +115,7 @@ class TestBenchGRPOAdvantages:
 # Benchmark: Token-level KL divergence (H8)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestBenchTokenKL:
 
     @pytest.mark.parametrize("seq_len", [128, 512, 2048, 8192])

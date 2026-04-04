@@ -495,9 +495,7 @@ mod pendulum_vec_env_tests {
     #[test]
     fn pendulum_vec_env_step_flat() {
         let mut venv = make_pendulum_vec_env(4, 42);
-        let actions: Vec<Action> = (0..4)
-            .map(|_| Action::Continuous(vec![0.5]))
-            .collect();
+        let actions: Vec<Action> = (0..4).map(|_| Action::Continuous(vec![0.5])).collect();
         let batch = venv.step_all_flat(&actions).unwrap();
         assert!(batch.obs.is_empty());
         assert_eq!(batch.obs_flat.len(), 4 * 3);
@@ -509,9 +507,7 @@ mod pendulum_vec_env_tests {
         let mut venv = make_pendulum_vec_env(2, 42);
         // Step 300 times — past the 200 truncation limit
         for _ in 0..300 {
-            let actions: Vec<Action> = (0..2)
-                .map(|_| Action::Continuous(vec![1.0]))
-                .collect();
+            let actions: Vec<Action> = (0..2).map(|_| Action::Continuous(vec![1.0])).collect();
             let batch = venv.step_all(&actions).unwrap();
             assert_eq!(batch.obs.len(), 2);
         }

@@ -112,8 +112,7 @@ impl SequenceReplayBuffer {
         for window in &windows {
             for offset in 0..seq_len {
                 let idx = (window.ring_start + offset) % self.capacity;
-                let (obs, next_obs, action, reward, terminated, truncated) =
-                    self.buffer.get(idx);
+                let (obs, next_obs, action, reward, terminated, truncated) = self.buffer.get(idx);
                 batch.observations.extend_from_slice(obs);
                 batch.next_observations.extend_from_slice(next_obs);
                 batch.actions.extend_from_slice(action);
@@ -194,7 +193,7 @@ mod tests {
         let batch = buf.sample_sequences(1, 3, 42).unwrap();
         assert_eq!(batch.batch_size, 1);
         assert_eq!(batch.seq_len, 3);
-        assert_eq!(batch.observations.len(), 1 * 3 * 4);
+        assert_eq!(batch.observations.len(), 3 * 4);
         assert_eq!(batch.rewards.len(), 3);
     }
 
@@ -211,9 +210,7 @@ mod tests {
 
         // Each sequence should have rewards either all in [0,5) or all in [100,105)
         for seq_idx in 0..20 {
-            let rewards: Vec<f32> = (0..4)
-                .map(|t| batch.rewards[seq_idx * 4 + t])
-                .collect();
+            let rewards: Vec<f32> = (0..4).map(|t| batch.rewards[seq_idx * 4 + t]).collect();
             let all_low = rewards.iter().all(|&r| r < 50.0);
             let all_high = rewards.iter().all(|&r| r >= 50.0);
             assert!(
@@ -237,13 +234,12 @@ mod tests {
                 let next_obs_start = (seq_idx * seq_len + t) * obs_dim;
                 let obs_next_start = (seq_idx * seq_len + t + 1) * obs_dim;
 
-                let next_obs =
-                    &batch.next_observations[next_obs_start..next_obs_start + obs_dim];
-                let obs_t1 =
-                    &batch.observations[obs_next_start..obs_next_start + obs_dim];
+                let next_obs = &batch.next_observations[next_obs_start..next_obs_start + obs_dim];
+                let obs_t1 = &batch.observations[obs_next_start..obs_next_start + obs_dim];
 
                 assert_eq!(
-                    next_obs, obs_t1,
+                    next_obs,
+                    obs_t1,
                     "next_obs[{t}] != obs[{t_plus_1}] in seq {seq_idx}",
                     t_plus_1 = t + 1
                 );
@@ -340,8 +336,15 @@ mod tests {
         // Push a known episode
         for i in 0..5 {
             let val = (i + 1) as f32 * 10.0;
-            buf.push_slices(&[val, val], &[val + 1.0, val + 1.0], &[0.0], val, i == 4, false)
-                .unwrap();
+            buf.push_slices(
+                &[val, val],
+                &[val + 1.0, val + 1.0],
+                &[0.0],
+                val,
+                i == 4,
+                false,
+            )
+            .unwrap();
         }
 
         // Sample the entire episode

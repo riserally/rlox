@@ -16,12 +16,17 @@ Reference:
 from __future__ import annotations
 
 import copy
-from typing import Any, Self
+import sys
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing import TypeVar
+    Self = TypeVar("Self")
 
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from rlox.callbacks import Callback, CallbackList
@@ -364,7 +369,6 @@ class CalQL:
         cql_q2 = torch.logsumexp(cat_q2, dim=1).mean() - q2_data.mean()
 
         # Calibrated penalty: scale by max(Q - Q_cal, 0)
-        q_mean_data = (q1_data + q2_data) / 2
         cal_penalty = self._compute_calibrated_penalty(
             torch.logsumexp(cat_q1, dim=1),
             q1_data,

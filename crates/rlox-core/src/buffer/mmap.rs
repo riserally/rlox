@@ -770,10 +770,7 @@ mod tests {
             let r = batch.rewards[i];
             let obs_slice = &batch.observations[i * 3..(i + 1) * 3];
             for &v in obs_slice {
-                assert!(
-                    (v - r).abs() < 1e-6,
-                    "obs {v} should match reward {r}"
-                );
+                assert!((v - r).abs() < 1e-6, "obs {v} should match reward {r}");
             }
         }
     }
@@ -787,14 +784,18 @@ mod tests {
         for batch_idx in 0..3 {
             let base = batch_idx as f32 * 5.0;
             let n = 5;
-            let obs: Vec<f32> = (0..n).flat_map(|i| {
-                let v = base + i as f32;
-                vec![v, v + 0.1]
-            }).collect();
-            let next_obs: Vec<f32> = (0..n).flat_map(|i| {
-                let v = base + i as f32 + 100.0;
-                vec![v, v + 0.1]
-            }).collect();
+            let obs: Vec<f32> = (0..n)
+                .flat_map(|i| {
+                    let v = base + i as f32;
+                    vec![v, v + 0.1]
+                })
+                .collect();
+            let next_obs: Vec<f32> = (0..n)
+                .flat_map(|i| {
+                    let v = base + i as f32 + 100.0;
+                    vec![v, v + 0.1]
+                })
+                .collect();
             let actions: Vec<f32> = (0..n).map(|i| (base + i as f32) * 0.01).collect();
             let rewards: Vec<f32> = (0..n).map(|i| base + i as f32).collect();
             let terminated = vec![0.0f32; n];

@@ -72,7 +72,7 @@ def cmd_train(args):
         print(f"\nTraining complete. Final metrics: {metrics}")
 
         if args.save:
-            print(f"Note: --save is not supported with config-driven training yet")
+            print("Note: --save is not supported with config-driven training yet")
         return
 
     # Legacy arg-based path — require --algo and --env

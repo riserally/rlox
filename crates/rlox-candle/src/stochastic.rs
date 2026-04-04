@@ -22,6 +22,7 @@ pub struct CandleStochasticPolicy {
     device: Device,
     act_dim: usize,
     lr: f64,
+    #[allow(dead_code)]
     rng: ChaCha8Rng,
 }
 
@@ -115,7 +116,7 @@ impl CandleStochasticPolicy {
 
         let y_sq = y_t.sqr().nn_err()?;
         let one = Tensor::ones_like(&y_sq).nn_err()?;
-        let correction = ((&one - &y_sq).nn_err()? + 1e-6 as f64)
+        let correction = ((&one - &y_sq).nn_err()? + 1e-6_f64)
             .nn_err()?
             .log()
             .nn_err()?

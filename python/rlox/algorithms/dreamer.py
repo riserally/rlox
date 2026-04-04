@@ -923,7 +923,6 @@ class DreamerV3:
 
         total_recon_loss = torch.tensor(0.0)
         total_reward_loss = torch.tensor(0.0)
-        total_kl_loss = torch.tensor(0.0)
 
         for t in range(seq_len):
             obs_t = obs[:, t]

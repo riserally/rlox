@@ -11,8 +11,6 @@ import copy
 import random
 from typing import Any
 
-import numpy as np
-import torch
 
 from rlox.config import PBTConfig
 from rlox.trainer import ALGORITHM_REGISTRY

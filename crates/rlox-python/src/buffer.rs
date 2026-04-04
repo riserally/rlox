@@ -7,8 +7,8 @@ use rlox_core::buffer::columnar::ExperienceTable;
 use rlox_core::buffer::episode::EpisodeTracker;
 use rlox_core::buffer::extra_columns::ColumnHandle;
 use rlox_core::buffer::her::{HERBuffer, HERStrategy};
-use rlox_core::buffer::mmap::MmapReplayBuffer;
 use rlox_core::buffer::mixed;
+use rlox_core::buffer::mmap::MmapReplayBuffer;
 use rlox_core::buffer::offline::OfflineDatasetBuffer;
 use rlox_core::buffer::priority::PrioritizedReplayBuffer;
 use rlox_core::buffer::ringbuf::ReplayBuffer;
@@ -1095,7 +1095,10 @@ impl PyHERBuffer {
         seed: u64,
     ) -> PyResult<Bound<'py, PyDict>> {
         let batch = py
-            .allow_threads(|| self.inner.sample_with_relabeling(batch_size, her_ratio, seed))
+            .allow_threads(|| {
+                self.inner
+                    .sample_with_relabeling(batch_size, her_ratio, seed)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let builder = BatchDictBuilder::new(py);
@@ -1132,7 +1135,9 @@ pub fn py_sample_mixed<'py>(
     seed: u64,
 ) -> PyResult<Bound<'py, PyDict>> {
     let batch = py
-        .allow_threads(|| mixed::sample_mixed(&buffer_a.inner, &buffer_b.inner, ratio, batch_size, seed))
+        .allow_threads(|| {
+            mixed::sample_mixed(&buffer_a.inner, &buffer_b.inner, ratio, batch_size, seed)
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     let builder = BatchDictBuilder::new(py);

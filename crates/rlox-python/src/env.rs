@@ -248,9 +248,9 @@ fn parse_actions(py: Python<'_>, obj: &PyObject, n_envs: usize) -> PyResult<Vec<
 
     // Try 1D f32 array: (n_envs,) -> single-dim continuous
     if let Ok(arr1d) = obj.extract::<PyReadonlyArray1<f32>>(py) {
-        let slice = arr1d.as_slice().map_err(|e| {
-            PyRuntimeError::new_err(format!("Failed to read 1D f32 array: {}", e))
-        })?;
+        let slice = arr1d
+            .as_slice()
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to read 1D f32 array: {}", e)))?;
         if slice.len() != n_envs {
             return Err(PyValueError::new_err(format!(
                 "actions 1D array has {} elements but VecEnv has {} envs",
@@ -258,10 +258,7 @@ fn parse_actions(py: Python<'_>, obj: &PyObject, n_envs: usize) -> PyResult<Vec<
                 n_envs
             )));
         }
-        let actions: Vec<Action> = slice
-            .iter()
-            .map(|&v| Action::Continuous(vec![v]))
-            .collect();
+        let actions: Vec<Action> = slice.iter().map(|&v| Action::Continuous(vec![v])).collect();
         return Ok(actions);
     }
 

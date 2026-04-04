@@ -95,6 +95,7 @@ impl<B: Backend> Clone for SquashedGaussianModel<B> {
     }
 }
 
+#[allow(dead_code)]
 pub struct BurnStochasticPolicy<B: AutodiffBackend> {
     model: SquashedGaussianModel<B>,
     optimizer: OptimizerAdaptor<Adam, SquashedGaussianParams<B>, B>,

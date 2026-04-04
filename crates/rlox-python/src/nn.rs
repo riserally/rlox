@@ -261,6 +261,7 @@ pub struct PyCandleCollector {
     shared: SharedPolicy,
     pipeline: Pipeline,
     collector: Option<AsyncCollector>,
+    #[allow(dead_code)]
     obs_dim: usize,
 }
 

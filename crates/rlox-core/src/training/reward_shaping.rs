@@ -46,17 +46,13 @@ impl RewardTransform for PBRSTransform {
             .iter()
             .find(|(name, _)| *name == "phi_current")
             .map(|(_, v)| *v)
-            .ok_or_else(|| {
-                RloxError::BufferError("missing 'phi_current' in extras".into())
-            })?;
+            .ok_or_else(|| RloxError::BufferError("missing 'phi_current' in extras".into()))?;
         let phi_next = context
             .extras
             .iter()
             .find(|(name, _)| *name == "phi_next")
             .map(|(_, v)| *v)
-            .ok_or_else(|| {
-                RloxError::BufferError("missing 'phi_next' in extras".into())
-            })?;
+            .ok_or_else(|| RloxError::BufferError("missing 'phi_next' in extras".into()))?;
 
         shape_rewards_pbrs(rewards, phi_current, phi_next, context.gamma, context.dones)
     }
@@ -112,9 +108,7 @@ pub fn shape_rewards_pbrs(
         if dones[i] == 1.0 {
             output.push(rewards[i]);
         } else {
-            output.push(
-                rewards[i] + gamma * potentials_next[i] - potentials_current[i],
-            );
+            output.push(rewards[i] + gamma * potentials_next[i] - potentials_current[i]);
         }
     }
     Ok(output)
@@ -150,7 +144,7 @@ pub fn compute_goal_distance_potentials(
             got: "obs_dim=0".into(),
         });
     }
-    if observations.len() % obs_dim != 0 {
+    if !observations.len().is_multiple_of(obs_dim) {
         return Err(RloxError::ShapeMismatch {
             expected: format!("observations.len() divisible by obs_dim={obs_dim}"),
             got: format!("observations.len()={}", observations.len()),
@@ -246,14 +240,11 @@ mod tests {
         let gamma = 0.99;
         // No dones (all within episode)
         let dones = &[0.0, 0.0, 0.0, 0.0, 0.0];
-        let shaped =
-            shape_rewards_pbrs(rewards, phi, phi_next, gamma, dones).unwrap();
+        let shaped = shape_rewards_pbrs(rewards, phi, phi_next, gamma, dones).unwrap();
         let sum_raw: f64 = rewards.iter().sum();
         let sum_shaped: f64 = shaped.iter().sum();
         // Telescoping sum: sum(gamma*phi_next[i] - phi[i]) for non-done steps
-        let shaping_sum: f64 = (0..5)
-            .map(|i| gamma * phi_next[i] - phi[i])
-            .sum::<f64>();
+        let shaping_sum: f64 = (0..5).map(|i| gamma * phi_next[i] - phi[i]).sum::<f64>();
         assert!(
             (sum_shaped - (sum_raw + shaping_sum)).abs() < 1e-10,
             "sum_shaped={sum_shaped}, expected {}",
@@ -263,7 +254,13 @@ mod tests {
 
     #[test]
     fn test_pbrs_length_mismatch_errors() {
-        let result = shape_rewards_pbrs(&[1.0, 2.0, 3.0], &[0.0, 0.0], &[0.0, 0.0], 0.99, &[0.0, 0.0]);
+        let result = shape_rewards_pbrs(
+            &[1.0, 2.0, 3.0],
+            &[0.0, 0.0],
+            &[0.0, 0.0],
+            0.99,
+            &[0.0, 0.0],
+        );
         assert!(matches!(result, Err(RloxError::ShapeMismatch { .. })));
     }
 
@@ -302,10 +299,8 @@ mod tests {
     fn test_goal_distance_scale_factor() {
         let goal = &[0.0];
         let observations = &[1.0, 0.0]; // obs_dim=2, goal at [0..1]
-        let phi_1 =
-            compute_goal_distance_potentials(observations, goal, 2, 0, 1, 1.0).unwrap();
-        let phi_2 =
-            compute_goal_distance_potentials(observations, goal, 2, 0, 1, 2.0).unwrap();
+        let phi_1 = compute_goal_distance_potentials(observations, goal, 2, 0, 1, 1.0).unwrap();
+        let phi_2 = compute_goal_distance_potentials(observations, goal, 2, 0, 1, 2.0).unwrap();
         assert!(
             (phi_2[0] - 2.0 * phi_1[0]).abs() < 1e-10,
             "scale=2 should double potential: phi_1={}, phi_2={}",

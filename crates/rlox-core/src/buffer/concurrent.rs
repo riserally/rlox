@@ -4,8 +4,8 @@ use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
-use crate::error::RloxError;
 use super::ringbuf::SampledBatch;
+use crate::error::RloxError;
 
 /// Lock-free MPSC (multi-producer, single-consumer) replay buffer.
 ///
@@ -380,8 +380,15 @@ mod tests {
                 std::thread::spawn(move || {
                     for i in 0..pushes_per_thread {
                         let val = (t * pushes_per_thread + i) as f32;
-                        buf.push(&[val, val], &[val + 1.0, val + 1.0], &[val], val, false, false)
-                            .unwrap();
+                        buf.push(
+                            &[val, val],
+                            &[val + 1.0, val + 1.0],
+                            &[val],
+                            val,
+                            false,
+                            false,
+                        )
+                        .unwrap();
                     }
                 })
             })

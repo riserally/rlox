@@ -6,6 +6,7 @@ use rlox_nn::{Activation, ContinuousQFunction, MLPConfig, NNError, TensorData, T
 use crate::convert::*;
 use crate::mlp::MLP;
 
+#[allow(dead_code)]
 pub struct CandleTwinQ {
     q1: MLP,
     q2: MLP,

@@ -116,7 +116,12 @@ mod tests {
     use super::*;
     use crate::buffer::sample_record;
 
-    fn make_buffer_with_reward(capacity: usize, obs_dim: usize, n: usize, reward: f32) -> ReplayBuffer {
+    fn make_buffer_with_reward(
+        capacity: usize,
+        obs_dim: usize,
+        n: usize,
+        reward: f32,
+    ) -> ReplayBuffer {
         let mut buf = ReplayBuffer::new(capacity, obs_dim, 1);
         for _ in 0..n {
             let mut r = sample_record(obs_dim);
@@ -177,7 +182,7 @@ mod tests {
         let batch = sample_mixed(&buf_a, &buf_b, 0.5, 32, 42).unwrap();
         assert_eq!(batch.observations.len(), 32 * 4);
         assert_eq!(batch.next_observations.len(), 32 * 4);
-        assert_eq!(batch.actions.len(), 32 * 1);
+        assert_eq!(batch.actions.len(), 32);
         assert_eq!(batch.rewards.len(), 32);
         assert_eq!(batch.terminated.len(), 32);
     }

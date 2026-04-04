@@ -30,7 +30,6 @@ from rlox.logging import LoggerCallback
 from rlox.policies import DiscretePolicy
 from rlox.trainer import register_algorithm
 from rlox.utils import detect_env_spaces as _detect_env_spaces
-from rlox.vec_normalize import VecNormalize
 
 
 _RUST_NATIVE_ENVS = {"CartPole-v1", "CartPole"}

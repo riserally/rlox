@@ -6,6 +6,7 @@ use rlox_nn::{Activation, MLPConfig, NNError, QFunction, TensorData};
 use crate::convert::*;
 use crate::mlp::MLP;
 
+#[allow(dead_code)]
 pub struct CandleDQN {
     q_network: MLP,
     target_network: MLP,
@@ -41,7 +42,7 @@ impl CandleDQN {
 
         // Copy weights from q to target
         let q_data = varmap.data().lock().unwrap();
-        let mut t_data = target_varmap.data().lock().unwrap();
+        let t_data = target_varmap.data().lock().unwrap();
         for (name, var) in q_data.iter() {
             if let Some(tvar) = t_data.get(name) {
                 tvar.set(&var.as_tensor().clone()).unwrap();

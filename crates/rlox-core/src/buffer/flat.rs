@@ -14,8 +14,8 @@ use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
-use crate::error::RloxError;
 use super::ringbuf::ReplayBuffer;
+use crate::error::RloxError;
 
 /// A sampled batch stored as flat contiguous `f32` arrays.
 ///
@@ -52,11 +52,7 @@ impl ReplayBuffer {
     ///
     /// Uses `ChaCha8Rng` seeded with `seed` for deterministic cross-platform
     /// reproducibility.
-    pub fn sample_flat(
-        &self,
-        batch_size: usize,
-        seed: u64,
-    ) -> Result<FlatBatch, RloxError> {
+    pub fn sample_flat(&self, batch_size: usize, seed: u64) -> Result<FlatBatch, RloxError> {
         if self.is_empty() {
             return Err(RloxError::BufferError(
                 "cannot sample from empty buffer".into(),
@@ -235,10 +231,16 @@ mod tests {
         // Sample all — terminated/truncated should only be 0.0 or 1.0.
         let batch = buf.sample_flat(2, 0).unwrap();
         for &v in &batch.terminated {
-            assert!(v == 0.0 || v == 1.0, "terminated must be 0.0 or 1.0, got {v}");
+            assert!(
+                v == 0.0 || v == 1.0,
+                "terminated must be 0.0 or 1.0, got {v}"
+            );
         }
         for &v in &batch.truncated {
-            assert!(v == 0.0 || v == 1.0, "truncated must be 0.0 or 1.0, got {v}");
+            assert!(
+                v == 0.0 || v == 1.0,
+                "truncated must be 0.0 or 1.0, got {v}"
+            );
         }
     }
 

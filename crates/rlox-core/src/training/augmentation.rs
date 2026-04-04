@@ -123,13 +123,9 @@ pub fn random_shift_batch(
                     let src_x = x as isize + dx as isize - pad as isize;
 
                     let out_idx = ch_offset + y * width + x;
-                    if src_y >= 0
-                        && src_y < height as isize
-                        && src_x >= 0
-                        && src_x < width as isize
+                    if src_y >= 0 && src_y < height as isize && src_x >= 0 && src_x < width as isize
                     {
-                        let src_idx =
-                            ch_offset + src_y as usize * width + src_x as usize;
+                        let src_idx = ch_offset + src_y as usize * width + src_x as usize;
                         output[out_idx] = images[src_idx];
                     }
                     // else: already 0.0 from vec initialization

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -178,8 +178,6 @@ class RemoteEnvPool:
             worker_actions = flat_actions[offset * act_dim:(offset + worker_envs) * act_dim]
             offset += worker_envs
 
-            import grpc
-            from google.protobuf.descriptor_pool import DescriptorPool
 
             step_req = worker.stub._step_request_class(
                 actions=worker_actions,
@@ -292,7 +290,6 @@ def _build_env_stub(channel: Any) -> Any:
     Uses the low-level ``grpc.channel_unary_unary`` API with manual
     protobuf serialization matching ``env.proto``.
     """
-    import grpc
 
     # We use grpc.protos_and_services if available, otherwise manual stubs.
     # For maximum compatibility, build manual unary-unary callables.

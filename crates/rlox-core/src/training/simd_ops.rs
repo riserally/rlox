@@ -206,12 +206,12 @@ pub fn average_weights_simd(vectors: &[&[f32]]) -> Vec<f32> {
     let remainder = dim % 8;
     let (result_chunks, result_rest) = result.split_at_mut(chunks * 8);
     for chunk in result_chunks.chunks_exact_mut(8) {
-        for i in 0..8 {
-            chunk[i] /= n;
+        for item in chunk.iter_mut().take(8) {
+            *item /= n;
         }
     }
-    for i in 0..remainder {
-        result_rest[i] /= n;
+    for item in result_rest.iter_mut().take(remainder) {
+        *item /= n;
     }
 
     result
@@ -368,8 +368,7 @@ mod tests {
         let dones: Vec<f64> = (0..n).map(|i| if i == 5 { 1.0 } else { 0.0 }).collect();
 
         let simd_result = pbrs_simd(&rewards, &phi, &phi_next, gamma, &dones);
-        let scalar_result =
-            shape_rewards_pbrs(&rewards, &phi, &phi_next, gamma, &dones).unwrap();
+        let scalar_result = shape_rewards_pbrs(&rewards, &phi, &phi_next, gamma, &dones).unwrap();
 
         for (i, (a, b)) in simd_result.iter().zip(scalar_result.iter()).enumerate() {
             assert!(

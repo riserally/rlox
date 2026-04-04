@@ -18,12 +18,7 @@ pub trait WeightUpdate: Send + Sync {
     ///
     /// # Errors
     /// Returns `ShapeMismatch` if `target.len() != source.len()`.
-    fn apply(
-        &self,
-        target: &mut [f32],
-        source: &[f32],
-        lr: f32,
-    ) -> Result<(), RloxError>;
+    fn apply(&self, target: &mut [f32], source: &[f32], lr: f32) -> Result<(), RloxError>;
 
     /// Human-readable name.
     fn name(&self) -> &str;
@@ -34,12 +29,7 @@ pub struct ReptileUpdate;
 
 impl WeightUpdate for ReptileUpdate {
     #[inline]
-    fn apply(
-        &self,
-        target: &mut [f32],
-        source: &[f32],
-        lr: f32,
-    ) -> Result<(), RloxError> {
+    fn apply(&self, target: &mut [f32], source: &[f32], lr: f32) -> Result<(), RloxError> {
         reptile_update(target, source, lr)
     }
 
@@ -53,12 +43,7 @@ pub struct PolyakUpdate;
 
 impl WeightUpdate for PolyakUpdate {
     #[inline]
-    fn apply(
-        &self,
-        target: &mut [f32],
-        source: &[f32],
-        lr: f32,
-    ) -> Result<(), RloxError> {
+    fn apply(&self, target: &mut [f32], source: &[f32], lr: f32) -> Result<(), RloxError> {
         polyak_update(target, source, lr)
     }
 
@@ -96,11 +81,7 @@ pub fn reptile_update(
 ///
 /// Used by SAC/TD3 for target network updates. Operates in-place on `target`.
 #[inline]
-pub fn polyak_update(
-    target: &mut [f32],
-    source: &[f32],
-    tau: f32,
-) -> Result<(), RloxError> {
+pub fn polyak_update(target: &mut [f32], source: &[f32], tau: f32) -> Result<(), RloxError> {
     if target.len() != source.len() {
         return Err(RloxError::ShapeMismatch {
             expected: format!("target.len()={}", target.len()),

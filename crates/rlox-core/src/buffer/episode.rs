@@ -100,13 +100,7 @@ impl EpisodeTracker {
     #[inline]
     pub fn invalidate_overwritten(&mut self, write_pos: usize, count: usize) {
         self.episodes.retain(|ep| {
-            !ring_range_overlaps(
-                ep.start,
-                ep.length,
-                write_pos,
-                count,
-                self.ring_capacity,
-            )
+            !ring_range_overlaps(ep.start, ep.length, write_pos, count, self.ring_capacity)
         });
 
         // Also invalidate current in-progress episode if it overlaps
@@ -534,15 +528,13 @@ mod tests {
                 n_pushes in 1usize..300,
             ) {
                 let mut tracker = EpisodeTracker::new(cap);
-                let mut write_pos = 0;
-                for i in 0..n_pushes {
+                for (write_pos, i) in (0..n_pushes).enumerate() {
                     let done = i % 7 == 6; // episodes of ~7 steps
                     if write_pos >= cap {
                         // Wrapping: invalidate the position about to be overwritten
                         tracker.invalidate_overwritten(write_pos % cap, 1);
                     }
                     tracker.notify_push(write_pos % cap, done);
-                    write_pos += 1;
                 }
                 // All remaining episodes should have valid start positions
                 for ep in tracker.episodes() {

@@ -72,8 +72,8 @@ class PPOBuilder:
         self._callbacks = cbs
         return self
 
-    def logger(self, l) -> PPOBuilder:
-        self._logger = l
+    def logger(self, log) -> PPOBuilder:
+        self._logger = log
         return self
 
     def learning_rate(self, lr: float) -> PPOBuilder:
@@ -181,8 +181,8 @@ class SACBuilder:
         self._callbacks = cbs
         return self
 
-    def logger(self, l) -> SACBuilder:
-        self._logger = l
+    def logger(self, log) -> SACBuilder:
+        self._logger = log
         return self
 
     def learning_rate(self, lr: float) -> SACBuilder:

@@ -1,0 +1,379 @@
+{
+  "system": {
+    "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.36",
+    "python_version": "3.12.13 (main, Mar 17 2026, 02:20:16) [GCC 12.2.0]",
+    "cpu": "unknown",
+    "cpu_count": 14,
+    "numpy_version": "1.26.4",
+    "torch_version": "2.5.1",
+    "cuda_available": false,
+    "rlox_available": true
+  },
+  "timestamp": "2026-03-24T13:13:40",
+  "results": [
+    {
+      "name": "actor_critic_act_1",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 1,
+        "obs_dim": 4,
+        "n_actions": 2
+      },
+      "median_ns": 1378750.0,
+      "mean_ns": 1349679.585,
+      "p25_ns": 989354.25,
+      "p75_ns": 1760958.5,
+      "p99_ns": 2205366.6599999997,
+      "min_ns": 536250.0,
+      "max_ns": 2379916.0,
+      "iqr_ns": 771604.25,
+      "n_samples": 200
+    },
+    {
+      "name": "actor_critic_act_32",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 32,
+        "obs_dim": 4,
+        "n_actions": 2
+      },
+      "median_ns": 2433270.5,
+      "mean_ns": 2349348.57,
+      "p25_ns": 2049729.25,
+      "p75_ns": 2657542.25,
+      "p99_ns": 3385477.0,
+      "min_ns": 922167.0,
+      "max_ns": 3549834.0,
+      "iqr_ns": 607813.0,
+      "n_samples": 200
+    },
+    {
+      "name": "actor_critic_act_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256,
+        "obs_dim": 4,
+        "n_actions": 2
+      },
+      "median_ns": 375771.0,
+      "mean_ns": 614821.285,
+      "p25_ns": 352593.75,
+      "p75_ns": 428187.75,
+      "p99_ns": 4005957.919999998,
+      "min_ns": 270375.0,
+      "max_ns": 4247125.0,
+      "iqr_ns": 75594.0,
+      "n_samples": 200
+    },
+    {
+      "name": "ppo_step_64",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 64
+      },
+      "median_ns": 5646229.0,
+      "mean_ns": 5311128.34,
+      "p25_ns": 4597229.5,
+      "p75_ns": 6436250.0,
+      "p99_ns": 7121375.330000003,
+      "min_ns": 1480791.0,
+      "max_ns": 7587500.0,
+      "iqr_ns": 1839020.5,
+      "n_samples": 100
+    },
+    {
+      "name": "ppo_step_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 1617041.5,
+      "mean_ns": 3590307.51,
+      "p25_ns": 1232114.75,
+      "p75_ns": 4427854.0,
+      "p99_ns": 27911897.410000023,
+      "min_ns": 1128292.0,
+      "max_ns": 32080333.0,
+      "iqr_ns": 3195739.25,
+      "n_samples": 100
+    },
+    {
+      "name": "dqn_q_values_1",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 1
+      },
+      "median_ns": 694104.0,
+      "mean_ns": 665929.375,
+      "p25_ns": 344593.25,
+      "p75_ns": 811062.75,
+      "p99_ns": 1217526.3399999996,
+      "min_ns": 215291.0,
+      "max_ns": 1251916.0,
+      "iqr_ns": 466469.5,
+      "n_samples": 200
+    },
+    {
+      "name": "dqn_q_values_32",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 32
+      },
+      "median_ns": 748229.0,
+      "mean_ns": 795484.76,
+      "p25_ns": 555832.75,
+      "p75_ns": 893041.75,
+      "p99_ns": 1468132.91,
+      "min_ns": 309625.0,
+      "max_ns": 1490500.0,
+      "iqr_ns": 337209.0,
+      "n_samples": 200
+    },
+    {
+      "name": "dqn_q_values_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 125083.5,
+      "mean_ns": 556806.87,
+      "p25_ns": 117155.75,
+      "p75_ns": 1410458.75,
+      "p99_ns": 1808591.4899999998,
+      "min_ns": 112833.0,
+      "max_ns": 1843542.0,
+      "iqr_ns": 1293303.0,
+      "n_samples": 200
+    },
+    {
+      "name": "dqn_td_step_64",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 64
+      },
+      "median_ns": 1398333.5,
+      "mean_ns": 1354205.42,
+      "p25_ns": 665937.25,
+      "p75_ns": 1841552.25,
+      "p99_ns": 2304216.66,
+      "min_ns": 542792.0,
+      "max_ns": 2325666.0,
+      "iqr_ns": 1175615.0,
+      "n_samples": 100
+    },
+    {
+      "name": "dqn_td_step_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 460062.5,
+      "mean_ns": 823748.32,
+      "p25_ns": 441646.0,
+      "p75_ns": 537531.5,
+      "p99_ns": 4381494.500000001,
+      "min_ns": 408292.0,
+      "max_ns": 4475792.0,
+      "iqr_ns": 95885.5,
+      "n_samples": 100
+    },
+    {
+      "name": "sac_sample_1",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 1
+      },
+      "median_ns": 1103333.5,
+      "mean_ns": 1623305.43,
+      "p25_ns": 728156.75,
+      "p75_ns": 2819552.25,
+      "p99_ns": 3781934.7499999986,
+      "min_ns": 502916.0,
+      "max_ns": 4290750.0,
+      "iqr_ns": 2091395.5,
+      "n_samples": 200
+    },
+    {
+      "name": "sac_sample_32",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 32
+      },
+      "median_ns": 1291271.5,
+      "mean_ns": 1671504.025,
+      "p25_ns": 989905.75,
+      "p75_ns": 2681270.75,
+      "p99_ns": 3258981.079999999,
+      "min_ns": 622792.0,
+      "max_ns": 3379042.0,
+      "iqr_ns": 1691365.0,
+      "n_samples": 200
+    },
+    {
+      "name": "sac_sample_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 384854.0,
+      "mean_ns": 742748.115,
+      "p25_ns": 350395.75,
+      "p75_ns": 518125.25,
+      "p99_ns": 4106930.6599999997,
+      "min_ns": 338166.0,
+      "max_ns": 4132500.0,
+      "iqr_ns": 167729.5,
+      "n_samples": 200
+    },
+    {
+      "name": "td3_act_1",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 1
+      },
+      "median_ns": 1051125.0,
+      "mean_ns": 1383544.815,
+      "p25_ns": 633208.25,
+      "p75_ns": 2198739.5,
+      "p99_ns": 3008888.75,
+      "min_ns": 416375.0,
+      "max_ns": 3044959.0,
+      "iqr_ns": 1565531.25,
+      "n_samples": 200
+    },
+    {
+      "name": "td3_act_32",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 32
+      },
+      "median_ns": 485833.5,
+      "mean_ns": 1015381.07,
+      "p25_ns": 397218.5,
+      "p75_ns": 2010219.25,
+      "p99_ns": 2644913.8399999994,
+      "min_ns": 324791.0,
+      "max_ns": 3604125.0,
+      "iqr_ns": 1613000.75,
+      "n_samples": 200
+    },
+    {
+      "name": "td3_act_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 277583.5,
+      "mean_ns": 1051416.515,
+      "p25_ns": 244562.5,
+      "p75_ns": 1311468.75,
+      "p99_ns": 3788310.92,
+      "min_ns": 230708.0,
+      "max_ns": 3843750.0,
+      "iqr_ns": 1066906.25,
+      "n_samples": 200
+    },
+    {
+      "name": "twin_q_1",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 1
+      },
+      "median_ns": 2832958.0,
+      "mean_ns": 2899594.385,
+      "p25_ns": 2157969.0,
+      "p75_ns": 3499999.75,
+      "p99_ns": 6028937.67,
+      "min_ns": 894833.0,
+      "max_ns": 7066625.0,
+      "iqr_ns": 1342030.75,
+      "n_samples": 200
+    },
+    {
+      "name": "twin_q_32",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 32
+      },
+      "median_ns": 196917.0,
+      "mean_ns": 338965.43,
+      "p25_ns": 191500.0,
+      "p75_ns": 220427.0,
+      "p99_ns": 2769847.09,
+      "min_ns": 186667.0,
+      "max_ns": 2806792.0,
+      "iqr_ns": 28927.0,
+      "n_samples": 200
+    },
+    {
+      "name": "twin_q_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 513667.0,
+      "mean_ns": 852072.725,
+      "p25_ns": 439562.5,
+      "p75_ns": 840239.75,
+      "p99_ns": 4195362.999999999,
+      "min_ns": 414459.0,
+      "max_ns": 6043209.0,
+      "iqr_ns": 400677.25,
+      "n_samples": 200
+    },
+    {
+      "name": "critic_step_64",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 64
+      },
+      "median_ns": 1203937.0,
+      "mean_ns": 1999936.62,
+      "p25_ns": 1096229.5,
+      "p75_ns": 2936999.75,
+      "p99_ns": 5587812.080000005,
+      "min_ns": 993083.0,
+      "max_ns": 6435458.0,
+      "iqr_ns": 1840770.25,
+      "n_samples": 100
+    },
+    {
+      "name": "critic_step_256",
+      "category": "nn_backends",
+      "framework": "pytorch",
+      "params": {
+        "batch_size": 256
+      },
+      "median_ns": 2848166.5,
+      "mean_ns": 4307803.75,
+      "p25_ns": 2005260.25,
+      "p75_ns": 5500927.5,
+      "p99_ns": 29331517.000000004,
+      "min_ns": 1627500.0,
+      "max_ns": 29774542.0,
+      "iqr_ns": 3495667.25,
+      "n_samples": 100
+    }
+  ],
+  "comparisons": []
+}

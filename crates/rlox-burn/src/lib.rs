@@ -1,3 +1,7 @@
+// Burn's `.into()` on Device types is needed for backend abstraction but
+// clippy flags them as useless on concrete backends.
+#![allow(clippy::useless_conversion)]
+
 //! rlox-burn: Burn backend for neural network inference and training.
 //!
 //! Implements the [`rlox_nn`] traits (`ActorCritic`, `QFunction`,

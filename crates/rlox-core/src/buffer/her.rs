@@ -123,7 +123,7 @@ impl HERBuffer {
         her_ratio: f32,
         seed: u64,
     ) -> Result<SampledBatch, RloxError> {
-        if self.buffer.len() == 0 {
+        if self.buffer.is_empty() {
             return Err(RloxError::BufferError("buffer is empty".into()));
         }
 
@@ -204,8 +204,8 @@ impl HERBuffer {
                 .copy_from_slice(new_goal);
 
             // Compute new reward based on achieved goal in next_obs vs new desired goal
-            let achieved_in_next = &next_obs
-                [self.achieved_goal_start..self.achieved_goal_start + self.goal_dim];
+            let achieved_in_next =
+                &next_obs[self.achieved_goal_start..self.achieved_goal_start + self.goal_dim];
             let new_reward = sparse_goal_reward(achieved_in_next, new_goal, self.goal_tolerance);
 
             batch.observations.extend_from_slice(&new_obs);
@@ -304,10 +304,10 @@ mod tests {
             obs_dim,
             1, // act_dim
             goal_dim,
-            core_dim,                // achieved_goal_start
-            core_dim + goal_dim,     // desired_goal_start
-            HERStrategy::default(),  // Future { k: 4 }
-            0.05,                    // goal_tolerance
+            core_dim,               // achieved_goal_start
+            core_dim + goal_dim,    // desired_goal_start
+            HERStrategy::default(), // Future { k: 4 }
+            0.05,                   // goal_tolerance
         )
     }
 
@@ -356,8 +356,14 @@ mod tests {
         let core_dim = 2;
         let obs_dim = core_dim + goal_dim * 2;
         let mut buf = HERBuffer::new(
-            100, obs_dim, 1, goal_dim, core_dim, core_dim + goal_dim,
-            HERStrategy::Final, 0.05,
+            100,
+            obs_dim,
+            1,
+            goal_dim,
+            core_dim,
+            core_dim + goal_dim,
+            HERStrategy::Final,
+            0.05,
         );
         push_goal_episode(&mut buf, 5, goal_dim);
 
@@ -373,8 +379,14 @@ mod tests {
         let core_dim = 2;
         let obs_dim = core_dim + goal_dim * 2;
         let mut buf = HERBuffer::new(
-            100, obs_dim, 1, goal_dim, core_dim, core_dim + goal_dim,
-            HERStrategy::Future { k: 4 }, 0.05,
+            100,
+            obs_dim,
+            1,
+            goal_dim,
+            core_dim,
+            core_dim + goal_dim,
+            HERStrategy::Future { k: 4 },
+            0.05,
         );
         push_goal_episode(&mut buf, 10, goal_dim);
 
@@ -382,7 +394,10 @@ mod tests {
         let indices = buf.compute_relabel_indices(ep, 3, 42);
         assert_eq!(indices.len(), 4);
         for &idx in &indices {
-            assert!(idx > 3, "future index {idx} should be > transition offset 3");
+            assert!(
+                idx > 3,
+                "future index {idx} should be > transition offset 3"
+            );
             assert!(idx < 10, "future index {idx} should be < episode length 10");
         }
     }
@@ -393,8 +408,14 @@ mod tests {
         let core_dim = 2;
         let obs_dim = core_dim + goal_dim * 2;
         let mut buf = HERBuffer::new(
-            100, obs_dim, 1, goal_dim, core_dim, core_dim + goal_dim,
-            HERStrategy::Episode, 0.05,
+            100,
+            obs_dim,
+            1,
+            goal_dim,
+            core_dim,
+            core_dim + goal_dim,
+            HERStrategy::Episode,
+            0.05,
         );
         push_goal_episode(&mut buf, 10, goal_dim);
 
@@ -424,8 +445,14 @@ mod tests {
         let core_dim = 2;
         let obs_dim = core_dim + goal_dim * 2;
         let mut buf = HERBuffer::new(
-            100, obs_dim, 1, goal_dim, core_dim, core_dim + goal_dim,
-            HERStrategy::Future { k: 4 }, 0.05,
+            100,
+            obs_dim,
+            1,
+            goal_dim,
+            core_dim,
+            core_dim + goal_dim,
+            HERStrategy::Future { k: 4 },
+            0.05,
         );
         push_goal_episode(&mut buf, 10, goal_dim);
 
@@ -443,8 +470,14 @@ mod tests {
         let core_dim = 2;
         let obs_dim = core_dim + goal_dim * 2;
         let mut buf = HERBuffer::new(
-            100, obs_dim, 1, goal_dim, core_dim, core_dim + goal_dim,
-            HERStrategy::Future { k: 4 }, 0.05,
+            100,
+            obs_dim,
+            1,
+            goal_dim,
+            core_dim,
+            core_dim + goal_dim,
+            HERStrategy::Future { k: 4 },
+            0.05,
         );
         push_goal_episode(&mut buf, 10, goal_dim);
 
@@ -464,7 +497,7 @@ mod tests {
         let obs_dim = 2 + goal_dim * 2;
         assert_eq!(batch.batch_size, 8);
         assert_eq!(batch.observations.len(), 8 * obs_dim);
-        assert_eq!(batch.actions.len(), 8 * 1);
+        assert_eq!(batch.actions.len(), 8);
         assert_eq!(batch.rewards.len(), 8);
     }
 
@@ -481,7 +514,10 @@ mod tests {
         let batch = buf.sample_with_relabeling(32, 0.0, 42).unwrap();
         // All original rewards are -1.0
         for &r in &batch.rewards {
-            assert_eq!(r, -1.0, "with ratio=0, all rewards should be original (-1.0)");
+            assert_eq!(
+                r, -1.0,
+                "with ratio=0, all rewards should be original (-1.0)"
+            );
         }
     }
 

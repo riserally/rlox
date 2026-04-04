@@ -442,10 +442,7 @@ impl PrioritizedReplayBuffer {
                 got: format!("losses.len()={}", losses.len()),
             });
         }
-        let priorities: Vec<f64> = losses
-            .iter()
-            .map(|&l| l.abs() + epsilon)
-            .collect();
+        let priorities: Vec<f64> = losses.iter().map(|&l| l.abs() + epsilon).collect();
         self.update_priorities(indices, &priorities)
     }
 }
@@ -850,8 +847,16 @@ mod tests {
             min_priority: 1e-6,
         };
         let result = compute_lap_priorities(td, loss, &config).unwrap();
-        assert!((result[0] - 1.5).abs() < 1e-10, "expected 1.5, got {}", result[0]);
-        assert!((result[1] - 2.3).abs() < 1e-10, "expected 2.3, got {}", result[1]);
+        assert!(
+            (result[0] - 1.5).abs() < 1e-10,
+            "expected 1.5, got {}",
+            result[0]
+        );
+        assert!(
+            (result[1] - 2.3).abs() < 1e-10,
+            "expected 2.3, got {}",
+            result[1]
+        );
     }
 
     #[test]
@@ -966,7 +971,8 @@ mod tests {
             buf.push(sample_record(4), 1.0).unwrap();
         }
         let epsilon = 0.001;
-        buf.update_priorities_from_loss(&[0], &[0.0], epsilon).unwrap();
+        buf.update_priorities_from_loss(&[0], &[0.0], epsilon)
+            .unwrap();
         // The priority should be epsilon^alpha = 0.001^1.0 = 0.001
     }
 
@@ -977,10 +983,12 @@ mod tests {
             buf.push(sample_record(4), 1.0).unwrap();
         }
         // Give index 0 a very high loss
-        buf.update_priorities_from_loss(&[0], &[100.0], 0.01).unwrap();
+        buf.update_priorities_from_loss(&[0], &[100.0], 0.01)
+            .unwrap();
         // Give other indices low loss
         for i in 1..10 {
-            buf.update_priorities_from_loss(&[i], &[0.001], 0.01).unwrap();
+            buf.update_priorities_from_loss(&[i], &[0.001], 0.01)
+                .unwrap();
         }
         // Sample many times, index 0 should appear frequently
         let mut count_idx0 = 0;

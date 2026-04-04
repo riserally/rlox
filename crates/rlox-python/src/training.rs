@@ -229,11 +229,7 @@ impl PyRunningStatsVec {
     }
 
     /// Update with a flat batch: array of length `batch_size * dim`.
-    fn batch_update(
-        &mut self,
-        data: PyReadonlyArray1<'_, f64>,
-        batch_size: usize,
-    ) -> PyResult<()> {
+    fn batch_update(&mut self, data: PyReadonlyArray1<'_, f64>, batch_size: usize) -> PyResult<()> {
         let slice = data.as_slice()?;
         if slice.len() != batch_size * self.inner.dim() {
             return Err(PyValueError::new_err(format!(
@@ -738,9 +734,9 @@ pub fn reptile_update<'py>(
     // SAFETY: We have the GIL and no other references to this array exist
     // during the mutable borrow. PyArray1::readwrite gives exclusive access.
     let mut rw = unsafe { meta_params.as_array_mut() };
-    let meta_slice = rw.as_slice_mut().ok_or_else(|| {
-        PyRuntimeError::new_err("meta_params must be a contiguous array")
-    })?;
+    let meta_slice = rw
+        .as_slice_mut()
+        .ok_or_else(|| PyRuntimeError::new_err("meta_params must be a contiguous array"))?;
     weight_ops::reptile_update(meta_slice, task_slice, meta_lr)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }
@@ -759,9 +755,9 @@ pub fn polyak_update<'py>(
     let source_slice = source.as_slice()?;
     // SAFETY: Same as reptile_update above.
     let mut rw = unsafe { target.as_array_mut() };
-    let target_slice = rw.as_slice_mut().ok_or_else(|| {
-        PyRuntimeError::new_err("target must be a contiguous array")
-    })?;
+    let target_slice = rw
+        .as_slice_mut()
+        .ok_or_else(|| PyRuntimeError::new_err("target must be a contiguous array"))?;
     weight_ops::polyak_update(target_slice, source_slice, tau)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }

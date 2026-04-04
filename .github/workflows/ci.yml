@@ -90,7 +90,7 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
-          python -m pip install pytest gymnasium torch numpy pyyaml "gymnasium[mujoco]"
+          python -m pip install pytest pytest-timeout gymnasium torch numpy pyyaml "gymnasium[mujoco]"
       - run: python -m pytest tests/ -q --tb=short -m "slow" --timeout=300
 
   wheel-smoke:

@@ -6,6 +6,7 @@ use rlox_nn::{EntropyTuner, NNError, TensorData};
 use crate::convert::*;
 
 pub struct CandleEntropyTuner {
+    #[allow(dead_code)]
     varmap: VarMap,
     log_alpha: Tensor,
     optimizer: candle_nn::AdamW,

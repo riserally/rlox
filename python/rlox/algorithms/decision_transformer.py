@@ -13,8 +13,13 @@ Reference:
 
 from __future__ import annotations
 
-import math
-from typing import Any, Self
+import sys
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing import TypeVar
+    Self = TypeVar("Self")
 
 import gymnasium as gym
 import numpy as np

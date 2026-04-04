@@ -20,7 +20,14 @@ Example
 
 from __future__ import annotations
 
-from typing import Any, Protocol, Self, runtime_checkable
+import sys
+from typing import Any, Protocol, runtime_checkable
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing import TypeVar
+    Self = TypeVar("Self")
 
 import numpy as np
 import torch

@@ -25,27 +25,26 @@ def _build_callbacks(config: TrainingConfig) -> list[Callback]:
     """Instantiate callbacks from string names in the config."""
     cbs: list[Callback] = []
     for name in config.callbacks:
-        match name:
-            case "eval":
-                cbs.append(
-                    EvalCallback(
-                        eval_freq=config.eval_freq,
-                        n_eval_episodes=config.eval_episodes,
-                    )
+        if name == "eval":
+            cbs.append(
+                EvalCallback(
+                    eval_freq=config.eval_freq,
+                    n_eval_episodes=config.eval_episodes,
                 )
-            case "checkpoint":
-                cbs.append(
-                    CheckpointCallback(
-                        save_freq=config.checkpoint_freq,
-                        save_path=config.checkpoint_dir,
-                    )
+            )
+        elif name == "checkpoint":
+            cbs.append(
+                CheckpointCallback(
+                    save_freq=config.checkpoint_freq,
+                    save_path=config.checkpoint_dir,
                 )
-            case "progress":
-                cbs.append(ProgressBarCallback())
-            case "timing":
-                cbs.append(TimingCallback())
-            case _:
-                raise ValueError(f"Unknown callback name: {name!r}")
+            )
+        elif name == "progress":
+            cbs.append(ProgressBarCallback())
+        elif name == "timing":
+            cbs.append(TimingCallback())
+        else:
+            raise ValueError(f"Unknown callback name: {name!r}")
     return cbs
 
 
@@ -54,21 +53,20 @@ def _build_logger(config: TrainingConfig) -> Any:
     if config.logger is None:
         return None
 
-    match config.logger:
-        case "console":
-            from rlox.logging import ConsoleLogger
+    if config.logger == "console":
+        from rlox.logging import ConsoleLogger
 
-            return ConsoleLogger()
-        case "tensorboard":
-            from rlox.logging import TensorBoardLogger
+        return ConsoleLogger()
+    elif config.logger == "tensorboard":
+        from rlox.logging import TensorBoardLogger
 
-            return TensorBoardLogger(log_dir=config.log_dir or "runs")
-        case "wandb":
-            from rlox.logging import WandbLogger
+        return TensorBoardLogger(log_dir=config.log_dir or "runs")
+    elif config.logger == "wandb":
+        from rlox.logging import WandbLogger
 
-            return WandbLogger(project="rlox")
-        case _:
-            raise ValueError(f"Unknown logger: {config.logger!r}")
+        return WandbLogger(project="rlox")
+    else:
+        raise ValueError(f"Unknown logger: {config.logger!r}")
 
 
 def train_from_config(config: TrainingConfig | str | Path) -> dict[str, float]:

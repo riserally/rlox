@@ -164,6 +164,7 @@ impl<B: Backend> Clone for DuelingQNetworkModel<B> {
 }
 
 /// Burn DQN implementation supporting both standard and dueling architectures.
+#[allow(dead_code)]
 pub struct BurnDQN<B: AutodiffBackend> {
     q_network: QNetworkModel<B>,
     target_network: QNetworkModel<B::InnerBackend>,

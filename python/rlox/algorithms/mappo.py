@@ -20,12 +20,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
 
-from rlox.batch import RolloutBatch
 from rlox.callbacks import Callback, CallbackList
 from rlox.collectors import RolloutCollector
 from rlox.logging import LoggerCallback

@@ -1,0 +1,25 @@
+{
+  "benchmark": "ppo_cartpole_throughput",
+  "env": "CartPole-v1",
+  "n_envs": 4,
+  "total_steps": 20000,
+  "correctness_passed": true,
+  "elapsed_s": 7.664127711999981,
+  "steps_per_second": 2609.5598548919443,
+  "system": {
+    "timestamp": "2026-03-18T20:27:40",
+    "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.36",
+    "os": "Linux",
+    "python_version": "3.12.13",
+    "cpu": "aarch64",
+    "cpu_count_logical": 14,
+    "numpy_version": "1.26.4",
+    "torch_version": "2.5.1",
+    "cuda_available": false,
+    "rlox_available": true,
+    "rlox_version": "0.2.3",
+    "stable_baselines3_version": "2.7.1",
+    "torchrl_version": "0.11.1",
+    "gymnasium_version": "1.2.3"
+  }
+}

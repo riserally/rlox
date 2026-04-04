@@ -1,0 +1,71 @@
+{
+  "benchmark": "e2e_256x2048",
+  "n_envs": 256,
+  "n_steps": 2048,
+  "total_transitions": 524288,
+  "correctness_passed": true,
+  "rlox": {
+    "median_ns": 1934357459.5,
+    "mean_ns": 1927630267.5,
+    "min_ns": 1898832292.0,
+    "max_ns": 1945970000.0,
+    "p25_ns": 1919366167.5,
+    "p75_ns": 1938111979.75,
+    "p99_ns": 1945914338.87,
+    "iqr_ns": 18745812.25,
+    "n_samples": 10,
+    "times_ns": [
+      1945351543.0,
+      1935148543.0,
+      1918594334.0,
+      1934598543.0,
+      1934116376.0,
+      1898832292.0,
+      1945970000.0,
+      1939099792.0,
+      1902909584.0,
+      1921681668.0
+    ]
+  },
+  "rlox_steps_per_second": 271039.87291755265,
+  "sb3": {
+    "median_ns": 2961749397.0,
+    "mean_ns": 2961557330.5,
+    "min_ns": 2942081418.0,
+    "max_ns": 2984483293.0,
+    "p25_ns": 2951875522.5,
+    "p75_ns": 2967210448.75,
+    "p99_ns": 2984004114.28,
+    "iqr_ns": 15334926.25,
+    "n_samples": 10,
+    "times_ns": [
+      2964419293.0,
+      2942081418.0,
+      2984483293.0,
+      2961733459.0,
+      2956398585.0,
+      2947024168.0,
+      2979159085.0,
+      2968140834.0,
+      2950367835.0,
+      2961765335.0
+    ]
+  },
+  "speedup_vs_sb3": 1.5311282733469356,
+  "system": {
+    "timestamp": "2026-03-18T20:27:32",
+    "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.36",
+    "os": "Linux",
+    "python_version": "3.12.13",
+    "cpu": "aarch64",
+    "cpu_count_logical": 14,
+    "numpy_version": "1.26.4",
+    "torch_version": "2.5.1",
+    "cuda_available": false,
+    "rlox_available": true,
+    "rlox_version": "0.2.3",
+    "stable_baselines3_version": "2.7.1",
+    "torchrl_version": "0.11.1",
+    "gymnasium_version": "1.2.3"
+  }
+}

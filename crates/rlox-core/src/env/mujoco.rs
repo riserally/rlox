@@ -160,8 +160,8 @@ mod simplified {
             // equations of motion with contacts, inertia, Coriolis forces, etc.
 
             // Update velocities from torques (joints 0..6 map to actions 0..6)
-            for i in 0..ACT_DIM {
-                let torque = (torques[i] as f64).clamp(-1.0, 1.0);
+            for (i, &t) in torques.iter().enumerate().take(ACT_DIM) {
+                let torque = (t as f64).clamp(-1.0, 1.0);
                 self.state[8 + i] += DT * torque;
             }
 
@@ -177,7 +177,10 @@ mod simplified {
             // HalfCheetah-v4 reward = forward_velocity - ctrl_cost
             let forward_vel = self.forward_velocity();
             let ctrl_cost: f64 = CTRL_COST_WEIGHT
-                * torques.iter().map(|&t| (t as f64) * (t as f64)).sum::<f64>();
+                * torques
+                    .iter()
+                    .map(|&t| (t as f64) * (t as f64))
+                    .sum::<f64>();
             let reward = forward_vel - ctrl_cost;
 
             // HalfCheetah never terminates early, only truncates at max_steps.
@@ -432,7 +435,10 @@ mod tests {
         assert_eq!(r1, r2, "same seed must produce identical trajectories");
 
         let r3 = run(456);
-        assert_ne!(r1, r3, "different seeds should produce different trajectories");
+        assert_ne!(
+            r1, r3,
+            "different seeds should produce different trajectories"
+        );
     }
 
     // ----- Step after done errors -----

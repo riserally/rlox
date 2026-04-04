@@ -1,0 +1,118 @@
+{
+  "a2c_cartpole": {
+    "algo": "A2C",
+    "env": "CartPole-v1",
+    "final_return": 493.95,
+    "peak": 500.0,
+    "stable": true,
+    "evals": [
+      {
+        "step": 5000,
+        "mean_return": 414.7
+      },
+      {
+        "step": 10000,
+        "mean_return": 309.55
+      },
+      {
+        "step": 15000,
+        "mean_return": 492.25
+      },
+      {
+        "step": 20000,
+        "mean_return": 469.4
+      },
+      {
+        "step": 25000,
+        "mean_return": 476.9
+      },
+      {
+        "step": 30000,
+        "mean_return": 500.0
+      },
+      {
+        "step": 35000,
+        "mean_return": 500.0
+      },
+      {
+        "step": 40000,
+        "mean_return": 500.0
+      },
+      {
+        "step": 45000,
+        "mean_return": 500.0
+      },
+      {
+        "step": 50000,
+        "mean_return": 493.95
+      }
+    ],
+    "elapsed": 4.422170162200928
+  },
+  "ppo_cartpole": {
+    "algo": "PPO",
+    "env": "CartPole-v1",
+    "final_return": 475.0,
+    "elapsed": 2.5217549800872803
+  },
+  "ppo_hopper": {
+    "algo": "PPO",
+    "env": "Hopper-v4",
+    "final_return": 155.88344273353295,
+    "evals": [
+      {
+        "step": 16384,
+        "mean_return": 83.65722483215349
+      },
+      {
+        "step": 32768,
+        "mean_return": 73.02488220146103
+      },
+      {
+        "step": 49152,
+        "mean_return": 67.11176964966265
+      },
+      {
+        "step": 65536,
+        "mean_return": 66.89602988302777
+      },
+      {
+        "step": 81920,
+        "mean_return": 64.32096889419952
+      },
+      {
+        "step": 98304,
+        "mean_return": 85.01386100793785
+      },
+      {
+        "step": 114688,
+        "mean_return": 126.60602074491666
+      },
+      {
+        "step": 131072,
+        "mean_return": 170.14947732974926
+      },
+      {
+        "step": 147456,
+        "mean_return": 225.6338200734123
+      },
+      {
+        "step": 163840,
+        "mean_return": 215.9492732966305
+      },
+      {
+        "step": 180224,
+        "mean_return": 169.51085616949285
+      },
+      {
+        "step": 196608,
+        "mean_return": 147.2929655381933
+      },
+      {
+        "step": 212992,
+        "mean_return": 155.88344273353295
+      }
+    ],
+    "elapsed": 40.80205011367798
+  }
+}

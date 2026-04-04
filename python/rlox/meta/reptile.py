@@ -7,7 +7,6 @@ task-specific parameters using ``rlox.reptile_update`` (Rust-accelerated).
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 import numpy as np

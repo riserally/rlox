@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -22,7 +21,6 @@ from rlox.gym_vec_env import GymVecEnv
 from rlox.policies import DiscretePolicy
 from rlox.trainer import register_algorithm
 from rlox.utils import detect_env_spaces as _detect_env_spaces
-from rlox.vec_normalize import VecNormalize
 
 
 _RUST_NATIVE_ENVS = {"CartPole-v1", "CartPole"}
@@ -256,7 +254,6 @@ class TRPO:
 
         # Backtracking line search
         old_params = _get_flat_params(params)
-        expected_improve = policy_grad.dot(full_step).item()
 
         step_accepted = False
         for i in range(cfg.line_search_steps):

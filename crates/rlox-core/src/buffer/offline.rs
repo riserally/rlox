@@ -62,6 +62,7 @@ pub struct OfflineDatasetBuffer {
     actions: Vec<f32>,
     rewards: Vec<f32>,
     terminated: Vec<u8>,
+    #[allow(dead_code)]
     truncated: Vec<u8>,
 
     // Episode boundary tracking
@@ -191,6 +192,7 @@ impl OfflineDatasetBuffer {
     }
 
     /// Compute and cache normalization statistics.
+    #[allow(clippy::needless_range_loop)]
     pub fn compute_normalization(&mut self) {
         let n = self.len;
         let d = self.obs_dim;
@@ -248,7 +250,7 @@ impl OfflineDatasetBuffer {
         let mut terminated = Vec::with_capacity(batch_size);
 
         for _ in 0..batch_size {
-            let idx = rng.gen_range(0..self.len);
+            let idx = rng.random_range(0..self.len);
 
             obs.extend_from_slice(&self.obs[idx * d..(idx + 1) * d]);
             next_obs.extend_from_slice(&self.next_obs[idx * d..(idx + 1) * d]);
@@ -303,13 +305,13 @@ impl OfflineDatasetBuffer {
         let mut mask = vec![0u8; total];
 
         for b in 0..batch_size {
-            let ep_idx = rng.gen_range(0..n_eps);
+            let ep_idx = rng.random_range(0..n_eps);
             let ep_start = self.episode_starts[ep_idx];
             let ep_len = self.episode_lengths[ep_idx];
 
             // Random start within episode
             let max_start = ep_len.saturating_sub(seq_len);
-            let start_offset = rng.gen_range(0..=max_start);
+            let start_offset = rng.random_range(0..=max_start);
             let actual_len = seq_len.min(ep_len - start_offset);
 
             // Compute returns-to-go for this episode segment
@@ -404,14 +406,14 @@ mod tests {
         act_dim: usize,
         ep_len: usize,
     ) -> OfflineDatasetBuffer {
-        let mut rewards = vec![1.0f32; n];
+        let rewards = vec![1.0f32; n];
         let mut terminated = vec![0u8; n];
         let truncated = vec![0u8; n];
 
         // Mark episode boundaries
-        for i in 0..n {
-            if (i + 1) % ep_len == 0 {
-                terminated[i] = 1;
+        for (i, t) in terminated.iter_mut().enumerate().take(n) {
+            if (i + 1).is_multiple_of(ep_len) {
+                *t = 1;
             }
         }
 

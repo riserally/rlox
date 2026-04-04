@@ -216,7 +216,6 @@ class CQL(OfflineAlgorithm):
         self.actor_optimizer.step()
 
         # Entropy alpha update
-        alpha_loss_val = 0.0
         if self.auto_entropy:
             alpha_loss = -(
                 self.log_alpha * (log_prob.detach() + self.target_entropy)
@@ -225,7 +224,6 @@ class CQL(OfflineAlgorithm):
             alpha_loss.backward()
             self.alpha_optimizer.step()
             self.alpha = self.log_alpha.exp().item()
-            alpha_loss_val = alpha_loss.item()
 
         # Soft target update
         polyak_update(self.critic1, self.critic1_target, self.tau)

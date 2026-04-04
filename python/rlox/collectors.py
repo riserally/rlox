@@ -165,7 +165,6 @@ class RolloutCollector:
 
             terminated = step_result["terminated"].astype(bool)
             truncated = step_result["truncated"].astype(bool)
-            dones = terminated | truncated
 
             # Truncation bootstrap: when truncated but not terminated,
             # add gamma * V(terminal_obs) to reward.

@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 //! rlox-grpc: gRPC distributed environment workers for rlox.
 //!
 //! Enables remote environment execution over the network using Tonic gRPC.

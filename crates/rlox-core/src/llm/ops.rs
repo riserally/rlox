@@ -328,9 +328,8 @@ mod tests {
         let log_p = vec![f64::NAN];
         let log_q = vec![-1.0f64];
         let result = compute_token_kl(&log_p, &log_q);
-        match result {
-            Ok(v) => assert!(v.is_nan(), "NaN input should produce NaN output"),
-            Err(_) => {}
+        if let Ok(v) = result {
+            assert!(v.is_nan(), "NaN input should produce NaN output");
         }
     }
 

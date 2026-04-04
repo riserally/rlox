@@ -166,7 +166,7 @@ where
 
         let mut rng = self.rng.borrow_mut();
         for logits in &batch_logits {
-            let u: f32 = rand::Rng::gen(&mut *rng);
+            let u: f32 = rand::Rng::random(&mut *rng);
             let action = categorical_sample(logits, u);
             let lp = categorical_log_prob(logits, action);
             actions.push(action as f32);

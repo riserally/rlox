@@ -422,9 +422,7 @@ impl RLEnv for Pendulum {
 
         // Reward: -(theta^2 + 0.1*vel^2 + 0.001*torque^2)
         let norm_theta = angle_normalize(theta);
-        let reward = -(norm_theta * norm_theta
-            + 0.1 * vel * vel
-            + 0.001 * torque * torque);
+        let reward = -(norm_theta * norm_theta + 0.1 * vel * vel + 0.001 * torque * torque);
 
         // Dynamics
         let g = PENDULUM_GRAVITY;
@@ -432,10 +430,7 @@ impl RLEnv for Pendulum {
         let l = PENDULUM_LENGTH;
         let dt = PENDULUM_DT;
 
-        let new_vel = vel
-            + (3.0 * g / (2.0 * l) * theta.sin()
-                + 3.0 / (m * l * l) * torque)
-                * dt;
+        let new_vel = vel + (3.0 * g / (2.0 * l) * theta.sin() + 3.0 / (m * l * l) * torque) * dt;
         let new_vel = new_vel.clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
         let new_theta = theta + new_vel * dt;
 
@@ -497,8 +492,16 @@ mod pendulum_tests {
         let s = obs.as_slice();
         assert_eq!(s.len(), 3);
         // cos and sin should be in [-1, 1]
-        assert!(s[0] >= -1.0 && s[0] <= 1.0, "cos(theta) out of range: {}", s[0]);
-        assert!(s[1] >= -1.0 && s[1] <= 1.0, "sin(theta) out of range: {}", s[1]);
+        assert!(
+            s[0] >= -1.0 && s[0] <= 1.0,
+            "cos(theta) out of range: {}",
+            s[0]
+        );
+        assert!(
+            s[1] >= -1.0 && s[1] <= 1.0,
+            "sin(theta) out of range: {}",
+            s[1]
+        );
         // vel should be in [-8, 8]
         assert!(s[2].abs() <= 8.0, "vel out of range: {}", s[2]);
     }
@@ -521,8 +524,7 @@ mod pendulum_tests {
         let l = PENDULUM_LENGTH;
         let dt = PENDULUM_DT;
 
-        let expected_vel = (vel0
-            + (3.0 * g / (2.0 * l) * theta0.sin()) * dt)
+        let expected_vel = (vel0 + (3.0 * g / (2.0 * l) * theta0.sin()) * dt)
             .clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
         let expected_theta = theta0 + expected_vel * dt;
 
@@ -541,8 +543,7 @@ mod pendulum_tests {
 
         // Verify reward: -(norm_theta^2 + 0.1*vel0^2 + 0.001*0^2)
         let norm_theta = angle_normalize(theta0);
-        let expected_reward =
-            -(norm_theta * norm_theta + 0.1 * vel0 * vel0);
+        let expected_reward = -(norm_theta * norm_theta + 0.1 * vel0 * vel0);
         assert!(
             (t.reward - expected_reward).abs() < 1e-10,
             "reward mismatch: got {}, expected {}",
@@ -571,9 +572,7 @@ mod pendulum_tests {
         let dt = PENDULUM_DT;
 
         let expected_vel = (vel0
-            + (3.0 * g / (2.0 * l) * theta0.sin()
-                + 3.0 / (m * l * l) * torque as f64)
-                * dt)
+            + (3.0 * g / (2.0 * l) * theta0.sin() + 3.0 / (m * l * l) * torque as f64) * dt)
             .clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
         let expected_theta = theta0 + expected_vel * dt;
 
@@ -621,9 +620,7 @@ mod pendulum_tests {
         let clamped_torque = PENDULUM_MAX_TORQUE;
 
         let expected_vel = (vel0
-            + (3.0 * g / (2.0 * l) * theta0.sin()
-                + 3.0 / (m * l * l) * clamped_torque)
-                * dt)
+            + (3.0 * g / (2.0 * l) * theta0.sin() + 3.0 / (m * l * l) * clamped_torque) * dt)
             .clamp(-PENDULUM_MAX_VEL, PENDULUM_MAX_VEL);
 
         assert!(

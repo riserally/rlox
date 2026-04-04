@@ -8,6 +8,7 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 import rlox
@@ -288,7 +289,6 @@ class SAC:
         collector = self.collector
         collector.reset()
 
-        episode_rewards: list[float] = []
         metrics: dict[str, float] = {}
 
         self.callbacks.on_training_start()

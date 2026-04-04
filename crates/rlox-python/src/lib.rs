@@ -22,9 +22,8 @@ mod training;
 use pyo3::prelude::*;
 
 use buffer::{
-    PyEpisodeTracker, PyExperienceTable, PyHERBuffer, PyMmapReplayBuffer,
-    PyOfflineDatasetBuffer, PyPrioritizedReplayBuffer, PyReplayBuffer,
-    PySequenceReplayBuffer, PyVarLenStore,
+    PyEpisodeTracker, PyExperienceTable, PyHERBuffer, PyMmapReplayBuffer, PyOfflineDatasetBuffer,
+    PyPrioritizedReplayBuffer, PyReplayBuffer, PySequenceReplayBuffer, PyVarLenStore,
 };
 use env::{PyCartPole, PyGymEnv, PyVecEnv};
 use llm::PyDPOPair;

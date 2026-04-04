@@ -185,7 +185,6 @@ class TerminalDashboard(Callback):
         try:
             from rich.panel import Panel
             from rich.table import Table
-            from rich.text import Text
 
             elapsed = time.monotonic() - self._start_time if self._start_time else 0.0
 

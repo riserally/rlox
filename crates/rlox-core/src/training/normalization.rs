@@ -120,10 +120,10 @@ impl RunningStatsVec {
         );
         self.count += 1;
         let n = self.count as f64;
-        for i in 0..self.dim {
-            let delta = values[i] - self.mean[i];
+        for (i, &val) in values.iter().enumerate().take(self.dim) {
+            let delta = val - self.mean[i];
             self.mean[i] += delta / n;
-            let delta2 = values[i] - self.mean[i];
+            let delta2 = val - self.mean[i];
             self.m2[i] += delta * delta2;
         }
     }
@@ -707,11 +707,11 @@ mod tests {
 
                 // Normalizing the mean vector should give zeros
                 let z = stats.normalize(&stats.mean());
-                for d in 0..dim {
+                for (d, &val) in z.iter().enumerate().take(dim) {
                     prop_assert!(
-                        z[d].abs() < 1e-8,
+                        val.abs() < 1e-8,
                         "normalize(mean)[{d}] should be ~0, got {}",
-                        z[d]
+                        val
                     );
                 }
             }

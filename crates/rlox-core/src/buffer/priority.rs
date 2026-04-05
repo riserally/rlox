@@ -19,6 +19,7 @@ use super::ExperienceRecord;
 ///
 /// Internally stores `2 * capacity` nodes where leaves occupy indices
 /// `[capacity .. 2*capacity)` and internal nodes hold partial sums.
+#[derive(Debug)]
 pub struct SumTree {
     capacity: usize,
     tree: Vec<f64>,
@@ -27,8 +28,14 @@ pub struct SumTree {
 
 impl SumTree {
     /// Create a sum-tree with `capacity` leaves, all initialised to zero.
+    ///
+    /// The capacity is rounded up to the next power of two for efficient
+    /// binary-tree indexing. Unused leaves beyond the logical capacity
+    /// hold priority `0.0` (sum-tree) and `f64::INFINITY` (min-tree).
+    /// The `min()` method may therefore return `INFINITY` when the buffer
+    /// is not full; callers should handle this (see [`PrioritizedReplayBuffer::tree_min_prob`]).
     pub fn new(capacity: usize) -> Self {
-        assert!(capacity > 0, "SumTree capacity must be > 0");
+        debug_assert!(capacity > 0, "SumTree capacity must be > 0");
         let capacity = capacity.next_power_of_two();
         Self {
             capacity,
@@ -53,8 +60,12 @@ impl SumTree {
     }
 
     /// Set the priority of leaf `index`.
+    ///
+    /// # Panics (debug only)
+    ///
+    /// Panics in debug builds if `index >= capacity`.
     pub fn set(&mut self, index: usize, priority: f64) {
-        assert!(index < self.capacity, "SumTree index out of bounds");
+        debug_assert!(index < self.capacity, "SumTree index out of bounds");
         let mut pos = index + self.capacity;
         self.tree[pos] = priority;
         self.min_tree[pos] = priority;
@@ -66,8 +77,12 @@ impl SumTree {
     }
 
     /// Get the priority of leaf `index`.
+    ///
+    /// # Panics (debug only)
+    ///
+    /// Panics in debug builds if `index >= capacity`.
     pub fn get(&self, index: usize) -> f64 {
-        assert!(index < self.capacity, "SumTree index out of bounds");
+        debug_assert!(index < self.capacity, "SumTree index out of bounds");
         self.tree[index + self.capacity]
     }
 
@@ -100,6 +115,7 @@ impl SumTree {
 /// Prioritized experience replay buffer backed by a sum-tree.
 ///
 /// Implements proportional prioritization with importance-sampling weights.
+#[derive(Debug)]
 pub struct PrioritizedReplayBuffer {
     obs_dim: usize,
     act_dim: usize,
@@ -119,6 +135,7 @@ pub struct PrioritizedReplayBuffer {
 }
 
 /// A sampled batch with importance-sampling weights.
+#[derive(Debug, Clone)]
 pub struct PrioritizedSampledBatch {
     pub observations: Vec<f32>,
     pub next_observations: Vec<f32>,
@@ -289,7 +306,14 @@ impl PrioritizedReplayBuffer {
             let value = rng.random_range(lo..hi);
             let idx = self.tree.sample(value.min(total - 1e-12));
 
-            // Ensure we only sample valid indices
+            // Unused tree leaves have priority 0, so sample() should never
+            // return an index beyond self.count. Assert this rather than
+            // silently clamping (which would bias sampling toward the last entry).
+            debug_assert!(
+                idx < self.count,
+                "SumTree sampled index {idx} >= count {}, total={total}, value={value}",
+                self.count
+            );
             let idx = idx.min(self.count - 1);
 
             let obs_start = idx * self.obs_dim;

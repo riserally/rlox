@@ -65,10 +65,39 @@ impl RewardTransform for PBRSTransform {
 /// Goal-distance reward transform.
 ///
 /// Computes `phi(s) = -scale * ||s[goal_slice] - goal||` and applies PBRS.
+/// Expects `extras` to contain `"phi_current"` and `"phi_next"` entries
+/// pre-computed via [`compute_goal_distance_potentials`].
 pub struct GoalDistanceTransform {
     pub scale: f64,
     pub goal_start: usize,
     pub goal_dim: usize,
+}
+
+impl RewardTransform for GoalDistanceTransform {
+    fn transform(
+        &self,
+        rewards: &[f64],
+        context: &RewardContext<'_>,
+    ) -> Result<Vec<f64>, RloxError> {
+        let phi_current = context
+            .extras
+            .iter()
+            .find(|(name, _)| *name == "phi_current")
+            .map(|(_, v)| *v)
+            .ok_or_else(|| RloxError::BufferError("missing 'phi_current' in extras".into()))?;
+        let phi_next = context
+            .extras
+            .iter()
+            .find(|(name, _)| *name == "phi_next")
+            .map(|(_, v)| *v)
+            .ok_or_else(|| RloxError::BufferError("missing 'phi_next' in extras".into()))?;
+
+        shape_rewards_pbrs(rewards, phi_current, phi_next, context.gamma, context.dones)
+    }
+
+    fn name(&self) -> &str {
+        "GoalDistance"
+    }
 }
 
 /// Compute shaped rewards: `r' = r + gamma * Phi(s') - Phi(s)`

@@ -38,6 +38,7 @@ impl Default for HERStrategy {
 /// Stores transitions with goal information and performs goal relabeling
 /// during sampling. The obs vector layout is:
 /// `[obs_core | achieved_goal | desired_goal | ...]`
+#[derive(Debug)]
 pub struct HERBuffer {
     buffer: ReplayBuffer,
     tracker: EpisodeTracker,
@@ -268,6 +269,8 @@ impl HERBuffer {
 /// Compute sparse goal-conditioned reward.
 ///
 /// Returns `0.0` if `||achieved - desired||_2 < tolerance`, else `-1.0`.
+///
+/// Uses squared distance comparison to avoid a costly `sqrt`.
 #[inline]
 pub fn sparse_goal_reward(achieved: &[f32], desired: &[f32], tolerance: f32) -> f32 {
     let dist_sq: f32 = achieved
@@ -275,7 +278,7 @@ pub fn sparse_goal_reward(achieved: &[f32], desired: &[f32], tolerance: f32) -> 
         .zip(desired.iter())
         .map(|(&a, &d)| (a - d) * (a - d))
         .sum();
-    if dist_sq.sqrt() < tolerance {
+    if dist_sq < tolerance * tolerance {
         0.0
     } else {
         -1.0

@@ -2,7 +2,7 @@ use rayon::prelude::*;
 
 use crate::env::batch::BatchSteppable;
 use crate::env::spaces::{Action, ActionSpace, ObsSpace, Observation};
-use crate::env::{RLEnv, Transition};
+use crate::env::RLEnv;
 use crate::error::RloxError;
 use crate::seed::derive_seed;
 
@@ -34,16 +34,35 @@ pub struct VecEnv {
     obs_space: ObsSpace,
 }
 
+impl std::fmt::Debug for VecEnv {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VecEnv")
+            .field("num_envs", &self.envs.len())
+            .field("action_space", &self.action_space)
+            .field("obs_space", &self.obs_space)
+            .finish()
+    }
+}
+
 impl VecEnv {
-    pub fn new(envs: Vec<Box<dyn RLEnv>>) -> Self {
-        assert!(!envs.is_empty(), "VecEnv requires at least one environment");
+    /// Create a new vectorized environment from a list of sub-environments.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RloxError::EnvError`] if `envs` is empty.
+    pub fn new(envs: Vec<Box<dyn RLEnv>>) -> Result<Self, RloxError> {
+        if envs.is_empty() {
+            return Err(RloxError::EnvError(
+                "VecEnv requires at least one environment".into(),
+            ));
+        }
         let action_space = envs[0].action_space().clone();
         let obs_space = envs[0].obs_space().clone();
-        VecEnv {
+        Ok(VecEnv {
             envs,
             action_space,
             obs_space,
-        }
+        })
     }
 
     pub fn num_envs(&self) -> usize {
@@ -54,11 +73,12 @@ impl VecEnv {
         &self.action_space
     }
 
-    /// Step all environments in parallel using Rayon.
-    ///
-    /// If an environment is done after stepping, it is automatically reset
-    /// and the returned observation is from the fresh episode.
-    pub fn step_all(&mut self, actions: &[Action]) -> Result<BatchTransition, RloxError> {
+    /// Step + auto-reset all environments in parallel. Returns the raw
+    /// per-environment results: `(obs_data, reward, terminated, truncated, terminal_obs)`.
+    fn step_raw(
+        &mut self,
+        actions: &[Action],
+    ) -> Result<Vec<(Vec<f32>, f64, bool, bool, Option<Vec<f32>>)>, RloxError> {
         if actions.len() != self.envs.len() {
             return Err(RloxError::ShapeMismatch {
                 expected: format!("{}", self.envs.len()),
@@ -66,74 +86,6 @@ impl VecEnv {
             });
         }
 
-        let results: Vec<Result<(Transition, Option<Vec<f32>>), RloxError>> = self
-            .envs
-            .par_iter_mut()
-            .zip(actions.par_iter())
-            .map(|(env, action)| {
-                let mut transition = env.step(action)?;
-                let mut term_obs = None;
-                // Auto-reset on done — save terminal obs first
-                if transition.terminated || transition.truncated {
-                    term_obs = Some(transition.obs.clone().into_inner());
-                    let new_obs = env.reset(None)?;
-                    transition.obs = new_obs;
-                }
-                Ok((transition, term_obs))
-            })
-            .collect();
-
-        // Unpack results into columnar format
-        let n = results.len();
-        let mut obs = Vec::with_capacity(n);
-        let mut rewards = Vec::with_capacity(n);
-        let mut terminated = Vec::with_capacity(n);
-        let mut truncated = Vec::with_capacity(n);
-        let mut terminal_obs = Vec::with_capacity(n);
-
-        for result in results {
-            let (t, tobs) = result?;
-            obs.push(t.obs.into_inner());
-            rewards.push(t.reward);
-            terminated.push(t.terminated);
-            truncated.push(t.truncated);
-            terminal_obs.push(tobs);
-        }
-
-        Ok(BatchTransition {
-            obs,
-            obs_flat: Vec::new(),
-            obs_dim: 0,
-            rewards,
-            terminated,
-            truncated,
-            terminal_obs,
-        })
-    }
-
-    /// Step all environments in parallel, returning observations as a flat contiguous buffer.
-    ///
-    /// Unlike `step_all`, this avoids per-env Vec allocations by collecting
-    /// observations directly into `obs_flat: Vec<f32>` of shape `[n_envs * obs_dim]`.
-    /// The `obs` field is left empty.
-    pub fn step_all_flat(&mut self, actions: &[Action]) -> Result<BatchTransition, RloxError> {
-        if actions.len() != self.envs.len() {
-            return Err(RloxError::ShapeMismatch {
-                expected: format!("{}", self.envs.len()),
-                got: format!("{}", actions.len()),
-            });
-        }
-
-        let obs_dim = match &self.obs_space {
-            ObsSpace::Discrete(_) => 1,
-            ObsSpace::Box { shape, .. } => shape.iter().product(),
-            ObsSpace::MultiDiscrete(v) => v.len(),
-            ObsSpace::Dict(entries) => entries.iter().map(|(_, d)| d).sum(),
-        };
-        let n = self.envs.len();
-
-        // Step all envs in parallel, collecting (reward, terminated, truncated, term_obs)
-        // and the raw obs data
         let results: Vec<Result<(Vec<f32>, f64, bool, bool, Option<Vec<f32>>), RloxError>> = self
             .envs
             .par_iter_mut()
@@ -157,14 +109,63 @@ impl VecEnv {
             })
             .collect();
 
+        results.into_iter().collect()
+    }
+
+    /// Step all environments in parallel using Rayon.
+    ///
+    /// If an environment is done after stepping, it is automatically reset
+    /// and the returned observation is from the fresh episode.
+    pub fn step_all(&mut self, actions: &[Action]) -> Result<BatchTransition, RloxError> {
+        let raw = self.step_raw(actions)?;
+        let n = raw.len();
+        let mut obs = Vec::with_capacity(n);
+        let mut rewards = Vec::with_capacity(n);
+        let mut terminated = Vec::with_capacity(n);
+        let mut truncated = Vec::with_capacity(n);
+        let mut terminal_obs = Vec::with_capacity(n);
+
+        for (obs_data, reward, term, trunc, tobs) in raw {
+            obs.push(obs_data);
+            rewards.push(reward);
+            terminated.push(term);
+            truncated.push(trunc);
+            terminal_obs.push(tobs);
+        }
+
+        Ok(BatchTransition {
+            obs,
+            obs_flat: Vec::new(),
+            obs_dim: 0,
+            rewards,
+            terminated,
+            truncated,
+            terminal_obs,
+        })
+    }
+
+    /// Step all environments in parallel, returning observations as a flat contiguous buffer.
+    ///
+    /// Unlike `step_all`, this avoids per-env Vec allocations by collecting
+    /// observations directly into `obs_flat: Vec<f32>` of shape `[n_envs * obs_dim]`.
+    /// The `obs` field is left empty.
+    pub fn step_all_flat(&mut self, actions: &[Action]) -> Result<BatchTransition, RloxError> {
+        let obs_dim = match &self.obs_space {
+            ObsSpace::Discrete(_) => 1,
+            ObsSpace::Box { shape, .. } => shape.iter().product(),
+            ObsSpace::MultiDiscrete(v) => v.len(),
+            ObsSpace::Dict(entries) => entries.iter().map(|(_, d)| d).sum(),
+        };
+
+        let raw = self.step_raw(actions)?;
+        let n = raw.len();
         let mut obs_flat = vec![0.0f32; n * obs_dim];
         let mut rewards = Vec::with_capacity(n);
         let mut terminated = Vec::with_capacity(n);
         let mut truncated = Vec::with_capacity(n);
         let mut terminal_obs = Vec::with_capacity(n);
 
-        for (i, result) in results.into_iter().enumerate() {
-            let (obs_data, reward, term, trunc, tobs) = result?;
+        for (i, (obs_data, reward, term, trunc, tobs)) in raw.into_iter().enumerate() {
             obs_flat[i * obs_dim..(i + 1) * obs_dim].copy_from_slice(&obs_data);
             rewards.push(reward);
             terminated.push(term);
@@ -232,7 +233,7 @@ mod tests {
                 Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
             })
             .collect();
-        VecEnv::new(envs)
+        VecEnv::new(envs).unwrap()
     }
 
     #[test]
@@ -381,7 +382,7 @@ mod terminal_obs_tests {
         let envs: Vec<Box<dyn RLEnv>> = (0..n)
             .map(|i| Box::new(CartPole::new(Some(derive_seed(seed, i)))) as Box<dyn RLEnv>)
             .collect();
-        VecEnv::new(envs)
+        VecEnv::new(envs).unwrap()
     }
 
     #[test]
@@ -475,7 +476,7 @@ mod pendulum_vec_env_tests {
                 Box::new(Pendulum::new(Some(s))) as Box<dyn RLEnv>
             })
             .collect();
-        VecEnv::new(envs)
+        VecEnv::new(envs).unwrap()
     }
 
     #[test]

@@ -15,6 +15,7 @@ use super::ExperienceRecord;
 /// Supports optional extra f32 columns (e.g. log-probs, value estimates)
 /// via [`ColumnHandle`]. When no extra columns are registered, there is
 /// zero overhead — no allocations and no branches in the hot push/sample path.
+#[derive(Debug)]
 pub struct ReplayBuffer {
     obs_dim: usize,
     act_dim: usize,
@@ -31,6 +32,7 @@ pub struct ReplayBuffer {
 }
 
 /// A sampled batch of transitions. Owns its data (copied from the ring buffer).
+#[derive(Debug, Clone)]
 pub struct SampledBatch {
     pub observations: Vec<f32>,
     pub next_observations: Vec<f32>,
@@ -64,6 +66,11 @@ impl SampledBatch {
     }
 
     /// Clear all data but retain allocated capacity for reuse.
+    ///
+    /// Note: `extra` is cleared entirely (the outer Vec). If you alternate
+    /// between buffers with different extra-column schemas, the inner Vecs'
+    /// capacity is lost. This is acceptable because cross-buffer reuse of
+    /// extra columns is uncommon.
     pub fn clear(&mut self) {
         self.observations.clear();
         self.next_observations.clear();
@@ -270,6 +277,9 @@ impl ReplayBuffer {
     }
 
     /// Push a transition, overwriting the oldest if at capacity.
+    ///
+    /// Prefer [`push_slices`](Self::push_slices) to avoid the intermediate
+    /// `Vec<f32>` allocations inside `ExperienceRecord`.
     pub fn push(&mut self, record: ExperienceRecord) -> Result<(), RloxError> {
         self.push_slices(
             &record.obs,

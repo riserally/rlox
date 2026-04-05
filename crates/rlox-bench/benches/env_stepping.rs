@@ -16,7 +16,7 @@ fn make_vec_env(n: usize, seed: u64) -> VecEnv {
             Box::new(CartPole::new(Some(s))) as Box<dyn RLEnv>
         })
         .collect();
-    VecEnv::new(envs)
+    VecEnv::new(envs).unwrap()
 }
 
 fn bench_cartpole_single_step(c: &mut Criterion) {

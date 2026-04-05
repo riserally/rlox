@@ -192,13 +192,13 @@ mod simplified {
                 reward,
                 terminated: false,
                 truncated,
-                info: {
+                info: Some({
                     let mut info = HashMap::new();
                     info.insert("x_velocity".to_string(), forward_vel);
                     info.insert("reward_forward".to_string(), forward_vel);
                     info.insert("reward_ctrl".to_string(), -ctrl_cost);
                     info
-                },
+                }),
             })
         }
 
@@ -377,8 +377,8 @@ mod tests {
         let mut env = SimplifiedMuJoCoEnv::new(Some(42));
         let t = env.step(&zero_action()).unwrap();
         // With zero action, ctrl_cost = 0, so reward = forward_velocity
-        let x_vel = t.info.get("x_velocity").copied().unwrap_or(0.0);
-        let ctrl = t.info.get("reward_ctrl").copied().unwrap_or(0.0);
+        let x_vel = t.info.as_ref().and_then(|m| m.get("x_velocity")).copied().unwrap_or(0.0);
+        let ctrl = t.info.as_ref().and_then(|m| m.get("reward_ctrl")).copied().unwrap_or(0.0);
         assert!(
             ctrl.abs() < 1e-10,
             "ctrl cost should be ~0 for zero action, got {}",
@@ -395,7 +395,7 @@ mod tests {
         let mut env = SimplifiedMuJoCoEnv::new(Some(42));
         let action = Action::Continuous(vec![0.5; 6]);
         let t = env.step(&action).unwrap();
-        let ctrl = t.info.get("reward_ctrl").copied().unwrap_or(0.0);
+        let ctrl = t.info.as_ref().and_then(|m| m.get("reward_ctrl")).copied().unwrap_or(0.0);
         // ctrl_cost = 0.1 * sum(0.5^2 * 6) = 0.1 * 1.5 = 0.15
         assert!(ctrl < 0.0, "ctrl reward should be negative, got {}", ctrl);
     }
@@ -466,7 +466,7 @@ mod tests {
             })
             .collect();
 
-        let mut venv = VecEnv::new(envs);
+        let mut venv = VecEnv::new(envs).unwrap();
         assert_eq!(venv.num_envs(), 4);
 
         // Step all
@@ -493,7 +493,7 @@ mod tests {
             })
             .collect();
 
-        let mut venv = VecEnv::new(envs);
+        let mut venv = VecEnv::new(envs).unwrap();
         let actions: Vec<Action> = (0..n).map(|_| zero_action()).collect();
         let batch = venv.step_all_flat(&actions).unwrap();
 
@@ -512,7 +512,7 @@ mod tests {
             })
             .collect();
 
-        let mut venv = VecEnv::new(envs);
+        let mut venv = VecEnv::new(envs).unwrap();
         let actions: Vec<Action> = (0..n).map(|_| zero_action()).collect();
 
         // Step past truncation -- VecEnv auto-resets so this should not error
@@ -533,7 +533,7 @@ mod tests {
                 })
                 .collect();
 
-            let mut venv = VecEnv::new(envs);
+            let mut venv = VecEnv::new(envs).unwrap();
             venv.reset_all(Some(42)).unwrap();
 
             let actions: Vec<Action> = (0..n).map(|i| random_action(i as u32)).collect();

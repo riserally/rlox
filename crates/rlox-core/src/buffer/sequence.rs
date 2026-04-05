@@ -14,6 +14,7 @@ use super::ringbuf::ReplayBuffer;
 /// Wraps a `ReplayBuffer` for storage and an `EpisodeTracker` for
 /// episode-aware sequence sampling. Sequences never cross episode
 /// boundaries.
+#[derive(Debug)]
 pub struct SequenceReplayBuffer {
     buffer: ReplayBuffer,
     tracker: EpisodeTracker,
@@ -23,6 +24,7 @@ pub struct SequenceReplayBuffer {
 }
 
 /// A batch of sampled sequences.
+#[derive(Debug, Clone)]
 pub struct SequenceBatch {
     /// Observations: flat `(batch_size * seq_len * obs_dim)`.
     pub observations: Vec<f32>,

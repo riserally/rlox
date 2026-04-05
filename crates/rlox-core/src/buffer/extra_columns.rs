@@ -16,6 +16,7 @@ impl ColumnHandle {
 /// Each column is a flat `Vec<f32>` with a fixed dimensionality, stored
 /// contiguously for cache-friendly sampling. When no columns are registered,
 /// this struct has zero overhead — no allocations occur.
+#[derive(Debug)]
 pub struct ExtraColumns {
     names: Vec<String>,
     dims: Vec<usize>,

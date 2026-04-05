@@ -21,7 +21,7 @@ fn main() {
     let envs: Vec<Box<dyn RLEnv>> = (0..n_envs)
         .map(|i| Box::new(CartPole::new(Some(derive_seed(42, i)))) as Box<dyn RLEnv>)
         .collect();
-    let mut vec_env = VecEnv::new(envs);
+    let mut vec_env = VecEnv::new(envs).unwrap();
 
     let _observations = vec_env.reset_all(Some(42)).unwrap();
     println!("Created {n_envs} parallel CartPole environments");

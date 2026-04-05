@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::f64::consts::PI;
 
 use rand::Rng;
@@ -134,7 +133,7 @@ impl RLEnv for CartPole {
             reward: 1.0,
             terminated,
             truncated,
-            info: HashMap::new(),
+            info: None,
         })
     }
 
@@ -340,10 +339,12 @@ const PENDULUM_MAX_TORQUE: f64 = 2.0;
 const PENDULUM_MAX_STEPS: u32 = 200;
 
 /// Normalize an angle to `[-pi, pi]`.
+///
+/// Uses `rem_euclid` for a guaranteed non-negative remainder,
+/// avoiding precision drift with very large negative angles.
 #[inline]
 fn angle_normalize(x: f64) -> f64 {
-    // Equivalent to ((x + pi) % (2*pi)) - pi, handling negative values.
-    ((x + PI) % (2.0 * PI) + 2.0 * PI) % (2.0 * PI) - PI
+    (x + PI).rem_euclid(2.0 * PI) - PI
 }
 
 /// Pendulum-v1 environment, a faithful port of Gymnasium's Pendulum.
@@ -447,7 +448,7 @@ impl RLEnv for Pendulum {
             reward,
             terminated: false,
             truncated,
-            info: HashMap::new(),
+            info: None,
         })
     }
 

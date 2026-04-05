@@ -32,6 +32,8 @@ pub struct EpisodeMeta {
     /// Number of transitions in this episode.
     pub length: usize,
     /// Whether this episode is complete (reached done=true).
+    /// Incomplete episodes are still being built (the current in-progress
+    /// episode). They are not returned by `eligible_episodes`.
     pub complete: bool,
 }
 
@@ -52,6 +54,7 @@ pub struct EpisodeWindow {
 /// Maintains a list of [`EpisodeMeta`] entries, invalidating episodes
 /// whose data has been overwritten by the ring buffer's write pointer.
 /// Provides efficient sampling of contiguous windows for sequence models.
+#[derive(Debug)]
 pub struct EpisodeTracker {
     ring_capacity: usize,
     episodes: Vec<EpisodeMeta>,
@@ -198,10 +201,13 @@ impl EpisodeAware for EpisodeTracker {
     }
 }
 
-/// Check if two ring-buffer ranges overlap.
+/// Check if two ring-buffer ranges overlap in O(1) using modular arithmetic.
 ///
 /// Range A: `[a_start, a_start + a_len)` mod `cap`
 /// Range B: `[b_start, b_start + b_len)` mod `cap`
+///
+/// Two circular ranges overlap iff the start of either range falls
+/// within the other range.
 #[inline]
 fn ring_range_overlaps(
     a_start: usize,
@@ -213,35 +219,9 @@ fn ring_range_overlaps(
     if a_len == 0 || b_len == 0 {
         return false;
     }
-    // Check each position in the smaller range
-    // For efficiency with small ranges (typical episode invalidation)
-    if a_len <= b_len {
-        for offset in 0..a_len {
-            let pos = (a_start + offset) % cap;
-            if in_ring_range(pos, b_start, b_len, cap) {
-                return true;
-            }
-        }
-    } else {
-        for offset in 0..b_len {
-            let pos = (b_start + offset) % cap;
-            if in_ring_range(pos, a_start, a_len, cap) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Check if `pos` is within the ring range `[start, start + len)` mod `cap`.
-#[inline]
-fn in_ring_range(pos: usize, start: usize, len: usize, cap: usize) -> bool {
-    if len == 0 {
-        return false;
-    }
-    // Distance from start to pos going forward in the ring
-    let dist = (pos + cap - start) % cap;
-    dist < len
+    let a_in_b = (a_start + cap - b_start) % cap < b_len;
+    let b_in_a = (b_start + cap - a_start) % cap < a_len;
+    a_in_b || b_in_a
 }
 
 #[cfg(test)]

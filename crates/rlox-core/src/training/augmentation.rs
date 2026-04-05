@@ -117,18 +117,30 @@ pub fn random_shift_batch(
         for c in 0..channels {
             let ch_offset = img_offset + c * height * width;
             for y in 0..height {
-                for x in 0..width {
-                    // Source coordinates in the original image
-                    let src_y = y as isize + dy as isize - pad as isize;
-                    let src_x = x as isize + dx as isize - pad as isize;
+                let src_y = y as isize + dy as isize - pad as isize;
+                if src_y < 0 || src_y >= height as isize {
+                    continue;
+                }
+                let src_y = src_y as usize;
 
-                    let out_idx = ch_offset + y * width + x;
-                    if src_y >= 0 && src_y < height as isize && src_x >= 0 && src_x < width as isize
-                    {
-                        let src_idx = ch_offset + src_y as usize * width + src_x as usize;
-                        output[out_idx] = images[src_idx];
-                    }
-                    // else: already 0.0 from vec initialization
+                // For output x, source is src_x = x + dx - pad.
+                // Valid range: 0 <= src_x < width, i.e.:
+                //   x >= pad - dx  (lower bound, clamped to 0)
+                //   x <  width + pad - dx  (upper bound, clamped to width)
+                let x_lo = pad.saturating_sub(dx);
+                let x_hi = if dx > pad {
+                    width.saturating_sub(dx - pad)
+                } else {
+                    width
+                };
+
+                if x_lo < x_hi {
+                    let src_x_start = x_lo + dx - pad;
+                    let row_len = x_hi - x_lo;
+                    let src_base = ch_offset + src_y * width + src_x_start;
+                    let dst_base = ch_offset + y * width + x_lo;
+                    output[dst_base..dst_base + row_len]
+                        .copy_from_slice(&images[src_base..src_base + row_len]);
                 }
             }
         }

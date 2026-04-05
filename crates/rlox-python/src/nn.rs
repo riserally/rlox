@@ -13,9 +13,30 @@ use rlox_candle::collector::SharedPolicy;
 use rlox_core::env::builtins::CartPole;
 use rlox_core::env::parallel::VecEnv;
 use rlox_core::env::RLEnv;
-use rlox_core::pipeline::channel::Pipeline;
+use rlox_core::pipeline::channel::{Pipeline, RolloutBatch};
 use rlox_core::pipeline::collector::AsyncCollector;
 use rlox_core::seed::derive_seed;
+
+/// Convert a `RolloutBatch` into a Python dict of numpy arrays.
+fn rollout_batch_to_pydict<'py>(
+    py: Python<'py>,
+    batch: RolloutBatch,
+) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    dict.set_item("observations", PyArray1::from_vec(py, batch.observations))?;
+    dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
+    dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
+    dict.set_item("dones", PyArray1::from_vec(py, batch.dones))?;
+    dict.set_item("log_probs", PyArray1::from_vec(py, batch.log_probs))?;
+    dict.set_item("values", PyArray1::from_vec(py, batch.values))?;
+    dict.set_item("advantages", PyArray1::from_vec(py, batch.advantages))?;
+    dict.set_item("returns", PyArray1::from_vec(py, batch.returns))?;
+    dict.set_item("obs_dim", batch.obs_dim)?;
+    dict.set_item("act_dim", batch.act_dim)?;
+    dict.set_item("n_steps", batch.n_steps)?;
+    dict.set_item("n_envs", batch.n_envs)?;
+    Ok(dict)
+}
 
 enum Backend {
     Burn(rlox_burn::actor_critic::BurnActorCritic<BurnBackend>),
@@ -307,7 +328,10 @@ impl PyCandleCollector {
         let envs: Vec<Box<dyn RLEnv>> = (0..n_envs)
             .map(|i| Box::new(CartPole::new(Some(derive_seed(seed, i)))) as Box<dyn RLEnv>)
             .collect();
-        let vec_env = Box::new(VecEnv::new(envs));
+        let vec_env = Box::new(
+            VecEnv::new(envs)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        );
 
         // Create Candle callbacks
         let (action_fn, value_fn) =
@@ -340,42 +364,13 @@ impl PyCandleCollector {
         let batch = py
             .allow_threads(|| self.pipeline.recv())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-
-        let dict = PyDict::new(py);
-        dict.set_item("observations", PyArray1::from_vec(py, batch.observations))?;
-        dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
-        dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
-        dict.set_item("dones", PyArray1::from_vec(py, batch.dones))?;
-        dict.set_item("log_probs", PyArray1::from_vec(py, batch.log_probs))?;
-        dict.set_item("values", PyArray1::from_vec(py, batch.values))?;
-        dict.set_item("advantages", PyArray1::from_vec(py, batch.advantages))?;
-        dict.set_item("returns", PyArray1::from_vec(py, batch.returns))?;
-        dict.set_item("obs_dim", batch.obs_dim)?;
-        dict.set_item("act_dim", batch.act_dim)?;
-        dict.set_item("n_steps", batch.n_steps)?;
-        dict.set_item("n_envs", batch.n_envs)?;
-        Ok(dict)
+        rollout_batch_to_pydict(py, batch)
     }
 
     /// Try to receive a batch without blocking. Returns None if empty.
     fn try_recv<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         match self.pipeline.try_recv() {
-            Some(batch) => {
-                let dict = PyDict::new(py);
-                dict.set_item("observations", PyArray1::from_vec(py, batch.observations))?;
-                dict.set_item("actions", PyArray1::from_vec(py, batch.actions))?;
-                dict.set_item("rewards", PyArray1::from_vec(py, batch.rewards))?;
-                dict.set_item("dones", PyArray1::from_vec(py, batch.dones))?;
-                dict.set_item("log_probs", PyArray1::from_vec(py, batch.log_probs))?;
-                dict.set_item("values", PyArray1::from_vec(py, batch.values))?;
-                dict.set_item("advantages", PyArray1::from_vec(py, batch.advantages))?;
-                dict.set_item("returns", PyArray1::from_vec(py, batch.returns))?;
-                dict.set_item("obs_dim", batch.obs_dim)?;
-                dict.set_item("act_dim", batch.act_dim)?;
-                dict.set_item("n_steps", batch.n_steps)?;
-                dict.set_item("n_envs", batch.n_envs)?;
-                Ok(Some(dict))
-            }
+            Some(batch) => Ok(Some(rollout_batch_to_pydict(py, batch)?)),
             None => Ok(None),
         }
     }

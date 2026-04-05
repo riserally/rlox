@@ -94,6 +94,10 @@ impl<'py> BatchDictBuilder<'py> {
 
 // ---------- ExperienceTable ----------
 
+/// Append-only table of experience transitions for on-policy algorithms.
+///
+/// Stores observations, actions, rewards, and done flags in columnar layout.
+/// Cleared after each training epoch.
 #[pyclass(name = "ExperienceTable")]
 pub struct PyExperienceTable {
     inner: ExperienceTable,
@@ -169,6 +173,10 @@ impl PyExperienceTable {
 
 // ---------- ReplayBuffer ----------
 
+/// Fixed-capacity ring buffer with uniform random sampling.
+///
+/// Supports optional extra f32 columns (e.g. log-probs, value estimates)
+/// registered via ``register_column()``.
 #[pyclass(name = "ReplayBuffer")]
 pub struct PyReplayBuffer {
     inner: ReplayBuffer,
@@ -340,6 +348,9 @@ impl PyReplayBuffer {
 
 // ---------- PrioritizedReplayBuffer ----------
 
+/// Prioritized experience replay buffer with importance-sampling weights.
+///
+/// Uses a sum-tree for O(log N) proportional sampling.
 #[pyclass(name = "PrioritizedReplayBuffer")]
 pub struct PyPrioritizedReplayBuffer {
     inner: PrioritizedReplayBuffer,
@@ -453,6 +464,10 @@ impl PyPrioritizedReplayBuffer {
 // MmapReplayBuffer — spills to disk for Atari-scale observations
 // ---------------------------------------------------------------------------
 
+/// Memory-mapped replay buffer that spills to disk when RAM is exceeded.
+///
+/// Hot (recent) data stays in memory; cold (overflow) data is memory-mapped
+/// from a file for lazy on-demand paging.
 #[pyclass(name = "MmapReplayBuffer")]
 pub struct PyMmapReplayBuffer {
     inner: MmapReplayBuffer,
@@ -570,6 +585,7 @@ impl PyMmapReplayBuffer {
 
 // ---------- VarLenStore ----------
 
+/// Variable-length sequence storage for NLP / LLM token sequences.
 #[pyclass(name = "VarLenStore")]
 pub struct PyVarLenStore {
     inner: VarLenStore,
@@ -823,6 +839,7 @@ impl PyOfflineDatasetBuffer {
 // Wave 2: EpisodeTracker
 // ---------------------------------------------------------------------------
 
+/// Tracks episode boundaries within a ring buffer for sequence sampling.
 #[pyclass(name = "EpisodeTracker")]
 pub struct PyEpisodeTracker {
     inner: EpisodeTracker,
@@ -871,6 +888,10 @@ impl PyEpisodeTracker {
 // Wave 3: SequenceReplayBuffer
 // ---------------------------------------------------------------------------
 
+/// Episode-aware replay buffer for sampling contiguous subsequences.
+///
+/// Sequences never cross episode boundaries, making this suitable for
+/// recurrent / transformer-based RL policies.
 #[pyclass(name = "SequenceReplayBuffer")]
 pub struct PySequenceReplayBuffer {
     inner: SequenceReplayBuffer,
@@ -1011,6 +1032,10 @@ impl PySequenceReplayBuffer {
 // Wave 3: HERBuffer
 // ---------------------------------------------------------------------------
 
+/// Hindsight Experience Replay buffer for goal-conditioned RL.
+///
+/// Automatically relabels goals during sampling using the specified
+/// strategy (final, future, or episode).
 #[pyclass(name = "HERBuffer")]
 pub struct PyHERBuffer {
     inner: HERBuffer,

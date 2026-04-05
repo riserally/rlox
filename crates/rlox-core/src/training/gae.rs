@@ -1,3 +1,12 @@
+/// Result of a GAE computation, containing advantages and returns.
+#[derive(Debug, Clone)]
+pub struct GaeResult<T> {
+    /// Per-step advantage estimates.
+    pub advantages: Vec<T>,
+    /// Per-step return estimates (advantages + values).
+    pub returns: Vec<T>,
+}
+
 /// Compute Generalized Advantage Estimation.
 ///
 /// Iterates backwards over the rollout, computing:
@@ -7,6 +16,11 @@
 ///
 /// The `dones` slice uses `f64` where 0.0 = not done, 1.0 = done,
 /// matching the common Python/numpy convention.
+///
+/// # Panics
+///
+/// Panics in debug builds if `rewards`, `values`, and `dones` have
+/// different lengths.
 pub fn compute_gae(
     rewards: &[f64],
     values: &[f64],
@@ -16,6 +30,8 @@ pub fn compute_gae(
     gae_lambda: f64,
 ) -> (Vec<f64>, Vec<f64>) {
     let n = rewards.len();
+    debug_assert_eq!(values.len(), n, "values.len() must equal rewards.len()");
+    debug_assert_eq!(dones.len(), n, "dones.len() must equal rewards.len()");
     if n == 0 {
         return (Vec::new(), Vec::new());
     }
@@ -51,6 +67,11 @@ pub fn compute_gae(
 /// `last_values` has length `n_envs`.
 ///
 /// Returns `(advantages, returns)` each of length `n_envs * n_steps`.
+///
+/// # Panics
+///
+/// Panics in debug builds if input slice lengths do not match
+/// `n_envs * n_steps`.
 pub fn compute_gae_batched(
     rewards: &[f64],
     values: &[f64],
@@ -64,6 +85,10 @@ pub fn compute_gae_batched(
     if n_envs == 0 || n_steps == 0 {
         return (Vec::new(), Vec::new());
     }
+    let expected_len = n_envs * n_steps;
+    debug_assert_eq!(rewards.len(), expected_len, "rewards.len() must equal n_envs * n_steps");
+    debug_assert_eq!(values.len(), expected_len, "values.len() must equal n_envs * n_steps");
+    debug_assert_eq!(dones.len(), expected_len, "dones.len() must equal n_envs * n_steps");
 
     use rayon::prelude::*;
 
@@ -98,6 +123,11 @@ pub fn compute_gae_batched(
 /// Batched GAE in f32 — avoids f64 conversion overhead from Python.
 ///
 /// Same layout as `compute_gae_batched` but operates on f32.
+///
+/// # Panics
+///
+/// Panics in debug builds if input slice lengths do not match
+/// `n_envs * n_steps`.
 pub fn compute_gae_batched_f32(
     rewards: &[f32],
     values: &[f32],
@@ -111,6 +141,10 @@ pub fn compute_gae_batched_f32(
     if n_envs == 0 || n_steps == 0 {
         return (Vec::new(), Vec::new());
     }
+    let expected_len = n_envs * n_steps;
+    debug_assert_eq!(rewards.len(), expected_len, "rewards.len() must equal n_envs * n_steps");
+    debug_assert_eq!(values.len(), expected_len, "values.len() must equal n_envs * n_steps");
+    debug_assert_eq!(dones.len(), expected_len, "dones.len() must equal n_envs * n_steps");
 
     use rayon::prelude::*;
 

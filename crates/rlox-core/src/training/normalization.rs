@@ -2,6 +2,7 @@
 ///
 /// Computes running mean, population variance, and standard deviation
 /// in a numerically stable, single-pass manner.
+#[derive(Debug, Clone)]
 pub struct RunningStats {
     count: u64,
     mean: f64,
@@ -86,6 +87,7 @@ impl Default for RunningStats {
 /// Maintains independent mean/variance accumulators for each dimension,
 /// enabling proper per-feature observation normalization as in SB3's
 /// `RunningMeanStd`.
+#[derive(Debug, Clone)]
 pub struct RunningStatsVec {
     dim: usize,
     count: u64,
@@ -152,10 +154,16 @@ impl RunningStatsVec {
         }
     }
 
-    /// Return the current per-dimension mean vector.
+    /// Return the current per-dimension mean vector (clone).
     #[inline]
     pub fn mean(&self) -> Vec<f64> {
         self.mean.clone()
+    }
+
+    /// Borrow the per-dimension mean as a slice (zero-cost).
+    #[inline]
+    pub fn mean_ref(&self) -> &[f64] {
+        &self.mean
     }
 
     /// Return the per-dimension population variance vector.

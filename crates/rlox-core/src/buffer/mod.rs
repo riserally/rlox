@@ -1,3 +1,24 @@
+//! Experience replay buffers for reinforcement learning.
+//!
+//! This module provides several buffer implementations, each suited to
+//! different training scenarios:
+//!
+//! | Buffer | Use case |
+//! |--------|----------|
+//! | [`ringbuf::ReplayBuffer`] | Standard uniform off-policy replay (DQN, SAC). |
+//! | [`priority::PrioritizedReplayBuffer`] | Proportional PER with importance-sampling weights. |
+//! | [`sequence::SequenceReplayBuffer`] | Contiguous subsequence sampling for recurrent policies. |
+//! | [`her::HERBuffer`] | Hindsight Experience Replay for goal-conditioned RL. |
+//! | [`mmap::MmapReplayBuffer`] | Disk-backed spill for large replay capacities. |
+//! | [`columnar::ExperienceTable`] | Append-only on-policy table (PPO, A2C). |
+//! | [`offline::OfflineDatasetBuffer`] | Read-only offline RL datasets. |
+//! | [`concurrent::ConcurrentReplayBuffer`] | Lock-free multi-producer buffer. |
+//!
+//! All buffers store observations and actions as `f32`, rewards as `f32`,
+//! and boolean done flags. The [`ExperienceRecord`] struct is a convenience
+//! for the `push()` API; prefer `push_slices()` to avoid intermediate
+//! `Vec` allocations in hot paths.
+
 pub mod columnar;
 pub mod concurrent;
 pub mod episode;

@@ -246,7 +246,7 @@ mod tests {
         let envs: Vec<Box<dyn RLEnv>> = (0..n_envs)
             .map(|i| Box::new(CartPole::new(Some(derive_seed(42, i)))) as Box<dyn RLEnv>)
             .collect();
-        let vec_env = Box::new(VecEnv::new(envs));
+        let vec_env = Box::new(VecEnv::new(envs).unwrap());
 
         // Create Candle policy and callbacks
         let ac = CandleActorCritic::new(4, 2, 64, 2.5e-4, Device::Cpu, 42).unwrap();

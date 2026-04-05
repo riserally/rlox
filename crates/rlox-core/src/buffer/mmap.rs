@@ -43,6 +43,20 @@ pub struct MmapReplayBuffer {
     mmap_stale: bool,
 }
 
+impl std::fmt::Debug for MmapReplayBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MmapReplayBuffer")
+            .field("obs_dim", &self.obs_dim)
+            .field("act_dim", &self.act_dim)
+            .field("hot_capacity", &self.hot_capacity)
+            .field("total_capacity", &self.total_capacity)
+            .field("cold_count", &self.cold_count)
+            .field("cold_write_pos", &self.cold_write_pos)
+            .field("cold_path", &self.cold_path)
+            .finish_non_exhaustive()
+    }
+}
+
 impl MmapReplayBuffer {
     /// Create a new mmap-backed replay buffer.
     ///
@@ -64,6 +78,16 @@ impl MmapReplayBuffer {
         if total_capacity < hot_capacity {
             return Err(RloxError::BufferError(
                 "total_capacity must be >= hot_capacity".to_string(),
+            ));
+        }
+        if obs_dim == 0 {
+            return Err(RloxError::BufferError(
+                "obs_dim must be > 0".to_string(),
+            ));
+        }
+        if act_dim == 0 {
+            return Err(RloxError::BufferError(
+                "act_dim must be > 0".to_string(),
             ));
         }
 

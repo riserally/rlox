@@ -246,7 +246,7 @@ mod tests {
         let envs: Vec<Box<dyn RLEnv>> = (0..n)
             .map(|i| Box::new(CartPole::new(Some(derive_seed(seed, i)))) as Box<dyn RLEnv>)
             .collect();
-        Box::new(VecEnv::new(envs))
+        Box::new(VecEnv::new(envs).unwrap())
     }
 
     #[test]

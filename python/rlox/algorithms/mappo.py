@@ -721,7 +721,6 @@ class MAPPO:
     @classmethod
     def from_checkpoint(cls, path: str, env_id: str | None = None) -> MAPPO:
         """Restore MAPPO from a checkpoint."""
-        import torch as _torch
 
         from rlox.checkpoint import safe_torch_load
 

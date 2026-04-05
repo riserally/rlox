@@ -86,9 +86,21 @@ pub fn compute_gae_batched(
         return (Vec::new(), Vec::new());
     }
     let expected_len = n_envs * n_steps;
-    debug_assert_eq!(rewards.len(), expected_len, "rewards.len() must equal n_envs * n_steps");
-    debug_assert_eq!(values.len(), expected_len, "values.len() must equal n_envs * n_steps");
-    debug_assert_eq!(dones.len(), expected_len, "dones.len() must equal n_envs * n_steps");
+    debug_assert_eq!(
+        rewards.len(),
+        expected_len,
+        "rewards.len() must equal n_envs * n_steps"
+    );
+    debug_assert_eq!(
+        values.len(),
+        expected_len,
+        "values.len() must equal n_envs * n_steps"
+    );
+    debug_assert_eq!(
+        dones.len(),
+        expected_len,
+        "dones.len() must equal n_envs * n_steps"
+    );
 
     use rayon::prelude::*;
 
@@ -142,9 +154,21 @@ pub fn compute_gae_batched_f32(
         return (Vec::new(), Vec::new());
     }
     let expected_len = n_envs * n_steps;
-    debug_assert_eq!(rewards.len(), expected_len, "rewards.len() must equal n_envs * n_steps");
-    debug_assert_eq!(values.len(), expected_len, "values.len() must equal n_envs * n_steps");
-    debug_assert_eq!(dones.len(), expected_len, "dones.len() must equal n_envs * n_steps");
+    debug_assert_eq!(
+        rewards.len(),
+        expected_len,
+        "rewards.len() must equal n_envs * n_steps"
+    );
+    debug_assert_eq!(
+        values.len(),
+        expected_len,
+        "values.len() must equal n_envs * n_steps"
+    );
+    debug_assert_eq!(
+        dones.len(),
+        expected_len,
+        "dones.len() must equal n_envs * n_steps"
+    );
 
     use rayon::prelude::*;
 

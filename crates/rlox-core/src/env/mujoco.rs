@@ -377,8 +377,18 @@ mod tests {
         let mut env = SimplifiedMuJoCoEnv::new(Some(42));
         let t = env.step(&zero_action()).unwrap();
         // With zero action, ctrl_cost = 0, so reward = forward_velocity
-        let x_vel = t.info.as_ref().and_then(|m| m.get("x_velocity")).copied().unwrap_or(0.0);
-        let ctrl = t.info.as_ref().and_then(|m| m.get("reward_ctrl")).copied().unwrap_or(0.0);
+        let x_vel = t
+            .info
+            .as_ref()
+            .and_then(|m| m.get("x_velocity"))
+            .copied()
+            .unwrap_or(0.0);
+        let ctrl = t
+            .info
+            .as_ref()
+            .and_then(|m| m.get("reward_ctrl"))
+            .copied()
+            .unwrap_or(0.0);
         assert!(
             ctrl.abs() < 1e-10,
             "ctrl cost should be ~0 for zero action, got {}",
@@ -395,7 +405,12 @@ mod tests {
         let mut env = SimplifiedMuJoCoEnv::new(Some(42));
         let action = Action::Continuous(vec![0.5; 6]);
         let t = env.step(&action).unwrap();
-        let ctrl = t.info.as_ref().and_then(|m| m.get("reward_ctrl")).copied().unwrap_or(0.0);
+        let ctrl = t
+            .info
+            .as_ref()
+            .and_then(|m| m.get("reward_ctrl"))
+            .copied()
+            .unwrap_or(0.0);
         // ctrl_cost = 0.1 * sum(0.5^2 * 6) = 0.1 * 1.5 = 0.15
         assert!(ctrl < 0.0, "ctrl reward should be negative, got {}", ctrl);
     }

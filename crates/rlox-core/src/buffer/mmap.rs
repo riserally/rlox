@@ -81,14 +81,10 @@ impl MmapReplayBuffer {
             ));
         }
         if obs_dim == 0 {
-            return Err(RloxError::BufferError(
-                "obs_dim must be > 0".to_string(),
-            ));
+            return Err(RloxError::BufferError("obs_dim must be > 0".to_string()));
         }
         if act_dim == 0 {
-            return Err(RloxError::BufferError(
-                "act_dim must be > 0".to_string(),
-            ));
+            return Err(RloxError::BufferError("act_dim must be > 0".to_string()));
         }
 
         Ok(Self {

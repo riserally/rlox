@@ -328,10 +328,8 @@ impl PyCandleCollector {
         let envs: Vec<Box<dyn RLEnv>> = (0..n_envs)
             .map(|i| Box::new(CartPole::new(Some(derive_seed(seed, i)))) as Box<dyn RLEnv>)
             .collect();
-        let vec_env = Box::new(
-            VecEnv::new(envs)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
-        );
+        let vec_env =
+            Box::new(VecEnv::new(envs).map_err(|e| PyRuntimeError::new_err(e.to_string()))?);
 
         // Create Candle callbacks
         let (action_fn, value_fn) =

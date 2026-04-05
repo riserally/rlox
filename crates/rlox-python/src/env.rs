@@ -113,8 +113,7 @@ impl PyVecEnv {
         };
 
         Ok(PyVecEnv {
-            inner: VecEnv::new(envs)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+            inner: VecEnv::new(envs).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
         })
     }
 

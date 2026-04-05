@@ -22,7 +22,6 @@ import torch
 import torch.nn as nn
 
 from rlox.callbacks import Callback, CallbackList
-from rlox.checkpoint import Checkpoint
 from rlox.collectors import RolloutCollector
 from rlox.config import VPGConfig
 from rlox.gym_vec_env import GymVecEnv

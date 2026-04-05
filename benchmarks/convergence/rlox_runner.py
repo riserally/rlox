@@ -128,12 +128,28 @@ def _collect_rollout_gym(
 
         dones = terminated | truncated
 
+        # Truncation bootstrap: when truncated but not terminated,
+        # add gamma * V(terminal_obs) to the reward so GAE doesn't
+        # treat the time-limit boundary as a death (value=0).
+        raw_rewards = rewards.copy()
+        if use_step_all:
+            terminal_obs_list = step_result.get("terminal_obs")
+            if terminal_obs_list is not None:
+                for i in range(n_envs):
+                    if truncated[i] and not terminated[i] and terminal_obs_list[i] is not None:
+                        with torch.no_grad():
+                            term_val = policy.get_value(
+                                torch.as_tensor(terminal_obs_list[i], dtype=torch.float32).unsqueeze(0)
+                            ).item()
+                        raw_rewards[i] += gamma * term_val
+
         all_obs.append(obs_tensor)
         all_actions.append(actions)
         all_log_probs.append(log_probs)
         all_values.append(values)
-        all_rewards.append(torch.as_tensor(rewards.astype(np.float32)))
-        all_dones.append(torch.as_tensor(dones.astype(np.float32)))
+        all_rewards.append(torch.as_tensor(raw_rewards.astype(np.float32)))
+        # Pass only terminated (not dones) to GAE — truncation is handled above
+        all_dones.append(torch.as_tensor(terminated.astype(np.float32)))
 
         obs = next_obs
 

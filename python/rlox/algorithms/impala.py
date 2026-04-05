@@ -391,10 +391,13 @@ class IMPALA:
             - self.ent_coef * entropy_loss
         )
 
-        self.optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+        # Hold the policy lock for the entire gradient update so that actor
+        # threads cannot read a partially-updated parameter tensor between the
+        # backward pass and the parameter write.
         with self._policy_lock:
+            self.optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
             self.optimizer.step()
 
         return {

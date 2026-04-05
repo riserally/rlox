@@ -103,9 +103,13 @@ class CalQL:
         self.discrete = isinstance(act_space, gym.spaces.Discrete)
 
         if self.discrete:
-            self.act_dim = 1
-        else:
-            self.act_dim = int(np.prod(act_space.shape))
+            raise ValueError(
+                "Cal-QL uses a SAC actor-critic backbone (SquashedGaussianPolicy) "
+                "and requires a continuous action space. "
+                "For discrete envs, consider CQL or DQN-based offline RL."
+            )
+
+        self.act_dim = int(np.prod(act_space.shape))
 
         self.gamma = gamma
         self.tau = tau

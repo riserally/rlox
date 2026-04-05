@@ -120,6 +120,11 @@ class TD3:
         self.logger = logger
         self._global_step = 0
 
+        if compile:
+            from rlox.compile import compile_policy
+
+            compile_policy(self)
+
     def _get_config_dict(self) -> dict[str, Any]:
         """Return a serialisable config dict for checkpointing."""
         return {
@@ -135,11 +140,6 @@ class TD3:
             "noise_clip": self.noise_clip,
             "exploration_noise": self.exploration_noise,
         }
-
-        if compile:
-            from rlox.compile import compile_policy
-
-            compile_policy(self)
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         # Use OffPolicyCollector for multi-env, or default single-env loop

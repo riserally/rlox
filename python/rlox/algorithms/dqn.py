@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import copy
 from typing import Any
 
@@ -119,8 +120,8 @@ class DQN:
         else:
             self.buffer = rlox.ReplayBuffer(buffer_size, obs_dim, 1)
 
-        # N-step return buffer
-        self._n_step_buffer: list[tuple] = []
+        # N-step return buffer (deque for O(1) popleft)
+        self._n_step_buffer: collections.deque[tuple] = collections.deque()
 
         # Off-policy collector — enables multi-env collection
         self.collector = collector
@@ -179,7 +180,7 @@ class DQN:
                 bool(last_trunc),
                 np.asarray(last_next_obs, dtype=np.float32),
             )
-        self._n_step_buffer.pop(0)
+        self._n_step_buffer.popleft()
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         # Use OffPolicyCollector for multi-env, or default single-env loop
@@ -250,7 +251,7 @@ class DQN:
                             bool(last_trunc_b),
                             np.asarray(last_next_obs_b, dtype=np.float32),
                         )
-                    self._n_step_buffer.pop(0)
+                    self._n_step_buffer.popleft()
 
                 episode_rewards.append(ep_reward)
                 ep_reward = 0.0

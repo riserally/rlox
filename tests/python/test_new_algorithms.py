@@ -175,16 +175,24 @@ class TestCalQL:
     def test_calql_constructs(self):
         from rlox.algorithms.calql import CalQL
 
-        agent = CalQL(env_id="CartPole-v1", seed=0)
+        # Cal-QL requires a continuous action space (SAC backbone)
+        agent = CalQL(env_id="Pendulum-v1", seed=0)
         assert agent is not None
-        assert agent.env_id == "CartPole-v1"
+        assert agent.env_id == "Pendulum-v1"
+
+    def test_calql_rejects_discrete_env(self):
+        """Cal-QL must raise ValueError for discrete action spaces."""
+        from rlox.algorithms.calql import CalQL
+
+        with pytest.raises(ValueError, match="continuous action space"):
+            CalQL(env_id="CartPole-v1", seed=0)
 
     def test_calql_calibration_scales_penalty(self):
         """Calibration tau should scale the CQL penalty."""
         from rlox.algorithms.calql import CalQL
 
-        agent_low = CalQL(env_id="CartPole-v1", seed=0, calibration_tau=0.1)
-        agent_high = CalQL(env_id="CartPole-v1", seed=0, calibration_tau=0.9)
+        agent_low = CalQL(env_id="Pendulum-v1", seed=0, calibration_tau=0.1)
+        agent_high = CalQL(env_id="Pendulum-v1", seed=0, calibration_tau=0.9)
 
         # With higher calibration_tau, the penalty weight should be different
         # The calibration_tau is stored and used in loss computation
@@ -213,9 +221,10 @@ class TestCalQL:
     def test_calql_registered(self):
         from rlox.trainer import Trainer
 
+        # Cal-QL requires a continuous env
         trainer = Trainer(
             "calql",
-            env="CartPole-v1",
+            env="Pendulum-v1",
             config={"batch_size": 4, "buffer_size": 500},
         )
         assert trainer.algo is not None

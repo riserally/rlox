@@ -16,6 +16,8 @@
   <a href="https://pepy.tech/project/rlox"><img src="https://static.pepy.tech/badge/rlox" alt="Downloads"></a>
 </p>
 
+> **New to Reinforcement Learning?** Start with our [RL Introduction](https://riserally.github.io/rlox/rl-introduction/) to learn the fundamentals, then follow the [Learning Path](https://riserally.github.io/rlox/learning-path/) from beginner to production.
+
 ## Why rlox?
 
 RL frameworks like Stable-Baselines3 and TorchRL do everything in Python — environment stepping, buffer storage, advantage computation. This works, but Python interpreter overhead becomes the bottleneck long before your GPU does.

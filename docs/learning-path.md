@@ -86,6 +86,21 @@ action = trainer.predict(obs, deterministic=True)
 
 **Goal:** Understand the building blocks of RL and the rlox architecture.
 
+### RL fundamentals (start here if new to RL)
+
+Read [Introduction to Reinforcement Learning](rl-introduction.md) first to learn:
+
+- The agent-environment loop
+- States, observations, and actions
+- Policies: stochastic vs deterministic
+- Value functions: V(s), Q(s,a), and the advantage A(s,a)
+- The RL optimization problem
+- On-policy vs off-policy algorithms
+
+!!! tip "New to RL?"
+    If terms like "policy," "value function," or "advantage" are unfamiliar,
+    read the RL Introduction before continuing. Everything below builds on it.
+
 ### Policy gradient fundamentals
 
 Read [Policy Gradient Fundamentals](tutorials/policy-gradient-fundamentals.md) to understand:

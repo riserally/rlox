@@ -172,7 +172,31 @@ value = policy.get_value(obs)
 print(f"Estimated value of this state: {value.item():.3f}")
 ```
 
-The value function is critical for computing **advantages** (see Section 5).
+### Action-Value Function
+
+The **action-value function** Q(s, a) estimates the expected return from
+taking action a in state s, then following the policy:
+
+$$Q^\pi(s, a) = \mathbb{E}\left[\sum_{t=0}^{\infty} \gamma^t r_t \mid s_0 = s, a_0 = a\right]$$
+
+While V(s) answers "how good is this state?", Q(s, a) answers "how good
+is taking this specific action in this state?"
+
+### Advantage Function
+
+The **advantage** A(s, a) measures how much better action a is compared
+to the average action in state s:
+
+$$A^\pi(s, a) = Q^\pi(s, a) - V^\pi(s)$$
+
+- A(s, a) > 0: action a is **better** than average
+- A(s, a) < 0: action a is **worse** than average
+- A(s, a) = 0: action a is exactly average
+
+The advantage is the key quantity in policy gradient methods (PPO, A2C,
+TRPO). It tells the optimizer *which actions to reinforce* and *which
+to suppress*. rlox computes advantages efficiently via Generalized
+Advantage Estimation (GAE) in Rust — see Section 5.
 
 ### Discount Factor (gamma)
 

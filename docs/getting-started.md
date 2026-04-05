@@ -194,7 +194,7 @@ For continuous control with SAC or TD3:
 ```python
 from rlox import Trainer
 
-trainer = SACTrainer(
+trainer = Trainer("sac", 
     env="Pendulum-v1",
     config={
         "learning_rate": 3e-4,
@@ -212,7 +212,7 @@ For discrete control with DQN (with Rainbow extensions):
 ```python
 from rlox import Trainer
 
-trainer = DQNTrainer(
+trainer = Trainer("dqn", 
     env="CartPole-v1",
     config={
         "double_dqn": True,
@@ -296,7 +296,7 @@ trainer.train(total_timesteps=100_000)
 from rlox.callbacks import EarlyStoppingCallback
 from rlox import Trainer
 
-trainer = PPOTrainer(
+trainer = Trainer("ppo", 
     env="CartPole-v1",
     callbacks=[EarlyStoppingCallback(patience=20)],
 )

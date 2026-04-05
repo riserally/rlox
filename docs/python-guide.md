@@ -60,7 +60,7 @@ from rlox import Trainer
 **Trainer("ppo", ...)** -- On-policy, discrete or continuous actions.
 
 ```python
-trainer = PPOTrainer(
+trainer = Trainer("ppo", 
     env="CartPole-v1",
     config={"n_envs": 16, "n_steps": 256, "learning_rate": 3e-4},
     seed=42,
@@ -70,7 +70,7 @@ trainer = PPOTrainer(
 **Trainer("sac", ...)** -- Off-policy, continuous actions (e.g. Pendulum, MuJoCo).
 
 ```python
-trainer = SACTrainer(
+trainer = Trainer("sac", 
     env="Pendulum-v1",
     config={"learning_rate": 3e-4, "buffer_size": 100_000},
     seed=42,
@@ -80,7 +80,7 @@ trainer = SACTrainer(
 **Trainer("dqn", ...)** -- Off-policy, discrete actions with Rainbow extensions.
 
 ```python
-trainer = DQNTrainer(
+trainer = Trainer("dqn", 
     env="CartPole-v1",
     config={"double_dqn": True, "dueling": True},
     seed=42,
@@ -116,7 +116,7 @@ trainer = TD3Trainer(
 ```python
 from rlox import Trainer
 
-trainer = MAPPOTrainer(
+trainer = MATrainer("ppo", 
     env="spread_v3",   # PettingZoo environment
     n_agents=3,
     seed=42,
@@ -158,7 +158,7 @@ from rlox.callbacks import (
     TimingCallback,
 )
 
-trainer = PPOTrainer(
+trainer = Trainer("ppo", 
     env="CartPole-v1",
     callbacks=[
         EarlyStoppingCallback(patience=20, min_delta=1.0),
@@ -719,7 +719,7 @@ metrics = train_from_config(cfg)
 from rlox import Trainer
 from rlox.wrappers import VecNormalize
 
-trainer = PPOTrainer(
+trainer = Trainer("ppo", 
     env="CartPole-v1",
     wrappers=[VecNormalize(norm_obs=True, norm_reward=True, clip_obs=10.0)],
     seed=42,
@@ -742,7 +742,7 @@ from rlox.dashboard import MetricsCollector, HTMLReport, TerminalDashboard
 collector = MetricsCollector()
 
 from rlox import Trainer
-trainer = PPOTrainer(
+trainer = Trainer("ppo", 
     env="CartPole-v1",
     callbacks=[collector],
     seed=42,
@@ -756,7 +756,7 @@ report.save("training_report.html")
 # Or use the live terminal dashboard (Rich-based)
 # Pass TerminalDashboard as a callback for real-time display:
 from rlox import Trainer
-trainer = PPOTrainer(
+trainer = Trainer("ppo", 
     env="CartPole-v1",
     callbacks=[TerminalDashboard()],
     seed=42,

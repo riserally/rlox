@@ -97,6 +97,11 @@ class LanguageWrapper:
         """Return the number of parallel sub-environments."""
         return self._n_envs
 
+    def close(self) -> None:
+        """Close the inner environment."""
+        if hasattr(self.env, "close"):
+            self.env.close()
+
 
 class GoalConditionedWrapper:
     """Wrap env to append goal to observation and compute sparse reward.
@@ -174,3 +179,8 @@ class GoalConditionedWrapper:
     def num_envs(self) -> int:
         """Return the number of parallel sub-environments."""
         return self._n_envs
+
+    def close(self) -> None:
+        """Close the inner environment."""
+        if hasattr(self.env, "close"):
+            self.env.close()

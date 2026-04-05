@@ -100,6 +100,10 @@ class GymVecEnv:
         """Return the number of parallel sub-environments."""
         return self._n_envs
 
+    def close(self) -> None:
+        """Close all sub-environments and release resources."""
+        self._env.close()
+
     @property
     def action_space(self) -> gym.Space:
         """Return the single-env action space."""

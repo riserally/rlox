@@ -52,6 +52,11 @@ class FrameStack:
         """Return the number of parallel sub-environments."""
         return self.env.num_envs()
 
+    def close(self) -> None:
+        """Close the inner environment."""
+        if hasattr(self.env, "close"):
+            self.env.close()
+
 
 class ImagePreprocess:
     """Resize, grayscale, and normalize pixel observations.
@@ -153,6 +158,11 @@ class ImagePreprocess:
     def num_envs(self) -> int:
         """Return the number of parallel sub-environments."""
         return self.env.num_envs()
+
+    def close(self) -> None:
+        """Close the inner environment."""
+        if hasattr(self.env, "close"):
+            self.env.close()
 
 
 class AtariWrapper:

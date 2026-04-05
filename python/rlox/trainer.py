@@ -211,6 +211,7 @@ def _register_builtins() -> None:
     from rlox.algorithms.trpo import TRPO
     from rlox.algorithms.diffusion_policy import DiffusionPolicy
     from rlox.algorithms.mpo import MPO
+    from rlox.algorithms.dtp import RWDTP, RCDTP
 
     for name, cls in [
         ("ppo", PPO),
@@ -227,6 +228,8 @@ def _register_builtins() -> None:
         ("trpo", TRPO),
         ("diffusion", DiffusionPolicy),
         ("mpo", MPO),
+        ("rwdtp", RWDTP),
+        ("rcdtp", RCDTP),
     ]:
         if name not in ALGORITHM_REGISTRY:
             ALGORITHM_REGISTRY[name] = cls

@@ -40,6 +40,7 @@ from rlox.algorithms.awr import AWR
 from rlox.algorithms.trpo import TRPO
 from rlox.algorithms.diffusion_policy import DiffusionPolicy
 from rlox.algorithms.mpo import MPO
+from rlox.algorithms.dtp import DecisionTreePolicy, RWDTP, RCDTP
 
 __all__ = [
     "PPO",
@@ -62,4 +63,7 @@ __all__ = [
     "TRPO",
     "DiffusionPolicy",
     "MPO",
+    "DecisionTreePolicy",
+    "RWDTP",
+    "RCDTP",
 ]

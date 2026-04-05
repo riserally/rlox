@@ -1026,7 +1026,63 @@ class MPOConfig(ConfigMixin):
         _validate_positive("dual_lr", self.dual_lr)
 
 
-_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo", "diffusion", "mpo"}
+@dataclass
+class DTPConfig(ConfigMixin):
+    """Configuration for Decision Tree Policies (RWDTP / RCDTP).
+
+    Implements Koirala & Fleming, "Solving Offline Reinforcement Learning
+    with Decision Tree Regression," arXiv:2401.11630, 2024.
+
+    Attributes
+    ----------
+    method : str
+        Which framework to use: ``"rwdtp"`` (return-weighted) or
+        ``"rcdtp"`` (return-conditioned).  Default ``"rwdtp"``.
+    gamma : float
+        Discount factor for return computation (default 1.0).
+    return_power : float
+        Exponent ``p`` applied to normalised returns in RWDTP (default 1.0).
+    n_trees : int
+        Number of boosting rounds / weak policies (default 500).
+    max_depth : int
+        Maximum depth per tree (default 6).
+    learning_rate_xgb : float
+        XGBoost shrinkage / step-size (default 0.1).
+    target_return : float or None
+        RCDTP runtime target return.  If None, uses the dataset maximum.
+    subsample : float
+        Row subsampling ratio per boosting round (default 1.0).
+    colsample_bytree : float
+        Column subsampling ratio per tree (default 1.0).
+    reg_alpha : float
+        L1 regularization on leaf weights (default 0.0).
+    reg_lambda : float
+        L2 regularization on leaf weights (default 1.0).
+    """
+
+    method: str = "rwdtp"
+    gamma: float = 1.0
+    return_power: float = 1.0
+    n_trees: int = 500
+    max_depth: int = 6
+    learning_rate_xgb: float = 0.1
+    target_return: float | None = None
+    subsample: float = 1.0
+    colsample_bytree: float = 1.0
+    reg_alpha: float = 0.0
+    reg_lambda: float = 1.0
+
+    def __post_init__(self):
+        if self.method not in ("rwdtp", "rcdtp"):
+            raise ValueError(
+                f"method must be 'rwdtp' or 'rcdtp', got {self.method!r}"
+            )
+        _validate_min("n_trees", self.n_trees, 1)
+        _validate_min("max_depth", self.max_depth, 1)
+        _validate_positive("learning_rate_xgb", self.learning_rate_xgb)
+
+
+_VALID_ALGORITHMS = {"ppo", "sac", "dqn", "td3", "a2c", "mappo", "dreamer", "impala", "dt", "qmix", "calql", "trpo", "diffusion", "mpo", "rwdtp", "rcdtp"}
 _VALID_LOGGERS = {"tensorboard", "wandb", "console", None}
 _VALID_CALLBACKS = {"eval", "checkpoint", "progress", "timing", "early_stopping"}
 

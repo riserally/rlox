@@ -91,4 +91,4 @@ metrics = agent.train(n_updates=100_000)
 
 ## References
 
-- Fujimoto, S. & Gu, S. S. (2021). A Minimalist Approach to Offline Reinforcement Learning. *NeurIPS 2021*. *arXiv:2106.06860*.
+- Fujimoto, S. & Gu, S. S. (2021). [A Minimalist Approach to Offline Reinforcement Learning](https://arxiv.org/abs/2106.06860). *NeurIPS 2021*. [arXiv:2106.06860](https://arxiv.org/abs/2106.06860).

@@ -97,4 +97,4 @@ print(f"Mean reward: {metrics['mean_reward']:.1f}")
 
 ## References
 
-- Rashid, T., Samvelyan, M., Schroeder de Witt, C., Farquhar, G., Foerster, J., & Whiteson, S. (2018). QMIX: Monotonic Value Function Factorisation for Deep Multi-Agent Reinforcement Learning. *ICML 2018*. *arXiv:1803.11485*.
+- Rashid, T., Samvelyan, M., Schroeder de Witt, C., Farquhar, G., Foerster, J., & Whiteson, S. (2018). QMIX: Monotonic Value Function Factorisation for Deep Multi-Agent Reinforcement Learning. *ICML 2018*. [arXiv:1803.11485](https://arxiv.org/abs/1803.11485).

@@ -127,4 +127,4 @@ All defaults from `MPOConfig`:
 
 ## References
 
-- Abdolmaleki, A., Springenberg, J. T., Tassa, Y., Munos, R., Heess, N., & Riedmiller, M. (2018). Maximum a Posteriori Policy Optimisation. *ICLR 2018*. *arXiv:1806.06920*.
+- Abdolmaleki, A., Springenberg, J. T., Tassa, Y., Munos, R., Heess, N., & Riedmiller, M. (2018). Maximum a Posteriori Policy Optimisation. *ICLR 2018*. [arXiv:1806.06920](https://arxiv.org/abs/1806.06920).

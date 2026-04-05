@@ -106,5 +106,5 @@ All defaults from `MAPPOConfig`:
 
 ## References
 
-- Yu, C., Velu, A., Vinitsky, E., et al. (2022). The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games. *NeurIPS 2022*.
-- de Witt, C. S., Gupta, T., Makoviichuk, D., et al. (2020). Is Independent Learning All You Need in the StarCraft Multi-Agent Challenge? *arXiv:2011.09533*.
+- Yu, C., Velu, A., Vinitsky, E., et al. (2022). [The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games](https://arxiv.org/abs/2103.01955). *NeurIPS 2022*.
+- de Witt, C. S., Gupta, T., Makoviichuk, D., et al. (2020). Is Independent Learning All You Need in the StarCraft Multi-Agent Challenge? [arXiv:2011.09533](https://arxiv.org/abs/2011.09533).

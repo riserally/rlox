@@ -115,4 +115,4 @@ All defaults from `IMPALAConfig`:
 
 ## References
 
-- Espeholt, L., Soyer, H., Munos, R., et al. (2018). IMPALA: Scalable Distributed Deep-RL with Importance Weighted Actor-Learner Architectures. *ICML 2018*.
+- Espeholt, L., Soyer, H., Munos, R., et al. (2018). [IMPALA: Scalable Distributed Deep-RL with Importance Weighted Actor-Learner Architectures](https://arxiv.org/abs/1802.01561). *ICML 2018*.

@@ -99,4 +99,4 @@ metrics = agent.train(n_updates=100_000)
 
 ## References
 
-- Kostrikov, I., Nair, A., & Levine, S. (2022). Offline Reinforcement Learning with Implicit Q-Learning. *ICLR 2022*. *arXiv:2110.06169*.
+- Kostrikov, I., Nair, A., & Levine, S. (2022). [Offline Reinforcement Learning with Implicit Q-Learning](https://arxiv.org/abs/2110.06169). *ICLR 2022*. [arXiv:2110.06169](https://arxiv.org/abs/2110.06169).

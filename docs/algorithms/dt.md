@@ -103,4 +103,4 @@ metrics = trainer.train(total_timesteps=1_000_000)
 
 ## References
 
-- Chen, L., Lu, K., Rajeswaran, A., Lee, K., Grover, A., Laskin, M., Abbeel, P., Srinivas, A., & Mordatch, I. (2021). Decision Transformer: Reinforcement Learning via Sequence Modeling. *NeurIPS 2021*. *arXiv:2106.01345*.
+- Chen, L., Lu, K., Rajeswaran, A., Lee, K., Grover, A., Laskin, M., Abbeel, P., Srinivas, A., & Mordatch, I. (2021). Decision Transformer: Reinforcement Learning via Sequence Modeling. *NeurIPS 2021*. [arXiv:2106.01345](https://arxiv.org/abs/2106.01345).

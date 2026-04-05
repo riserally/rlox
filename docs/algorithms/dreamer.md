@@ -127,5 +127,5 @@ All defaults from `DreamerV3Config`:
 
 ## References
 
-- Hafner, D., Pasukonis, J., Ba, J., & Lillicrap, T. (2023). Mastering Diverse Domains through World Models. *arXiv:2301.04104* (DreamerV3).
+- Hafner, D., Pasukonis, J., Ba, J., & Lillicrap, T. (2023). [Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104). [arXiv:2301.04104](https://arxiv.org/abs/2301.04104) (DreamerV3).
 - Hafner, D., Lillicrap, T., Fischer, I., Villegas, R., Ha, D., Lee, H., & Davidson, J. (2019). Learning Latent Dynamics for Planning from Pixels. *ICML* (Dreamer V1).

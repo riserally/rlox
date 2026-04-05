@@ -83,5 +83,5 @@ Since VPG is emulated via PPO, the relevant parameters from `PPOConfig`:
 
 ## References
 
-- Williams, R. J. (1992). Simple statistical gradient-following algorithms for connectionist reinforcement learning. *Machine Learning*, 8(3-4), 229-256.
-- Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). Policy gradient methods for reinforcement learning with function approximation. *NeurIPS*.
+- Williams, R. J. (1992). [Simple statistical gradient-following algorithms for connectionist reinforcement learning](https://link.springer.com/article/10.1007/BF00992696). *Machine Learning*, 8(3-4), 229-256.
+- Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). [Policy gradient methods for reinforcement learning with function approximation](https://papers.nips.cc/paper/1999/hash/464d828b85b0bed98e80ade0a5c43b0f-Abstract.html). *NeurIPS*.

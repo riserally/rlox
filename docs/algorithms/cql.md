@@ -101,4 +101,4 @@ metrics = agent.train(n_updates=100_000)
 
 ## References
 
-- Kumar, A., Zhou, A., Tucker, G., & Levine, S. (2020). Conservative Q-Learning for Offline Reinforcement Learning. *NeurIPS 2020*. *arXiv:2006.04779*.
+- Kumar, A., Zhou, A., Tucker, G., & Levine, S. (2020). [Conservative Q-Learning for Offline Reinforcement Learning](https://arxiv.org/abs/2006.04779). *NeurIPS 2020*. [arXiv:2006.04779](https://arxiv.org/abs/2006.04779).

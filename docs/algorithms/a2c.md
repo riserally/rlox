@@ -93,5 +93,5 @@ All defaults from `A2CConfig`:
 
 ## References
 
-- Mnih, V., Badia, A. P., Mirza, M., et al. (2016). Asynchronous Methods for Deep Reinforcement Learning. *ICML* (A3C, the async predecessor).
+- Mnih, V., Badia, A. P., Mirza, M., et al. (2016). [Asynchronous Methods for Deep Reinforcement Learning](https://arxiv.org/abs/1602.01783). *ICML* (A3C, the async predecessor).
 - Stable Baselines3 A2C implementation (synchronous variant).

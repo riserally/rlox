@@ -99,4 +99,4 @@ print(f"Mean reward: {metrics['mean_reward']:.1f}")
 
 ## References
 
-- Nakamoto, N., Zhai, S., Singh, A., Mark, M. S., Ma, Y., Finn, C., Kumar, A., & Levine, S. (2023). Cal-QL: Calibrated Offline RL Pre-Training for Efficient Online Fine-Tuning. *NeurIPS 2023*. *arXiv:2303.05479*.
+- Nakamoto, N., Zhai, S., Singh, A., Mark, M. S., Ma, Y., Finn, C., Kumar, A., & Levine, S. (2023). Cal-QL: Calibrated Offline RL Pre-Training for Efficient Online Fine-Tuning. *NeurIPS 2023*. [arXiv:2303.05479](https://arxiv.org/abs/2303.05479).

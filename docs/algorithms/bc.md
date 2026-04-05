@@ -87,5 +87,5 @@ metrics = agent.train(n_updates=50_000)
 
 ## References
 
-- Pomerleau, D. A. (1989). ALVINN: An Autonomous Land Vehicle in a Neural Network. *NeurIPS 1989*.
+- Pomerleau, D. A. (1989). [ALVINN: An Autonomous Land Vehicle in a Neural Network](https://papers.nips.cc/paper/1988/hash/812b4ba287f5ee0bc9d43bbf5bbe87fb-Abstract.html). *NeurIPS 1989*.
 - Bain, M. & Sammut, C. (1995). A Framework for Behavioural Cloning. *Machine Intelligence 15*, pp. 103-129.

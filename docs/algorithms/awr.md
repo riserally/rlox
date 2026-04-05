@@ -103,4 +103,4 @@ metrics = trainer.train(total_timesteps=100_000)
 
 ## References
 
-- Peng, X. B., Kumar, A., Zhang, G., & Levine, S. (2019). Advantage-Weighted Regression: Simple and Scalable Off-Policy Reinforcement Learning. *arXiv:1910.00177*.
+- Peng, X. B., Kumar, A., Zhang, G., & Levine, S. (2019). [Advantage-Weighted Regression: Simple and Scalable Off-Policy Reinforcement Learning](https://arxiv.org/abs/1910.00177). [arXiv:1910.00177](https://arxiv.org/abs/1910.00177).

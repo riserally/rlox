@@ -99,4 +99,4 @@ All defaults from `TRPOConfig`:
 
 ## References
 
-- Schulman, J., Levine, S., Abbeel, P., Jordan, M., & Moritz, P. (2015). Trust Region Policy Optimization. *ICML 2015*.
+- Schulman, J., Levine, S., Abbeel, P., Jordan, M., & Moritz, P. (2015). [Trust Region Policy Optimization](https://arxiv.org/abs/1502.05477). *ICML 2015*.

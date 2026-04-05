@@ -116,5 +116,5 @@ All defaults from `TD3Config`:
 
 ## References
 
-- Fujimoto, S., van Hoof, H., & Meger, D. (2018). Addressing Function Approximation Error in Actor-Critic Methods. *ICML 2018*.
-- Lillicrap, T. P., Hunt, J. J., Pritzel, A., et al. (2015). Continuous control with deep reinforcement learning. *arXiv:1509.02971* (DDPG).
+- Fujimoto, S., van Hoof, H., & Meger, D. (2018). [Addressing Function Approximation Error in Actor-Critic Methods](https://arxiv.org/abs/1802.09477). *ICML 2018*.
+- Lillicrap, T. P., Hunt, J. J., Pritzel, A., et al. (2015). [Continuous control with deep reinforcement learning](https://arxiv.org/abs/1509.02971). *arXiv* (DDPG).

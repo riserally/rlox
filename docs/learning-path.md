@@ -274,6 +274,38 @@ launch_dashboard(log_dir="runs/")
 
 See [Dashboard API reference](api/dashboard.md).
 
+### Plugin ecosystem
+
+Extend rlox without modifying the core:
+
+- Register custom environments, buffers, and reward functions via `ENV_REGISTRY`, `BUFFER_REGISTRY`, `REWARD_REGISTRY`
+- Auto-discover third-party plugins with `discover_plugins()`
+- See [Python User Guide -- Plugin Ecosystem](python-guide.md#plugin-ecosystem)
+
+### Visual RL
+
+Train agents from pixel observations:
+
+- `FrameStack`, `ImagePreprocess`, `AtariWrapper` for standard preprocessing
+- `DMControlWrapper` for DeepMind Control Suite
+- See [Python User Guide -- Visual RL Wrappers](python-guide.md#visual-rl-wrappers)
+
+### Cloud deploy
+
+Deploy trained agents to production:
+
+- `generate_dockerfile` for containerized model serving
+- `generate_k8s_job` for Kubernetes training jobs
+- `generate_sagemaker_config` for AWS SageMaker
+- See [Python User Guide -- Cloud Deploy](python-guide.md#cloud-deploy)
+
+### Model zoo
+
+Share and reuse pretrained agents:
+
+- `ModelZoo.register` / `ModelZoo.load` for model sharing
+- `ModelCard` metadata for discoverability
+
 ### Custom algorithms
 
 Extend rlox with the protocol system:
@@ -293,4 +325,5 @@ Extend rlox with the protocol system:
 | 3 | Off-policy algorithms | [DQN](algorithms/dqn.md), [SAC](algorithms/sac.md), [TD3](algorithms/td3.md) |
 | 4 | Advanced algorithms | [TRPO](algorithms/trpo.md), [IMPALA](algorithms/impala.md), [DreamerV3](algorithms/dreamer.md) |
 | 5 | Multi-agent + advanced | [MAPPO](algorithms/mappo.md), intrinsic motivation, offline RL |
-| 6-7 | Production | Config-driven training, distributed, dashboard |
+| 6 | Production & plugins | Config-driven training, distributed, dashboard, plugin ecosystem |
+| 7 | Deploy & visual RL | Cloud deploy, visual RL wrappers, model zoo |

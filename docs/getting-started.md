@@ -338,6 +338,10 @@ cargo test --package rlox-core
 | `RunningStatsVec` | Per-dimension online mean/variance (for observation normalisation) |
 | `pack_sequences` | LLM sequence packing |
 | `Pendulum` | Native Pendulum-v1 environment |
+| `FrameStack` | Stack consecutive observation frames (visual RL) |
+| `ImagePreprocess` | Resize, grayscale, normalize pixel observations |
+| `AtariWrapper` | Standard Atari preprocessing pipeline |
+| `DMControlWrapper` | DeepMind Control Suite environment wrapper |
 
 ### Python Layer (from `rlox.*`)
 
@@ -372,6 +376,15 @@ cargo test --package rlox-core
 | `Callback`, `EvalCallback` | `rlox.callbacks` | Training hooks |
 | `compile_policy` | `rlox.compile` | torch.compile integration |
 | `MmapReplayBuffer` | `rlox` | Disk-spilling replay for large obs |
+| `ENV_REGISTRY` | `rlox.plugins` | Plugin registry for custom environments |
+| `BUFFER_REGISTRY` | `rlox.plugins` | Plugin registry for custom buffers |
+| `REWARD_REGISTRY` | `rlox.plugins` | Plugin registry for custom reward functions |
+| `discover_plugins` | `rlox.plugins` | Auto-discover plugins from installed packages |
+| `ModelZoo` | `rlox.model_zoo` | Registry of pretrained agents |
+| `FrameStack`, `AtariWrapper` | `rlox.wrappers.visual` | Visual RL observation wrappers |
+| `LanguageWrapper` | `rlox.wrappers.language` | Language-grounded RL wrapper |
+| `generate_dockerfile` | `rlox.deploy` | Generate Dockerfile for model serving |
+| `generate_k8s_job` | `rlox.deploy` | Generate Kubernetes job manifest |
 
 ## Next Steps
 

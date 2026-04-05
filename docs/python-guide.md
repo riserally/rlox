@@ -386,14 +386,20 @@ print(ppo.timing_summary())
 
 ### Inference with `predict()`
 
-All algorithms provide a `predict()` method for evaluation:
+All algorithms provide a `predict()` method for evaluation. This includes PPO, A2C, VPG, TRPO, SAC, TD3, DQN, IMPALA, MAPPO, and all other trainers:
 
 ```python
+# On-policy (PPO, A2C, VPG, TRPO): returns numpy action
+action = ppo.predict(obs, deterministic=True)
+
 # SAC/TD3: returns numpy action array (scaled to env range)
 action = sac.predict(obs, deterministic=True)
 
 # DQN: returns int action
 action = dqn.predict(obs)
+
+# IMPALA/MAPPO: also support predict()
+action = impala.predict(obs)
 ```
 
 ### Custom Environments
@@ -968,6 +974,179 @@ sac.train(total_timesteps=50_000)
 # get_action_and_logprob, get_value, get_logprob_and_entropy
 ppo = PPO(env_id="CartPole-v1")
 compile_policy(ppo)
+```
+
+---
+
+## Plugin Ecosystem
+
+rlox provides a plugin system for registering custom environments, buffers, and reward functions. Third-party packages can expose plugins via entry points that are discovered automatically.
+
+### Registries
+
+```python
+from rlox.plugins import ENV_REGISTRY, BUFFER_REGISTRY, REWARD_REGISTRY
+
+# Register a custom environment factory
+ENV_REGISTRY.register("my-env-v0", lambda: MyCustomEnv())
+
+# Register a custom buffer class
+BUFFER_REGISTRY.register("my-buffer", MyBufferClass)
+
+# Register a custom reward function
+REWARD_REGISTRY.register("shaped-reward", my_reward_fn)
+```
+
+### Using registered components
+
+```python
+from rlox import Trainer
+
+# Use a registered custom environment by name
+trainer = Trainer("ppo", env="my-env-v0", seed=42)
+metrics = trainer.train(total_timesteps=50_000)
+```
+
+### Plugin discovery
+
+Plugins from installed packages are discovered automatically via Python entry points:
+
+```python
+from rlox.plugins import discover_plugins
+
+# Scan installed packages for rlox plugins
+discover_plugins()
+
+# Plugins register themselves into ENV_REGISTRY, BUFFER_REGISTRY, etc.
+```
+
+To make your package discoverable, add an entry point in your `pyproject.toml`:
+
+```toml
+[project.entry-points."rlox.plugins"]
+my_plugin = "my_package.plugin:register"
+```
+
+---
+
+## Model Zoo
+
+The model zoo provides a registry of pretrained agents with metadata (algorithm, environment, hyperparameters, performance).
+
+```python
+from rlox.model_zoo import ModelZoo, ModelCard
+
+# Register a trained model
+card = ModelCard(
+    name="ppo-cartpole-v1",
+    algorithm="ppo",
+    env="CartPole-v1",
+    mean_reward=500.0,
+    description="PPO agent trained to solve CartPole-v1",
+)
+ModelZoo.register(card, checkpoint_path="checkpoints/ppo_cartpole.pt")
+
+# List available models
+for card in ModelZoo.list():
+    print(f"{card.name}: {card.mean_reward:.1f}")
+
+# Load a pretrained model
+trainer = ModelZoo.load("ppo-cartpole-v1")
+action = trainer.predict(obs, deterministic=True)
+```
+
+---
+
+## Visual RL Wrappers
+
+Wrappers for pixel-based reinforcement learning, providing standard preprocessing for image observations.
+
+```python
+from rlox.wrappers.visual import FrameStack, ImagePreprocess, AtariWrapper, DMControlWrapper
+
+# FrameStack: stack N consecutive frames along the channel axis
+env = FrameStack(env, n_frames=4)
+
+# ImagePreprocess: resize, grayscale, normalize pixel values
+env = ImagePreprocess(env, width=84, height=84, grayscale=True)
+
+# AtariWrapper: combines standard Atari preprocessing
+# (NoopReset, MaxAndSkip, EpisodicLife, FireReset, ClipReward, FrameStack)
+env = AtariWrapper(env, frame_stack=4)
+
+# DMControlWrapper: wraps DeepMind Control Suite environments
+env = DMControlWrapper(domain="cartpole", task="swingup")
+```
+
+---
+
+## Language RL Wrappers
+
+Wrappers for language-grounded and goal-conditioned reinforcement learning.
+
+```python
+from rlox.wrappers.language import LanguageWrapper, GoalConditionedWrapper
+
+# LanguageWrapper: adds language instructions to observations
+env = LanguageWrapper(env, instruction_fn=lambda obs: "move to the red block")
+
+# GoalConditionedWrapper: adds goal specifications to the observation space
+env = GoalConditionedWrapper(env, goal_fn=sample_goal, reward_fn=goal_reward)
+```
+
+---
+
+## Cloud Deploy
+
+Generate deployment artifacts for trained agents: Dockerfiles, Kubernetes job manifests, and SageMaker configurations.
+
+```python
+from rlox.deploy import generate_dockerfile, generate_k8s_job, generate_sagemaker_config
+
+# Generate a Dockerfile for serving a trained model
+dockerfile = generate_dockerfile(
+    checkpoint_path="checkpoints/ppo_cartpole.pt",
+    algorithm="ppo",
+    env="CartPole-v1",
+    base_image="python:3.12-slim",
+)
+with open("Dockerfile", "w") as f:
+    f.write(dockerfile)
+
+# Generate a Kubernetes job manifest
+k8s_manifest = generate_k8s_job(
+    name="rlox-training",
+    image="my-registry/rlox-agent:latest",
+    gpu=1,
+    memory="8Gi",
+)
+with open("k8s-job.yaml", "w") as f:
+    f.write(k8s_manifest)
+
+# Generate SageMaker training config
+sagemaker_cfg = generate_sagemaker_config(
+    algorithm="ppo",
+    env="CartPole-v1",
+    instance_type="ml.g4dn.xlarge",
+)
+```
+
+> **Note:** The deploy module validates all inputs (checkpoint paths, image names, resource specifications) before generating artifacts.
+
+---
+
+## Checkpoint Security
+
+All checkpoint loading uses `weights_only=True` by default via `safe_torch_load()`. This prevents arbitrary code execution from untrusted checkpoint files:
+
+```python
+from rlox.checkpointing import safe_torch_load
+
+# Safe by default — only loads tensor data, not arbitrary Python objects
+state_dict = safe_torch_load("model.pt")
+
+# All Trainer.from_checkpoint() and algorithm.load() calls use safe_torch_load internally
+trainer = Trainer.from_checkpoint("model.pt", algorithm="ppo", env="CartPole-v1")
 ```
 
 ---

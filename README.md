@@ -192,18 +192,23 @@ Same hyperparameters (rl-zoo3 defaults), 5 seeds per experiment. On-policy algor
 
 ## Features
 
-- **8 Algorithms**: PPO, SAC, DQN, TD3, A2C, MAPPO, DreamerV3, IMPALA (+ GRPO, DPO for LLM)
-- **8 Trainers**: Each algorithm has a high-level `Trainer` with `train()`, `save()`, `from_checkpoint()`
+- **22 Algorithms**: PPO, SAC, DQN, TD3, A2C, VPG, TRPO, MAPPO, DreamerV3, IMPALA, and more (+ GRPO, DPO for LLM)
+- **Trainers**: Each algorithm has a high-level `Trainer` with `train()`, `save()`, `from_checkpoint()`, `predict()`
 - **Environments**: Gymnasium-compatible, Rayon-parallel VecEnv, CartPole and Pendulum-v1 built-in
+- **Visual RL wrappers**: `FrameStack`, `ImagePreprocess`, `AtariWrapper`, `DMControlWrapper` for pixel-based RL
+- **Language RL wrappers**: `LanguageWrapper`, `GoalConditionedWrapper` for language-grounded tasks
+- **Plugin ecosystem**: `ENV_REGISTRY`, `BUFFER_REGISTRY`, `REWARD_REGISTRY`, `discover_plugins` for extensibility
+- **Model zoo**: `ModelZoo.register`, `ModelZoo.load` for sharing and reusing pretrained agents
 - **VecNormalize**: Obs/reward normalization at the environment boundary (SB3-compatible)
 - **Buffers**: ring, mmap, priority replay — all in Rust with zero-copy Python access
 - **Config-driven training**: YAML/TOML configs via `TrainingConfig` and `python -m rlox train --config config.yaml`
 - **Diagnostics dashboard**: `TerminalDashboard`, `HTMLReport`, entropy/KL/gradient monitoring
 - **LLM post-training**: GRPO, DPO, token KL, sequence packing, vLLM/TGI/SGLang backends
+- **Cloud deploy**: Dockerfile generator, Kubernetes manifest generator, SageMaker integration
 - **Distributed**: pipeline parallelism (crossbeam), gRPC workers, multi-GPU (DDP)
 - **Production**: callbacks, checkpointing, eval toolkit (IQM, bootstrap CI, performance profiles)
 - **NN backends**: Burn (NdArray) and Candle (CPU) for pure-Rust inference, PyTorch for training
-- **409 Rust tests, 869 Python tests** — comprehensive coverage
+- **444 Rust tests, ~1094 Python tests** — comprehensive coverage
 
 ## Tutorials & Documentation
 
@@ -220,10 +225,10 @@ Same hyperparameters (rl-zoo3 defaults), 5 seeds per experiment. On-policy algor
 ## Running Tests
 
 ```bash
-# Rust tests (412 tests across all crates)
+# Rust tests (444 tests across all crates)
 cargo test --workspace
 
-# Python tests (900+ tests, after maturin develop)
+# Python tests (~1094 tests, after maturin develop)
 pip install -e ".[all]"
 pytest tests/python/ -q
 

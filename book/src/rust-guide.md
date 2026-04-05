@@ -42,7 +42,7 @@ Key types:
 | `Observation(Vec<f32>)` | Flat observation vector |
 | `Action::Discrete(u32)` | Discrete action |
 | `Action::Continuous(Vec<f32>)` | Continuous action vector |
-| `Transition` | Step result: `obs`, `reward`, `terminated`, `truncated`, `info` |
+| `Transition` | Step result: `obs`, `reward`, `terminated`, `truncated`, `info: Option<HashMap>` |
 | `ActionSpace::Discrete(n)` | Discrete space with `n` actions |
 | `ObsSpace::Box { low, high, shape }` | Bounded continuous observation space |
 
@@ -89,7 +89,8 @@ let envs: Vec<Box<dyn RLEnv>> = (0..64)
         Box::new(CartPole::new(Some(derive_seed(42, i)))) as Box<dyn RLEnv>
     })
     .collect();
-let mut vec_env = VecEnv::new(envs);
+// VecEnv::new returns Result — validates that all envs have matching spaces
+let mut vec_env = VecEnv::new(envs).unwrap();
 
 // Reset all environments
 let observations = vec_env.reset_all(Some(42)).unwrap();
@@ -107,6 +108,10 @@ assert_eq!(batch.rewards.len(), 64);   // Vec<f64>
 assert_eq!(batch.terminated.len(), 64); // Vec<bool>
 assert_eq!(batch.truncated.len(), 64);  // Vec<bool>
 ```
+
+> **Note:** `VecEnv::new` returns `Result<VecEnv, RloxError>`. It validates that all environments share compatible action and observation spaces. Use `?` in fallible contexts or `.unwrap()` in examples.
+
+> **Note:** `Transition.info` is `Option<HashMap<String, f64>>`. Most environments return `None` for info; only environments that produce auxiliary metadata (e.g., episode statistics) populate this field. Check with `if let Some(info) = transition.info { ... }`.
 
 **Auto-reset**: When an environment terminates or truncates, `VecEnv` automatically resets it. The returned `batch.obs` contains the post-reset observation, while the pre-reset observation is available in `batch.terminal_obs[i]` (needed for value bootstrapping).
 

@@ -339,7 +339,7 @@ for prompts in dataloader:
     let envs: Vec<Box<dyn RLEnv>> = (0..64)
         .map(|i| Box::new(CartPole::new(Some(derive_seed(42, i)))) as _)
         .collect();
-    let mut vec_env = VecEnv::new(envs);
+    let mut vec_env = VecEnv::new(envs).unwrap();
 
     let observations = vec_env.reset_all(Some(42)).unwrap();
     let actions: Vec<Action> = (0..64)
@@ -561,6 +561,102 @@ for prompts in dataloader:
     let kl = compute_token_kl(log_p, log_q).unwrap();
     assert!(kl.abs() < 1e-15); // identical distributions → KL = 0
     ```
+
+## Plugin Ecosystem
+
+### Register a Custom Environment
+
+```python
+from rlox.plugins import ENV_REGISTRY
+from rlox import Trainer
+
+# Define a custom environment factory
+def make_custom_env():
+    import gymnasium as gym
+    env = gym.make("CartPole-v1")
+    # Add custom wrappers, reward shaping, etc.
+    return env
+
+# Register it
+ENV_REGISTRY.register("my-custom-env", make_custom_env)
+
+# Use it with any Trainer
+trainer = Trainer("ppo", env="my-custom-env", seed=42)
+metrics = trainer.train(total_timesteps=50_000)
+```
+
+### Discover Plugins from Installed Packages
+
+```python
+from rlox.plugins import discover_plugins, ENV_REGISTRY
+
+# Auto-discover plugins from all installed packages
+discover_plugins()
+
+# Now any plugin-registered environments are available
+print(ENV_REGISTRY.list())  # shows all registered env names
+```
+
+## Visual RL
+
+### FrameStack + ImagePreprocess
+
+```python
+import gymnasium as gym
+from rlox.wrappers.visual import FrameStack, ImagePreprocess
+from rlox import Trainer
+
+# Standard visual RL preprocessing pipeline
+env = gym.make("ALE/Breakout-v5", render_mode="rgb_array")
+env = ImagePreprocess(env, width=84, height=84, grayscale=True)
+env = FrameStack(env, n_frames=4)
+
+# Train with preprocessed pixel observations
+trainer = Trainer("dqn", env=env, config={"buffer_size": 100_000}, seed=42)
+metrics = trainer.train(total_timesteps=1_000_000)
+```
+
+### AtariWrapper (All-in-One)
+
+```python
+import gymnasium as gym
+from rlox.wrappers.visual import AtariWrapper
+
+# AtariWrapper applies: NoopReset, MaxAndSkip, EpisodicLife,
+# FireReset, ClipReward, ImagePreprocess, FrameStack
+env = AtariWrapper(gym.make("ALE/Pong-v5"), frame_stack=4)
+```
+
+## Cloud Deploy
+
+### Generate a Dockerfile
+
+```python
+from rlox.deploy import generate_dockerfile
+
+dockerfile = generate_dockerfile(
+    checkpoint_path="checkpoints/ppo_cartpole.pt",
+    algorithm="ppo",
+    env="CartPole-v1",
+)
+with open("Dockerfile", "w") as f:
+    f.write(dockerfile)
+```
+
+### Generate a Kubernetes Job
+
+```python
+from rlox.deploy import generate_k8s_job
+
+manifest = generate_k8s_job(
+    name="rlox-ppo-training",
+    image="my-registry/rlox:latest",
+    gpu=1,
+    memory="16Gi",
+)
+with open("k8s-job.yaml", "w") as f:
+    f.write(manifest)
+```
 
 ## Monitoring & Profiling
 

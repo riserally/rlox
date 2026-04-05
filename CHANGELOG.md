@@ -2,6 +2,33 @@
 
 All notable changes to rlox are documented here.
 
+## [1.1.0] - 2026-03-29
+
+### Added
+- **VPG algorithm** -- Vanilla Policy Gradient with GAE support
+- **Plugin ecosystem** -- `ENV_REGISTRY`, `BUFFER_REGISTRY`, `REWARD_REGISTRY` for registering custom components; `discover_plugins()` for auto-discovery via Python entry points
+- **Model zoo** -- `ModelZoo.register`, `ModelZoo.load`, `ModelCard` for sharing and reusing pretrained agents
+- **Visual RL wrappers** -- `FrameStack`, `ImagePreprocess`, `AtariWrapper`, `DMControlWrapper` for pixel-based RL
+- **Language RL wrappers** -- `LanguageWrapper`, `GoalConditionedWrapper` for language-grounded tasks
+- **Cloud deploy** -- `generate_dockerfile`, `generate_k8s_job`, `generate_sagemaker_config` for deployment artifact generation
+- **`predict()` method** added to TRPO, IMPALA, MAPPO, A2C, VPG (all algorithms now support `predict()`)
+- **22 algorithm documentation pages** completed
+
+### Changed
+- `safe_torch_load()` -- all checkpoint loading now uses `weights_only=True` by default for security
+- `VecEnv::new` now returns `Result<VecEnv, RloxError>` instead of panicking on invalid input
+- `Transition.info` changed from `HashMap<String, f64>` to `Option<HashMap<String, f64>>` (None when no metadata)
+- PBT (Population-Based Training) is now fully reproducible with seeded RNG
+- Docker deploy module validates all inputs (checkpoint paths, image names, resource specs) before generating artifacts
+- 12+ core types now derive `Debug` and `Clone` for better ergonomics and debuggability
+
+### Fixed
+- Checkpoint security: prevented potential arbitrary code execution from untrusted checkpoints via `weights_only=True`
+
+### Test Suite
+- 444 Rust tests (was 409)
+- ~1094 Python tests (was 869)
+
 ## [1.0.0] - 2026-03-29
 
 ### API 1.0 Freeze

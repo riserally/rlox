@@ -16,6 +16,14 @@
   <a href="https://pepy.tech/project/rlox"><img src="https://static.pepy.tech/badge/rlox" alt="Downloads"></a>
 </p>
 
+<p align="center">
+  <a href="https://riserally.github.io/rlox/"><b>Documentation</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/learning-path/"><b>Learning Path</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/rl-introduction/"><b>RL Introduction</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/algorithms/"><b>22 Algorithms</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/examples/"><b>Examples</b></a>
+</p>
+
 > **New to Reinforcement Learning?** Start with our [RL Introduction](https://riserally.github.io/rlox/rl-introduction/) to learn the fundamentals, then follow the [Learning Path](https://riserally.github.io/rlox/learning-path/) from beginner to production.
 
 ## Why rlox?

@@ -175,18 +175,11 @@ class OffPolicyCollector:
             actions = np.clip(actions, -self.act_high, self.act_high)
 
         # Step environments
-        if self._n_envs > 1:
-            result = self.env.step_all(actions if not self.is_continuous else actions)
-            next_obs = result["obs"]
-            rewards = result["rewards"]
-            terminated = result["terminated"].astype(bool)
-            truncated = result["truncated"].astype(bool)
-        else:
-            result = self.env.step_all(actions)
-            next_obs = result["obs"]
-            rewards = result["rewards"]
-            terminated = result["terminated"].astype(bool)
-            truncated = result["truncated"].astype(bool)
+        result = self.env.step_all(actions)
+        next_obs = result["obs"]
+        rewards = result["rewards"]
+        terminated = result["terminated"].astype(bool)
+        truncated = result["truncated"].astype(bool)
 
         # Track episode rewards
         self._ep_rewards += rewards

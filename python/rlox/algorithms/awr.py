@@ -292,7 +292,9 @@ class AWR:
     @classmethod
     def from_checkpoint(cls, path: str, env_id: str | None = None) -> Self:
         """Restore AWR from a checkpoint."""
-        data = torch.load(path, weights_only=False)
+        from rlox.checkpoint import safe_torch_load
+
+        data = safe_torch_load(path)
         eid = env_id or data.get("env_id", "CartPole-v1")
         config = data["config"]
 

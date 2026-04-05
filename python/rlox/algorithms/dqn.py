@@ -417,7 +417,9 @@ class DQN:
     @classmethod
     def from_checkpoint(cls, path: str, env_id: str | None = None) -> DQN:
         """Restore DQN from a checkpoint."""
-        data = torch.load(path, weights_only=False)
+        from rlox.checkpoint import safe_torch_load
+
+        data = safe_torch_load(path)
         config = data["config"]
         eid = env_id or data.get("env_id", "CartPole-v1")
 

@@ -295,7 +295,7 @@ class TRPO:
         with torch.no_grad():
             new_lp, _ = self.policy.get_logprob_and_entropy(obs, actions)
             kl = (old_log_probs - new_lp).mean().item()
-        return max(kl, 0.0)  # KL should be non-negative
+        return kl
 
     def train(self, total_timesteps: int) -> dict[str, float]:
         """Run TRPO training and return final metrics."""
@@ -350,6 +350,37 @@ class TRPO:
             float(sum(all_rewards) / len(all_rewards)) if all_rewards else 0.0
         )
         return last_metrics
+
+    def predict(self, obs: Any, deterministic: bool = True) -> np.ndarray | int:
+        """Get action from the trained policy.
+
+        Parameters
+        ----------
+        obs : array-like
+            Observation.
+        deterministic : bool
+            If True, return the mode of the action distribution.
+
+        Returns
+        -------
+        Action as an int (discrete) or numpy array (continuous).
+        """
+        obs_t = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
+        if obs_t.dim() == 1:
+            obs_t = obs_t.unsqueeze(0)
+        with torch.no_grad():
+            if deterministic:
+                if self._is_discrete:
+                    logits = self.policy.actor(obs_t)
+                    action = logits.argmax(dim=-1)
+                else:
+                    action = self.policy.actor(obs_t)
+            else:
+                action, _ = self.policy.get_action_and_logprob(obs_t)
+        action = action.squeeze(0)
+        if self._is_discrete:
+            return int(action.item())
+        return action.numpy()
 
     def save(self, path: str) -> None:
         """Save training checkpoint."""

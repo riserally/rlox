@@ -63,6 +63,7 @@ class PBT:
             perturb_factor=perturb_factor,
         )
         self.seed = seed
+        self._rng = random.Random(seed)
         self._algo_config = algo_config or {}
 
         algo_cls = ALGORITHM_REGISTRY.get(self.algo_name)
@@ -127,7 +128,7 @@ class PBT:
             # Perturb learning rate
             if hasattr(agent, "optimizer"):
                 for pg in agent.optimizer.param_groups:
-                    factor = 1.0 + random.uniform(-cfg.perturb_factor, cfg.perturb_factor)
+                    factor = 1.0 + self._rng.uniform(-cfg.perturb_factor, cfg.perturb_factor)
                     pg["lr"] = pg["lr"] * factor
 
     def run(self) -> dict[str, Any]:

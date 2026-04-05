@@ -140,7 +140,10 @@ class GoalConditionedWrapper:
     def _compute_sparse_reward(self, obs: np.ndarray) -> np.ndarray:
         """Compute sparse reward: 0 if within threshold, -1 otherwise."""
         achieved = obs[:, -self.goal_dim :]
-        assert self._goals is not None
+        if self._goals is None:
+            raise RuntimeError(
+                "reset_all() must be called before step_all()"
+            )
         distances = np.linalg.norm(achieved - self._goals, axis=1)
         return np.where(distances < self.distance_threshold, 0.0, -1.0)
 
@@ -153,7 +156,10 @@ class GoalConditionedWrapper:
         result["rewards"] = self._compute_sparse_reward(obs)
 
         # Append goal to observation
-        assert self._goals is not None
+        if self._goals is None:
+            raise RuntimeError(
+                "reset_all() must be called before step_all()"
+            )
         result["obs"] = np.concatenate([obs, self._goals], axis=1).astype(
             np.float32
         )

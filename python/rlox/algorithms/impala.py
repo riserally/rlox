@@ -462,6 +462,37 @@ class IMPALA:
         )
         return last_metrics
 
+    def predict(self, obs: Any, deterministic: bool = True) -> np.ndarray | int:
+        """Get action from the trained policy.
+
+        Parameters
+        ----------
+        obs : array-like
+            Observation.
+        deterministic : bool
+            If True, return the mode of the action distribution.
+
+        Returns
+        -------
+        Action as an int (discrete) or numpy array (continuous).
+        """
+        obs_t = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
+        if obs_t.dim() == 1:
+            obs_t = obs_t.unsqueeze(0)
+        with torch.no_grad():
+            if deterministic:
+                if self._is_discrete:
+                    logits = self.policy.actor(obs_t)
+                    action = logits.argmax(dim=-1)
+                else:
+                    action = self.policy.actor(obs_t)
+            else:
+                action, _ = self.policy.get_action_and_logprob(obs_t)
+        action = action.squeeze(0)
+        if self._is_discrete:
+            return int(action.item())
+        return action.numpy()
+
     def save(self, path: str) -> None:
         """Save training checkpoint."""
         state = {
@@ -475,7 +506,9 @@ class IMPALA:
     @classmethod
     def from_checkpoint(cls, path: str, env_id: str | None = None) -> IMPALA:
         """Restore IMPALA from a checkpoint."""
-        data = torch.load(path, weights_only=False)
+        from rlox.checkpoint import safe_torch_load
+
+        data = safe_torch_load(path)
         config = data.get("config", {})
         eid = env_id or config.get("env_id", "CartPole-v1")
 

@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_identifier(value: str, name: str) -> None:
+    """Raise ValueError if *value* is not a safe Dockerfile identifier."""
+    if not _SAFE_IDENTIFIER_RE.match(value):
+        raise ValueError(
+            f"{name}={value!r} is not a safe identifier. "
+            f"Only alphanumeric characters, hyphens, dots, and underscores are allowed."
+        )
 
 
 def generate_dockerfile(
@@ -29,6 +41,8 @@ def generate_dockerfile(
     str
         Dockerfile contents.
     """
+    _validate_identifier(algo, "algo")
+    _validate_identifier(env, "env")
     cfg = config_path or "config.yaml"
     return f"""\
 # ---- builder stage ----

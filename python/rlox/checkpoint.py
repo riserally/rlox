@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import io
+import logging
 import os
 import threading
 from typing import Any
 
 import torch
 import torch.nn as nn
+
+_logger = logging.getLogger(__name__)
 
 
 class Checkpoint:
@@ -56,4 +59,23 @@ class Checkpoint:
 
     @staticmethod
     def load(path: str) -> dict[str, Any]:
+        return safe_torch_load(path)
+
+
+def safe_torch_load(path: str) -> dict[str, Any]:
+    """Load a checkpoint with ``weights_only=True``, falling back for legacy files.
+
+    Tries the safe ``weights_only=True`` mode first.  If the checkpoint
+    contains non-tensor objects (e.g. legacy pickled configs), falls back
+    to ``weights_only=False`` with a warning so callers can migrate.
+    """
+    try:
+        return torch.load(path, weights_only=True)
+    except Exception:
+        _logger.warning(
+            "Failed to load %s with weights_only=True; falling back to "
+            "weights_only=False. Re-save this checkpoint to remove the "
+            "unsafe pickle dependency.",
+            path,
+        )
         return torch.load(path, weights_only=False)

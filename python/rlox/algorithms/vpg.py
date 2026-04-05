@@ -265,24 +265,70 @@ class VPG:
     # Checkpoint
     # ------------------------------------------------------------------
 
+    def predict(
+        self, obs: Any, deterministic: bool = True
+    ) -> np.ndarray | int:
+        """Get action from the trained policy.
+
+        Parameters
+        ----------
+        obs : array-like
+            Observation.
+        deterministic : bool
+            If True, return the mode of the action distribution.
+
+        Returns
+        -------
+        Action as an int (discrete) or numpy array (continuous).
+        """
+        obs_t = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
+        if obs_t.dim() == 1:
+            obs_t = obs_t.unsqueeze(0)
+        with torch.no_grad():
+            if deterministic:
+                if self._is_discrete:
+                    logits = self.policy.actor(obs_t)
+                    action = logits.argmax(dim=-1)
+                else:
+                    action = self.policy.actor(obs_t)
+            else:
+                action, _ = self.policy.get_action_and_logprob(obs_t)
+        action = action.squeeze(0)
+        if self._is_discrete:
+            return int(action.item())
+        return action.numpy()
+
     def save(self, path: str) -> None:
-        """Save training checkpoint."""
-        Checkpoint.save(
-            path,
-            model=self.policy,
-            optimizer=self.vf_optimizer,
-            step=self._global_step,
-            config=self.config.to_dict(),
-        )
+        """Save training checkpoint (both policy and VF optimizers)."""
+        import torch
+
+        state = {
+            "model_state_dict": self.policy.state_dict(),
+            "policy_optimizer_state_dict": self.policy_optimizer.state_dict(),
+            "vf_optimizer_state_dict": self.vf_optimizer.state_dict(),
+            "step": self._global_step,
+            "config": self.config.to_dict(),
+            "torch_rng_state": torch.random.get_rng_state(),
+        }
+        torch.save(state, path)
 
     @classmethod
     def from_checkpoint(cls, path: str, env_id: str | None = None) -> VPG:
         """Restore VPG from a checkpoint."""
-        data = Checkpoint.load(path)
+        from rlox.checkpoint import safe_torch_load
+
+        data = safe_torch_load(path)
         config = data["config"]
         eid = env_id or config.get("env_id", "CartPole-v1")
         vpg = cls(env_id=eid, **config)
         vpg.policy.load_state_dict(data["model_state_dict"])
-        vpg.vf_optimizer.load_state_dict(data["optimizer_state_dict"])
+        # Restore both optimizers (legacy checkpoints may lack policy_optimizer)
+        if "policy_optimizer_state_dict" in data:
+            vpg.policy_optimizer.load_state_dict(data["policy_optimizer_state_dict"])
+        if "vf_optimizer_state_dict" in data:
+            vpg.vf_optimizer.load_state_dict(data["vf_optimizer_state_dict"])
+        elif "optimizer_state_dict" in data:
+            # Legacy checkpoint format stored only the VF optimizer
+            vpg.vf_optimizer.load_state_dict(data["optimizer_state_dict"])
         vpg._global_step = data.get("step", 0)
         return vpg

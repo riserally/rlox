@@ -304,11 +304,11 @@ class MPO:
             ).reshape(b, n_samples)
             q_vals = torch.min(q1, q2)
 
-        # Compute E-step weights per sample in batch
+        # Compute E-step weights (vectorized softmax over action samples)
         eta = self.log_eta.exp().item()
-        weights = torch.stack(
-            [self.compute_e_step_weights(q_vals[i], eta) for i in range(b)]
-        )
+        log_w = q_vals / max(eta, 1e-8)
+        log_w = log_w - log_w.max(dim=-1, keepdim=True).values
+        weights = torch.softmax(log_w, dim=-1)
 
         # 3. Dual update (use mean Q-values across batch)
         q_flat = q_vals.reshape(-1)

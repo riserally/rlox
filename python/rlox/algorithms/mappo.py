@@ -667,6 +667,44 @@ class MAPPO:
         )
         return last_metrics
 
+    def predict(
+        self, obs: Any, deterministic: bool = True, agent_idx: int = 0
+    ) -> np.ndarray | int:
+        """Get action from the trained policy for a single agent.
+
+        Parameters
+        ----------
+        obs : array-like
+            Observation.
+        deterministic : bool
+            If True, return the mode of the action distribution.
+        agent_idx : int
+            Which agent's policy to use (default 0).
+
+        Returns
+        -------
+        Action as an int (discrete) or numpy array (continuous).
+        """
+        import torch
+
+        actor = self.actors[agent_idx]
+        obs_t = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
+        if obs_t.dim() == 1:
+            obs_t = obs_t.unsqueeze(0)
+        with torch.no_grad():
+            if deterministic:
+                if self._is_discrete:
+                    logits = actor.actor(obs_t)
+                    action = logits.argmax(dim=-1)
+                else:
+                    action = actor.actor(obs_t)
+            else:
+                action, _ = actor.get_action_and_logprob(obs_t)
+        action = action.squeeze(0)
+        if self._is_discrete:
+            return int(action.item())
+        return action.numpy()
+
     def save(self, path: str) -> None:
         """Save training checkpoint."""
         import torch as _torch
@@ -685,7 +723,9 @@ class MAPPO:
         """Restore MAPPO from a checkpoint."""
         import torch as _torch
 
-        data = _torch.load(path, weights_only=False)
+        from rlox.checkpoint import safe_torch_load
+
+        data = safe_torch_load(path)
         config = data.get("config", {})
         eid = env_id or config.get("env_id", "CartPole-v1")
         n_agents = config.get("n_agents", 1)

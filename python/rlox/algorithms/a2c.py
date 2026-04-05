@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 
 import numpy as np
 import torch
@@ -81,6 +82,7 @@ class A2C:
 
         self.logger = logger
         self.callbacks = CallbackList(callbacks)
+        self._global_step = 0
 
         if compile:
             from rlox.compile import compile_policy
@@ -136,8 +138,10 @@ class A2C:
 
             self.callbacks.on_train_batch(loss=loss.item(), **last_metrics)
 
+            self._global_step += steps_per_rollout
+
             should_continue = self.callbacks.on_step(
-                reward=mean_ep_reward, step=update, algo=self
+                reward=mean_ep_reward, step=self._global_step, algo=self
             )
             if not should_continue:
                 break
@@ -154,6 +158,44 @@ class A2C:
         )
         return last_metrics
 
+    def predict(
+        self, obs: Any, deterministic: bool = True
+    ) -> np.ndarray | int:
+        """Get action from the trained policy.
+
+        Parameters
+        ----------
+        obs : array-like
+            Observation.
+        deterministic : bool
+            If True, return the mode of the action distribution.
+
+        Returns
+        -------
+        Action as an int (discrete) or numpy array (continuous).
+        """
+        import torch
+
+        obs_t = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
+        if obs_t.dim() == 1:
+            obs_t = obs_t.unsqueeze(0)
+        with torch.no_grad():
+            if deterministic:
+                if hasattr(self.policy, "logits_net") or (
+                    hasattr(self.policy, "actor")
+                    and isinstance(self.policy, DiscretePolicy)
+                ):
+                    logits = self.policy.actor(obs_t)
+                    action = logits.argmax(dim=-1)
+                else:
+                    action = self.policy.actor(obs_t)
+            else:
+                action, _ = self.policy.get_action_and_logprob(obs_t)
+        action = action.squeeze(0)
+        if action.dim() == 0:
+            return int(action.item())
+        return action.numpy()
+
     def save(self, path: str) -> None:
         """Save training checkpoint."""
         from rlox.checkpoint import Checkpoint
@@ -162,7 +204,7 @@ class A2C:
             path,
             model=self.policy,
             optimizer=self.optimizer,
-            step=0,
+            step=self._global_step,
             config={"env_id": self.env_id},
         )
 
@@ -178,4 +220,5 @@ class A2C:
         a2c = cls(env_id=eid)
         a2c.policy.load_state_dict(data["model_state_dict"])
         a2c.optimizer.load_state_dict(data["optimizer_state_dict"])
+        a2c._global_step = data.get("step", 0)
         return a2c

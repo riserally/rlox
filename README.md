@@ -18,13 +18,13 @@
 
 <p align="center">
   <a href="https://riserally.github.io/rlox/"><b>Documentation</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/learning-path/"><b>Learning Path</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/rl-introduction/"><b>RL Introduction</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/algorithms/"><b>22 Algorithms</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/examples/"><b>Examples</b></a>
+  <a href="https://riserally.github.io/rlox/python/learning-path/"><b>Learning Path</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/python/rl-introduction/"><b>RL Introduction</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/python/algorithms/"><b>22 Algorithms</b></a> &nbsp;|&nbsp;
+  <a href="https://riserally.github.io/rlox/python/examples/"><b>Examples</b></a>
 </p>
 
-> **New to Reinforcement Learning?** Start with our [RL Introduction](https://riserally.github.io/rlox/rl-introduction/) to learn the fundamentals, then follow the [Learning Path](https://riserally.github.io/rlox/learning-path/) from beginner to production.
+> **New to Reinforcement Learning?** Start with our [RL Introduction](https://riserally.github.io/rlox/python/rl-introduction/) to learn the fundamentals, then follow the [Learning Path](https://riserally.github.io/rlox/python/learning-path/) from beginner to production.
 
 ## Why rlox?
 

@@ -97,163 +97,166 @@ from rlox._rlox_core import (
     py_sample_mixed,
 )
 
-# -- Python Layer 1 -----------------------------------------------------------
-from rlox.batch import RolloutBatch
-from rlox.collectors import RolloutCollector
+# -- Core Python imports (eager — these are in __all__) -----------------------
 from rlox.gym_vec_env import GymVecEnv
-from rlox.losses import PPOLoss
-from rlox.policies import ContinuousPolicy, DiscretePolicy
 from rlox.vec_normalize import VecNormalize
-
-# -- Configs -------------------------------------------------------------------
-from rlox.config import (
-    PPOConfig,
-    SACConfig,
-    DQNConfig,
-    A2CConfig,
-    TD3Config,
-    MAPPOConfig,
-    DreamerV3Config,
-    IMPALAConfig,
-    DecisionTransformerConfig,
-    QMIXConfig,
-    CalQLConfig,
-    PBTConfig,
-    TRPOConfig,
-    SelfPlayConfig,
-    GoExploreConfig,
-    MPOConfig,
-    TrainingConfig,
-)
-
-# -- Trainers ------------------------------------------------------------------
-from rlox.trainers import (
-    PPOTrainer,
-    SACTrainer,
-    DQNTrainer,
-    A2CTrainer,
-    TD3Trainer,
-    MAPPOTrainer,
-    DreamerV3Trainer,
-    IMPALATrainer,
-)
-
-# -- Unified Trainer -----------------------------------------------------------
+from rlox.policies import ContinuousPolicy, DiscretePolicy
+from rlox.config import PPOConfig, SACConfig, DQNConfig, A2CConfig, TD3Config, TRPOConfig, TrainingConfig
 from rlox.trainer import Trainer, ALGORITHM_REGISTRY
-
-# -- Runner (config-driven training) ------------------------------------------
 from rlox.runner import train_from_config
+from rlox.callbacks import Callback, EvalCallback
+from rlox.logging import ConsoleLogger
 
-# -- Callbacks -----------------------------------------------------------------
-from rlox.callbacks import (
-    Callback,
-    CallbackList,
-    EvalCallback,
-    EarlyStoppingCallback,
-    CheckpointCallback,
-    ProgressBarCallback,
-    TimingCallback,
-)
+# ---------------------------------------------------------------------------
+# Lazy imports for non-core modules (loaded on first access)
+# This keeps `import rlox` fast (~0.2s instead of ~0.7s).
+# ---------------------------------------------------------------------------
 
-# -- Protocols -----------------------------------------------------------------
-from rlox.protocols import (
-    OnPolicyActor,
-    StochasticActor,
-    DeterministicActor,
-    QFunction,
-    DiscreteQFunction,
-    ExplorationStrategy,
-    ReplayBufferProtocol,
-    VecEnv as VecEnvProtocol,
-    Augmentation,
-    RewardShaper,
-    IntrinsicMotivation,
-    MetaLearner,
-)
+def __getattr__(name: str):
+    """Lazy import for non-core symbols."""
+    _LAZY_MAP = {
+        # Protocols
+        "OnPolicyActor": "rlox.protocols",
+        "StochasticActor": "rlox.protocols",
+        "DeterministicActor": "rlox.protocols",
+        "QFunction": "rlox.protocols",
+        "DiscreteQFunction": "rlox.protocols",
+        "ExplorationStrategy": "rlox.protocols",
+        "ReplayBufferProtocol": "rlox.protocols",
+        # VecEnvProtocol is an alias for rlox.protocols.VecEnv
+        "VecEnvProtocol": "rlox.protocols",  # handled specially below
+        "Augmentation": "rlox.protocols",
+        "RewardShaper": "rlox.protocols",
+        "IntrinsicMotivation": "rlox.protocols",
+        "MetaLearner": "rlox.protocols",
+        # Exploration
+        "GaussianNoise": "rlox.exploration",
+        "EpsilonGreedy": "rlox.exploration",
+        "OUNoise": "rlox.exploration",
+        "GoExplore": "rlox.exploration",
+        # Wrappers
+        "FrameStack": "rlox.wrappers",
+        "ImagePreprocess": "rlox.wrappers",
+        "AtariWrapper": "rlox.wrappers",
+        "DMControlWrapper": "rlox.wrappers",
+        "LanguageWrapper": "rlox.wrappers",
+        "GoalConditionedWrapper": "rlox.wrappers",
+        # Advanced
+        "RandomShift": "rlox.augmentation",
+        "PotentialShaping": "rlox.reward_shaping",
+        "GoalDistanceShaping": "rlox.reward_shaping",
+        "RND": "rlox.intrinsic",
+        "ICM": "rlox.intrinsic",
+        "Reptile": "rlox.meta",
+        "PBT": "rlox.pbt",
+        "SelfPlay": "rlox.self_play",
+        "OfflineToOnline": "rlox.offline_to_online",
+        # Logging
+        "LoggerCallback": "rlox.logging",
+        "WandbLogger": "rlox.logging",
+        "TensorBoardLogger": "rlox.logging",
+        # Callbacks (non-core)
+        "CallbackList": "rlox.callbacks",
+        "EarlyStoppingCallback": "rlox.callbacks",
+        "CheckpointCallback": "rlox.callbacks",
+        "ProgressBarCallback": "rlox.callbacks",
+        "TimingCallback": "rlox.callbacks",
+        # Evaluation
+        "interquartile_mean": "rlox.evaluation",
+        "performance_profiles": "rlox.evaluation",
+        "stratified_bootstrap_ci": "rlox.evaluation",
+        "aggregate_metrics": "rlox.evaluation",
+        "probability_of_improvement": "rlox.evaluation",
+        # Dashboard
+        "MetricsCollector": "rlox.dashboard",
+        "TerminalDashboard": "rlox.dashboard",
+        "HTMLReport": "rlox.dashboard",
+        # Diagnostics
+        "TrainingDiagnostics": "rlox.diagnostics",
+        # Checkpoint
+        "Checkpoint": "rlox.checkpoint",
+        # Hub
+        "push_to_hub": "rlox.hub",
+        "load_from_hub": "rlox.hub",
+        # Plugins
+        "ENV_REGISTRY": "rlox.plugins",
+        "BUFFER_REGISTRY": "rlox.plugins",
+        "REWARD_REGISTRY": "rlox.plugins",
+        "register_env": "rlox.plugins",
+        "register_buffer": "rlox.plugins",
+        "register_reward": "rlox.plugins",
+        "discover_plugins": "rlox.plugins",
+        "list_registered": "rlox.plugins",
+        # Zoo
+        "ModelZoo": "rlox.zoo",
+        "ModelCard": "rlox.zoo",
+        # Compile
+        "compile_policy": "rlox.compile",
+        "apply_spectral_norm": "rlox.networks",
+        # Distributed
+        "MultiGPUTrainer": "rlox.distributed",
+        "RemoteEnvPool": "rlox.distributed",
+        "launch_elastic": "rlox.distributed",
+        # Deploy
+        "generate_dockerfile": "rlox.deploy",
+        "generate_k8s_job": "rlox.deploy",
+        "SageMakerEstimator": "rlox.deploy",
+        # Builders
+        "PPOBuilder": "rlox.builders",
+        "SACBuilder": "rlox.builders",
+        "DQNBuilder": "rlox.builders",
+        # Losses
+        "LossComponent": "rlox.losses",
+        "CompositeLoss": "rlox.losses",
+        "PPOLoss": "rlox.losses",
+        # Collectors
+        "OffPolicyCollector": "rlox.off_policy_collector",
+        "CollectorProtocol": "rlox.off_policy_collector",
+        # Batch
+        "RolloutBatch": "rlox.batch",
+        # Non-core configs
+        "MAPPOConfig": "rlox.config",
+        "DreamerV3Config": "rlox.config",
+        "IMPALAConfig": "rlox.config",
+        "DecisionTransformerConfig": "rlox.config",
+        "QMIXConfig": "rlox.config",
+        "CalQLConfig": "rlox.config",
+        "MPOConfig": "rlox.config",
+        "PBTConfig": "rlox.config",
+        "SelfPlayConfig": "rlox.config",
+        "GoExploreConfig": "rlox.config",
+        "VPGConfig": "rlox.config",
+        "DiffusionPolicyConfig": "rlox.config",
+        "DTPConfig": "rlox.config",
+        # Non-core Rust bindings
+        "RolloutCollector": "rlox.collectors",
+        # Deprecated trainers
+        "PPOTrainer": "rlox.trainers",
+        "SACTrainer": "rlox.trainers",
+        "DQNTrainer": "rlox.trainers",
+        "A2CTrainer": "rlox.trainers",
+        "TD3Trainer": "rlox.trainers",
+        "MAPPOTrainer": "rlox.trainers",
+        "DreamerV3Trainer": "rlox.trainers",
+        "IMPALATrainer": "rlox.trainers",
+    }
+    # Aliases where the attribute name differs from the module name
+    _ALIASES = {"VecEnvProtocol": ("rlox.protocols", "VecEnv")}
 
-# -- Wrappers (Visual RL, Language-Conditioned) --------------------------------
-from rlox.wrappers import (
-    FrameStack,
-    ImagePreprocess,
-    AtariWrapper,
-    DMControlWrapper,
-    LanguageWrapper,
-    GoalConditionedWrapper,
-)
-
-# -- Deploy (Docker, K8s, SageMaker) ------------------------------------------
-from rlox.deploy import generate_dockerfile, generate_k8s_job, SageMakerEstimator
-
-# -- Wave 4: Python wrappers --------------------------------------------------
-from rlox.augmentation import RandomShift
-from rlox.reward_shaping import PotentialShaping, GoalDistanceShaping
-from rlox.networks import apply_spectral_norm
-from rlox.intrinsic import RND, ICM
-from rlox.meta import Reptile
-from rlox.offline_to_online import OfflineToOnline
-
-# -- Population-Based Training -------------------------------------------------
-from rlox.pbt import PBT
-
-# -- Self-Play -----------------------------------------------------------------
-from rlox.self_play import SelfPlay
-
-# -- Exploration ---------------------------------------------------------------
-from rlox.exploration import GaussianNoise, EpsilonGreedy, OUNoise, GoExplore
-
-# -- Collectors ----------------------------------------------------------------
-from rlox.off_policy_collector import OffPolicyCollector, CollectorProtocol
-
-# -- Builders ------------------------------------------------------------------
-from rlox.builders import PPOBuilder, SACBuilder, DQNBuilder
-
-# -- Losses (composable) ------------------------------------------------------
-from rlox.losses import LossComponent, CompositeLoss
-
-# -- Logging -------------------------------------------------------------------
-from rlox.logging import LoggerCallback, WandbLogger, TensorBoardLogger, ConsoleLogger
-
-# -- Evaluation ----------------------------------------------------------------
-from rlox.evaluation import (
-    interquartile_mean,
-    performance_profiles,
-    stratified_bootstrap_ci,
-    aggregate_metrics,
-    probability_of_improvement,
-)
-
-# -- Diagnostics ---------------------------------------------------------------
-from rlox.diagnostics import TrainingDiagnostics
-
-# -- Dashboard -----------------------------------------------------------------
-from rlox.dashboard import MetricsCollector, TerminalDashboard, HTMLReport
-
-# -- Checkpoint ----------------------------------------------------------------
-from rlox.checkpoint import Checkpoint
-
-# -- Hub -----------------------------------------------------------------------
-from rlox.hub import push_to_hub, load_from_hub
-
-# -- Plugins -------------------------------------------------------------------
-from rlox.plugins import (
-    ENV_REGISTRY,
-    BUFFER_REGISTRY,
-    REWARD_REGISTRY,
-    register_env,
-    register_buffer,
-    register_reward,
-    discover_plugins,
-    list_registered,
-)
-
-# -- Model Zoo -----------------------------------------------------------------
-from rlox.zoo import ModelZoo, ModelCard
-
-# -- Compile -------------------------------------------------------------------
-from rlox.compile import compile_policy
-
-# -- Distributed ---------------------------------------------------------------
-from rlox.distributed import MultiGPUTrainer, RemoteEnvPool, launch_elastic
+    if name in _ALIASES:
+        import importlib
+        mod_path, attr_name = _ALIASES[name]
+        module = importlib.import_module(mod_path)
+        attr = getattr(module, attr_name)
+        globals()[name] = attr
+        return attr
+    if name in _LAZY_MAP:
+        import importlib
+        module = importlib.import_module(_LAZY_MAP[name])
+        attr = getattr(module, name)
+        globals()[name] = attr  # cache for next access
+        return attr
+    raise AttributeError(f"module 'rlox' has no attribute {name!r}")
 
 __version__ = "1.1.0"
 

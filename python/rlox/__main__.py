@@ -11,21 +11,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-ALGO_MAP = {
-    "ppo": "rlox.algorithms.ppo:PPO",
-    "a2c": "rlox.algorithms.a2c:A2C",
-    "sac": "rlox.algorithms.sac:SAC",
-    "td3": "rlox.algorithms.td3:TD3",
-    "dqn": "rlox.algorithms.dqn:DQN",
-}
-
-
-def _import_algo(name: str):
-    module_path, cls_name = ALGO_MAP[name].rsplit(":", 1)
-    import importlib
-
-    mod = importlib.import_module(module_path)
-    return getattr(mod, cls_name)
+def _get_algo_names() -> list[str]:
+    """Get all registered algorithm names from the Trainer registry."""
+    from rlox.trainer import ALGORITHM_REGISTRY
+    return sorted(ALGORITHM_REGISTRY.keys())
 
 
 def _is_training_config(path: str) -> bool:
@@ -84,47 +73,40 @@ def cmd_train(args):
         parser_err = "the following arguments are required: --env (or use --config with a TrainingConfig file)"
         print(f"error: {parser_err}", file=sys.stderr)
         sys.exit(2)
-    algo_cls = _import_algo(args.algo)
+    from rlox import Trainer
+    from rlox.logging import ConsoleLogger
 
-    kwargs: dict = {"seed": args.seed}
+    config: dict = {}
     if args.config:
         import yaml
 
         with open(args.config) as f:
             cfg = yaml.safe_load(f)
-        hp = cfg.get("hyperparameters", cfg)
-        kwargs.update(hp)
+        config = cfg.get("hyperparameters", cfg)
 
-    # On-policy algorithms use env_id, off-policy use env_id too
-    if args.algo in ("ppo", "a2c"):
-        algo = algo_cls(env_id=args.env, **kwargs)
-    else:
-        algo = algo_cls(env_id=args.env, **kwargs)
-
-    from rlox.logging import ConsoleLogger
-
-    algo_inner = getattr(algo, "algo", algo)
-    if hasattr(algo_inner, "logger") and algo_inner.logger is None:
-        algo_inner.logger = ConsoleLogger(log_interval=args.log_interval)
+    trainer = Trainer(
+        args.algo, env=args.env, seed=args.seed,
+        config=config, logger=ConsoleLogger(log_interval=args.log_interval),
+    )
 
     print(
         f"Training {args.algo.upper()} on {args.env} for {args.timesteps} steps (seed={args.seed})"
     )
-    metrics = algo.train(total_timesteps=args.timesteps)
+    metrics = trainer.train(total_timesteps=args.timesteps)
     print(f"\nTraining complete. Final metrics: {metrics}")
 
     if args.save:
-        if hasattr(algo_inner, "save"):
-            algo_inner.save(args.save)
-            print(f"Model saved to {args.save}")
+        trainer.save(args.save)
+        print(f"Model saved to {args.save}")
 
 
 def cmd_eval(args):
     import numpy as np
     import gymnasium as gym
 
-    algo_cls = _import_algo(args.algo)
-    algo = algo_cls.from_checkpoint(args.checkpoint, env_id=args.env)
+    from rlox import Trainer
+    trainer = Trainer.from_checkpoint(args.checkpoint, algorithm=args.algo, env=args.env)
+    algo = trainer.algo
 
     env = gym.make(args.env)
     rewards = []
@@ -151,7 +133,7 @@ def main():
 
     # Train
     train_p = sub.add_parser("train", help="Train an RL agent")
-    train_p.add_argument("--algo", choices=list(ALGO_MAP.keys()),
+    train_p.add_argument("--algo", choices=_get_algo_names(),
                          help="Algorithm (not required when --config provides it)")
     train_p.add_argument("--env", help="Gymnasium environment ID")
     train_p.add_argument("--timesteps", type=int, default=100_000)
@@ -162,7 +144,7 @@ def main():
 
     # Eval
     eval_p = sub.add_parser("eval", help="Evaluate a trained agent")
-    eval_p.add_argument("--algo", required=True, choices=list(ALGO_MAP.keys()))
+    eval_p.add_argument("--algo", required=True, choices=_get_algo_names())
     eval_p.add_argument("--checkpoint", required=True, help="Path to checkpoint file")
     eval_p.add_argument("--env", required=True, help="Gymnasium environment ID")
     eval_p.add_argument("--episodes", type=int, default=10)

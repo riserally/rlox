@@ -50,8 +50,8 @@ class TestVersionIsString:
         for part in parts:
             assert part.isdigit()
 
-    def test_version_is_1_0_0(self):
-        assert rlox.__version__ == "1.0.0"
+    def test_version_is_1_1_0(self):
+        assert rlox.__version__ == "1.1.0"
 
 
 # =========================================================================
@@ -296,6 +296,7 @@ class TestTrainersHaveTrainMethod:
         cls = self._get_trainer_class(name)
         assert hasattr(cls, "from_checkpoint"), f"{name} missing from_checkpoint() classmethod"
 
+    # Deprecated trainers are importable from rlox.trainers but NOT in __all__
     TRAINER_EXPORTS = [
         "PPOTrainer",
         "SACTrainer",
@@ -308,13 +309,18 @@ class TestTrainersHaveTrainMethod:
     ]
 
     @pytest.mark.parametrize("name", TRAINER_EXPORTS)
-    def test_trainers_in_rlox_all(self, name: str):
-        assert name in rlox.__all__, f"{name} missing from rlox.__all__"
+    def test_deprecated_trainers_importable_from_submodule(self, name: str):
+        """Deprecated trainers are still importable from rlox.trainers."""
+        import importlib
+        mod = importlib.import_module("rlox.trainers")
+        assert hasattr(mod, name), f"{name} not importable from rlox.trainers"
 
-    @pytest.mark.parametrize("name", TRAINER_EXPORTS)
-    def test_trainers_importable_from_rlox(self, name: str):
-        obj = getattr(rlox, name, None)
-        assert obj is not None, f"{name} not importable from rlox"
+    def test_trainer_in_rlox_all(self):
+        """The unified Trainer is the only trainer in __all__."""
+        assert "Trainer" in rlox.__all__
+        # Deprecated per-algorithm trainers should NOT be in __all__
+        for name in self.TRAINER_EXPORTS:
+            assert name not in rlox.__all__, f"{name} should not be in __all__ (deprecated)"
 
 
 # =========================================================================

@@ -209,6 +209,28 @@ class PPO:
         )
         return last_metrics
 
+    def predict(self, obs: torch.Tensor, deterministic: bool = True) -> torch.Tensor:
+        """Return an action for the given observation.
+
+        Parameters
+        ----------
+        obs : torch.Tensor
+            Observation tensor of shape ``(1, obs_dim)`` or ``(obs_dim,)``.
+        deterministic : bool
+            If True, return the argmax/mean action. If False, sample.
+        """
+        if obs.dim() == 1:
+            obs = obs.unsqueeze(0)
+        with torch.no_grad():
+            if deterministic:
+                logits = self.policy.actor(obs)
+                if hasattr(self.policy, "log_std"):
+                    return logits  # continuous: mean action
+                return logits.argmax(dim=-1)  # discrete: greedy
+            else:
+                actions, _ = self.policy.get_action_and_logprob(obs)
+                return actions
+
     def save(self, path: str) -> None:
         """Save training checkpoint."""
         Checkpoint.save(

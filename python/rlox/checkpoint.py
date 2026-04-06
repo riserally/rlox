@@ -62,20 +62,36 @@ class Checkpoint:
         return safe_torch_load(path)
 
 
-def safe_torch_load(path: str) -> dict[str, Any]:
-    """Load a checkpoint with ``weights_only=True``, falling back for legacy files.
+def safe_torch_load(path: str, *, allow_unsafe: bool = False) -> dict[str, Any]:
+    """Load a checkpoint with ``weights_only=True``.
 
-    Tries the safe ``weights_only=True`` mode first.  If the checkpoint
-    contains non-tensor objects (e.g. legacy pickled configs), falls back
-    to ``weights_only=False`` with a warning so callers can migrate.
+    Parameters
+    ----------
+    path : str
+        Path to the checkpoint file.
+    allow_unsafe : bool
+        If True, falls back to ``weights_only=False`` for legacy checkpoints
+        that contain pickled objects. **This enables arbitrary code execution
+        from the checkpoint file.** Default False.
+
+    Raises
+    ------
+    RuntimeError
+        If the checkpoint cannot be loaded safely and ``allow_unsafe=False``.
     """
     try:
         return torch.load(path, weights_only=True)
-    except Exception:
-        _logger.warning(
-            "Failed to load %s with weights_only=True; falling back to "
-            "weights_only=False. Re-save this checkpoint to remove the "
-            "unsafe pickle dependency.",
-            path,
-        )
-        return torch.load(path, weights_only=False)
+    except Exception as exc:
+        if allow_unsafe:
+            _logger.warning(
+                "Loading %s with weights_only=False (unsafe). "
+                "Re-save this checkpoint to remove the pickle dependency.",
+                path,
+            )
+            return torch.load(path, weights_only=False)
+        raise RuntimeError(
+            f"Cannot load {path} with weights_only=True. "
+            f"The checkpoint may contain pickled objects. "
+            f"Pass allow_unsafe=True to load anyway (security risk), "
+            f"or re-save the checkpoint with the latest rlox version."
+        ) from exc

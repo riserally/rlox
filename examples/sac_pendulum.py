@@ -1,7 +1,9 @@
-"""Train SAC on Pendulum-v1 (continuous control)."""
+"""Train SAC on Pendulum-v1."""
 
-from rlox.trainers import SACTrainer
+from rlox import Trainer
 
-trainer = SACTrainer(env="Pendulum-v1", config={"learning_starts": 500})
+trainer = Trainer("sac", env="Pendulum-v1", seed=42, config={
+    "learning_starts": 500,
+})
 metrics = trainer.train(total_timesteps=20_000)
 print(f"Mean reward: {metrics['mean_reward']:.1f}")

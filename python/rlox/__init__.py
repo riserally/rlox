@@ -1,10 +1,10 @@
-"""rlox -- Rust-accelerated reinforcement learning (v1.0.0).
+"""rlox -- Rust-accelerated reinforcement learning.
 
 The Polars architecture pattern applied to RL: Rust data plane for
 environments, buffers, and advantage computation; Python control plane
-for training logic, policies, and neural networks.
+for training logic, policies, and neural networks via PyTorch.
 
-8 algorithms, 8 trainers, config-driven training, diagnostics dashboard.
+Core algorithms: PPO, SAC, DQN, TD3, A2C, TRPO (+ 16 more via submodules).
 
 Rust primitives (via PyO3)
 --------------------------
@@ -255,184 +255,62 @@ from rlox.compile import compile_policy
 # -- Distributed ---------------------------------------------------------------
 from rlox.distributed import MultiGPUTrainer, RemoteEnvPool, launch_elastic
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
+
+# ---------------------------------------------------------------------------
+# Public API (__all__)
+#
+# Only the essentials are exported at top level. Everything else is available
+# via submodule imports (e.g. ``from rlox.callbacks import EvalCallback``).
+# This keeps ``dir(rlox)`` focused and discoverable.
+# ---------------------------------------------------------------------------
 
 __all__ = [
-    # Rust primitives
-    "CartPole",
-    "VecEnv",
-    "GymEnv",
-    "ExperienceTable",
-    "ReplayBuffer",
-    "PrioritizedReplayBuffer",
-    "MmapReplayBuffer",
-    "OfflineDatasetBuffer",
-    "VarLenStore",
-    "compute_gae",
-    "compute_gae_batched",
-    "compute_gae_batched_f32",
-    "compute_vtrace",
-    "compute_group_advantages",
-    "compute_batch_group_advantages",
-    "compute_token_kl",
-    "compute_token_kl_schulman",
-    "compute_batch_token_kl",
-    "compute_batch_token_kl_schulman",
-    "compute_token_kl_f32",
-    "compute_token_kl_schulman_f32",
-    "compute_batch_token_kl_f32",
-    "compute_batch_token_kl_schulman_f32",
-    "DPOPair",
-    "RunningStats",
-    "RunningStatsVec",
-    "pack_sequences",
-    "ActorCritic",
-    "CandleCollector",
-    # Wave 2/3 Rust bindings
-    "random_shift_batch",
-    "shape_rewards_pbrs",
-    "compute_goal_distance_potentials",
-    "reptile_update",
-    "average_weight_vectors",
-    "SequenceReplayBuffer",
-    "HERBuffer",
-    "py_sample_mixed",
-    # Python Layer 1
-    "RolloutBatch",
-    "RolloutCollector",
-    "GymVecEnv",
-    "VecNormalize",
-    "PPOLoss",
-    "ContinuousPolicy",
-    "DiscretePolicy",
-    # Configs
+    # ---- Core (what 90% of users need) ----
+    "Trainer",                  # Single entry point for all algorithms
+    "TrainingConfig",           # YAML/TOML config-driven training
+    "train_from_config",        # Run from config file
+
+    # ---- Rust primitives (data plane) ----
+    "VecEnv",                   # Parallel env stepping (Rust)
+    "GymVecEnv",                # Gymnasium env wrapper
+    "VecNormalize",             # Obs/reward normalization
+    "ReplayBuffer",             # Off-policy storage
+    "compute_gae",              # Generalized Advantage Estimation (147x)
+
+    # ---- Configs (6 core algorithms) ----
     "PPOConfig",
     "SACConfig",
     "DQNConfig",
-    "A2CConfig",
     "TD3Config",
-    "MAPPOConfig",
-    "DreamerV3Config",
-    "IMPALAConfig",
-    "DecisionTransformerConfig",
-    "QMIXConfig",
-    "CalQLConfig",
-    "PBTConfig",
+    "A2CConfig",
     "TRPOConfig",
-    "SelfPlayConfig",
-    "GoExploreConfig",
-    "MPOConfig",
-    "TrainingConfig",
-    # Unified Trainer
-    "Trainer",
-    "ALGORITHM_REGISTRY",
-    # Runner
-    "train_from_config",
-    # Trainers
-    "PPOTrainer",
-    "SACTrainer",
-    "DQNTrainer",
-    "A2CTrainer",
-    "TD3Trainer",
-    "MAPPOTrainer",
-    "DreamerV3Trainer",
-    "IMPALATrainer",
-    # Callbacks
+
+    # ---- Policies ----
+    "ContinuousPolicy",
+    "DiscretePolicy",
+
+    # ---- Callbacks ----
     "Callback",
-    "CallbackList",
     "EvalCallback",
-    "EarlyStoppingCallback",
-    "CheckpointCallback",
-    "ProgressBarCallback",
-    "TimingCallback",
-    # Protocols
-    "OnPolicyActor",
-    "StochasticActor",
-    "DeterministicActor",
-    "QFunction",
-    "DiscreteQFunction",
-    "ExplorationStrategy",
-    "ReplayBufferProtocol",
-    "VecEnvProtocol",
-    "Augmentation",
-    "RewardShaper",
-    "IntrinsicMotivation",
-    "MetaLearner",
-    # Wave 4 Python wrappers
-    "RandomShift",
-    "PotentialShaping",
-    "GoalDistanceShaping",
-    "apply_spectral_norm",
-    "RND",
-    "ICM",
-    "Reptile",
-    "OfflineToOnline",
-    "PBT",
-    "SelfPlay",
-    # Exploration
-    "GaussianNoise",
-    "EpsilonGreedy",
-    "OUNoise",
-    "GoExplore",
-    # Off-policy collectors
-    "OffPolicyCollector",
-    "CollectorProtocol",
-    # Builders
-    "PPOBuilder",
-    "SACBuilder",
-    "DQNBuilder",
-    # Losses
-    "LossComponent",
-    "CompositeLoss",
-    # Logging
-    "LoggerCallback",
-    "WandbLogger",
-    "TensorBoardLogger",
+
+    # ---- Logging ----
     "ConsoleLogger",
-    # Evaluation
-    "interquartile_mean",
-    "performance_profiles",
-    "stratified_bootstrap_ci",
-    "aggregate_metrics",
-    "probability_of_improvement",
-    # Diagnostics
-    "TrainingDiagnostics",
-    # Dashboard
-    "MetricsCollector",
-    "TerminalDashboard",
-    "HTMLReport",
-    # Checkpoint
-    "Checkpoint",
-    # Hub
-    "push_to_hub",
-    "load_from_hub",
-    # Plugins
-    "ENV_REGISTRY",
-    "BUFFER_REGISTRY",
-    "REWARD_REGISTRY",
-    "register_env",
-    "register_buffer",
-    "register_reward",
-    "discover_plugins",
-    "list_registered",
-    # Model Zoo
-    "ModelZoo",
-    "ModelCard",
-    # Compile
-    "compile_policy",
-    # Distributed
-    "MultiGPUTrainer",
-    "RemoteEnvPool",
-    "launch_elastic",
-    # Wrappers (Visual RL, Language-Conditioned)
-    "FrameStack",
-    "ImagePreprocess",
-    "AtariWrapper",
-    "DMControlWrapper",
-    "LanguageWrapper",
-    "GoalConditionedWrapper",
-    # Deploy
-    "generate_dockerfile",
-    "generate_k8s_job",
-    "SageMakerEstimator",
+
+    # ---- Version ----
+    "__version__",
 ]
+
+# Everything else remains importable via submodules:
+#   from rlox.algorithms import PPO, SAC, DQN
+#   from rlox.callbacks import CheckpointCallback, ProgressBarCallback
+#   from rlox.config import MAPPOConfig, DreamerV3Config, IMPALAConfig
+#   from rlox.exploration import GaussianNoise, EpsilonGreedy
+#   from rlox.intrinsic import RND, ICM
+#   from rlox.meta import Reptile
+#   from rlox.plugins import register_env, register_buffer
+#   from rlox.wrappers import FrameStack, AtariWrapper
+#   from rlox.deploy import generate_dockerfile
+#   from rlox.dashboard import MetricsCollector, HTMLReport
+#   from rlox.zoo import ModelZoo
+#   from rlox.distributed import MultiGPUTrainer

@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "rlox"
 version = "1.1.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT OR Apache-2.0"
 description = "Rust-accelerated reinforcement learning — 142x faster GAE, 53x faster rollouts. The Polars of RL."
 readme = "README.md"
@@ -17,18 +17,22 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Rust",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = ["numpy>=1.21"]
+dependencies = [
+    "numpy>=1.21",
+    "torch>=2.0",
+    "gymnasium>=0.29",
+]
 
 [project.optional-dependencies]
-all = ["torch>=2.0", "gymnasium>=0.29"]
+mujoco = ["gymnasium[mujoco]"]
 gpu = ["torch>=2.0"]
+dev = ["pytest", "pyyaml"]
 
 [project.scripts]
 rlox = "rlox.__main__:main"

@@ -110,7 +110,7 @@ class BC(OfflineAlgorithm):
 
         return {"loss": loss.item()}
 
-    def predict(self, obs: np.ndarray) -> np.ndarray:
+    def predict(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
         """Get action from the learned policy."""
         with torch.no_grad():
             obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)

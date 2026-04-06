@@ -45,12 +45,12 @@ def cmd_train(args):
             if args.config.endswith(".toml")
             else TrainingConfig.from_yaml(args.config)
         )
-        # CLI overrides
+        # CLI overrides (only if explicitly provided)
         if args.env:
             config.env_id = args.env
-        if args.seed != 42:
+        if args.seed is not None:
             config.seed = args.seed
-        if args.timesteps != 100_000:
+        if args.timesteps is not None:
             config.total_timesteps = args.timesteps
 
         print(
@@ -84,15 +84,18 @@ def cmd_train(args):
             cfg = yaml.safe_load(f)
         config = cfg.get("hyperparameters", cfg)
 
+    seed = args.seed if args.seed is not None else 42
+    timesteps = args.timesteps if args.timesteps is not None else 100_000
+
     trainer = Trainer(
-        args.algo, env=args.env, seed=args.seed,
+        args.algo, env=args.env, seed=seed,
         config=config, logger=ConsoleLogger(log_interval=args.log_interval),
     )
 
     print(
-        f"Training {args.algo.upper()} on {args.env} for {args.timesteps} steps (seed={args.seed})"
+        f"Training {args.algo.upper()} on {args.env} for {timesteps} steps (seed={seed})"
     )
-    metrics = trainer.train(total_timesteps=args.timesteps)
+    metrics = trainer.train(total_timesteps=timesteps)
     print(f"\nTraining complete. Final metrics: {metrics}")
 
     if args.save:
@@ -136,8 +139,8 @@ def main():
     train_p.add_argument("--algo", choices=_get_algo_names(),
                          help="Algorithm (not required when --config provides it)")
     train_p.add_argument("--env", help="Gymnasium environment ID")
-    train_p.add_argument("--timesteps", type=int, default=100_000)
-    train_p.add_argument("--seed", type=int, default=42)
+    train_p.add_argument("--timesteps", type=int, default=None)
+    train_p.add_argument("--seed", type=int, default=None)
     train_p.add_argument("--config", default=None, help="YAML config file")
     train_p.add_argument("--save", default=None, help="Path to save model checkpoint")
     train_p.add_argument("--log-interval", type=int, default=1000)

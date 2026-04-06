@@ -212,7 +212,7 @@ class IQL(OfflineAlgorithm):
             "actor_loss": actor_loss.item(),
         }
 
-    def predict(self, obs: np.ndarray) -> np.ndarray:
+    def predict(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
         """Get deterministic action."""
         with torch.no_grad():
             obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)

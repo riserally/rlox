@@ -40,23 +40,38 @@ def run_single_seed(
     import torch
 
     eval_env = gym.make(env_id)
+    is_discrete = hasattr(eval_env.action_space, "n")
+    vn = getattr(trainer.algo, "vec_normalize", None)
     rewards = []
     for _ in range(30):
         obs, _ = eval_env.reset(seed=seed + 1000)
         ep_r = 0.0
         done = False
         while not done:
-            obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+            # Normalize obs if VecNormalize was used during training
+            eval_obs = obs
+            if vn is not None:
+                eval_obs = vn.normalize_obs(obs.reshape(1, -1)).flatten()
+
+            obs_t = torch.as_tensor(eval_obs, dtype=torch.float32).unsqueeze(0)
             with torch.no_grad():
                 if hasattr(trainer.algo, "predict"):
                     action = trainer.algo.predict(obs_t, deterministic=True)
-                    if hasattr(action, "item"):
-                        action = action.item()
-                elif hasattr(trainer.algo, "policy"):
-                    logits = trainer.algo.policy.actor(obs_t)
-                    action = logits.argmax(-1).item()
                 else:
-                    action = eval_env.action_space.sample()
+                    logits = trainer.algo.policy.actor(obs_t)
+                    if is_discrete:
+                        action = logits.argmax(-1).item()
+                    else:
+                        action = logits.squeeze(0)
+
+            # Ensure action is correct shape for the environment
+            if hasattr(action, "numpy"):
+                action = action.numpy()
+            if isinstance(action, np.ndarray):
+                action = action.flatten()
+            elif is_discrete and hasattr(action, "item"):
+                action = action.item()
+
             obs, r, term, trunc, _ = eval_env.step(action)
             ep_r += r
             done = term or trunc

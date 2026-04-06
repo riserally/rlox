@@ -209,16 +209,18 @@ class PPO:
         )
         return last_metrics
 
-    def predict(self, obs: torch.Tensor, deterministic: bool = True) -> torch.Tensor:
+    def predict(self, obs, deterministic: bool = True) -> torch.Tensor:
         """Return an action for the given observation.
 
         Parameters
         ----------
-        obs : torch.Tensor
-            Observation tensor of shape ``(1, obs_dim)`` or ``(obs_dim,)``.
+        obs : torch.Tensor or np.ndarray
+            Observation of shape ``(obs_dim,)`` or ``(1, obs_dim)``.
         deterministic : bool
             If True, return the argmax/mean action. If False, sample.
         """
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
         if obs.dim() == 1:
             obs = obs.unsqueeze(0)
         with torch.no_grad():

@@ -104,10 +104,38 @@ class ConfigMixin:
     only need to declare their fields and ``__post_init__`` validation.
     """
 
+    # Subclasses can define aliases for common misspellings / YAML variants.
+    # Example: _KEY_ALIASES = {"normalize_reward": "normalize_rewards"}
+    _KEY_ALIASES: dict[str, str] = {}
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]):
+        import warnings
+        import difflib
+
         valid_keys = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        aliases = getattr(cls, "_KEY_ALIASES", {})
+
+        filtered: dict[str, Any] = {}
+        for k, v in d.items():
+            if k in valid_keys:
+                filtered[k] = v
+            elif k in aliases:
+                canonical = aliases[k]
+                warnings.warn(
+                    f"Config key '{k}' is an alias for '{canonical}'. "
+                    f"Consider using '{canonical}' directly.",
+                    stacklevel=2,
+                )
+                filtered[canonical] = v
+            else:
+                # Warn about unknown keys with "did you mean?" suggestion
+                matches = difflib.get_close_matches(k, valid_keys, n=1, cutoff=0.7)
+                hint = f" Did you mean '{matches[0]}'?" if matches else ""
+                warnings.warn(
+                    f"Unknown config key '{k}' for {cls.__name__}, ignoring.{hint}",
+                    stacklevel=2,
+                )
         return cls(**filtered)
 
     @classmethod
@@ -194,6 +222,9 @@ class PPOConfig(ConfigMixin):
     anneal_lr: bool = True
     normalize_rewards: bool = False
     normalize_obs: bool = False
+
+    # Accept common YAML variants (SB3 uses "normalize_reward" without 's')
+    _KEY_ALIASES = {"normalize_reward": "normalize_rewards", "clip_range": "clip_eps"}
 
     def __post_init__(self):
         _validate_positive("learning_rate", self.learning_rate)

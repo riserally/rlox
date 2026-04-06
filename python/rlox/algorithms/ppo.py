@@ -62,11 +62,10 @@ class PPO:
         self.env_id = env_id
         self.seed = seed
 
-        # Build config from validated PPOConfig
-        cfg_fields = {f.name for f in PPOConfig.__dataclass_fields__.values()}
-        cfg_dict = {k: v for k, v in config_kwargs.items() if k in cfg_fields}
+        # Build config from validated PPOConfig (uses from_dict for alias + warning support)
+        cfg_dict = dict(config_kwargs)
         cfg_dict["n_envs"] = n_envs
-        self.config = PPOConfig(**cfg_dict)
+        self.config = PPOConfig.from_dict(cfg_dict)
 
         self.device = "cpu"
 

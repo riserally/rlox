@@ -33,6 +33,7 @@ graph TD
     G --> BC_node[<a href='bc/'>BC</a>]
     G --> AWR_node[<a href='awr/'>AWR</a>]
     G --> DT_node[<a href='dt/'>Decision Transformer</a>]
+    G --> DTP_node[<a href='dtp/'>DTP (Tree Policy)</a>]
     G --> Diff_node[<a href='diffusion/'>Diffusion Policy</a>]
     H --> GRPO_node[<a href='grpo/'>GRPO</a>]
     H --> DPO_node[<a href='dpo/'>DPO</a>]
@@ -71,6 +72,7 @@ graph TD
 | [BC](bc.md) | Discrete / Continuous | Supervised | N/A (offline) | High | Minimal |
 | [AWR](awr.md) | Discrete / Continuous | Stochastic | Medium | Medium | Low |
 | [Decision Transformer](dt.md) | Discrete / Continuous | Sequence model | N/A (offline) | High | Medium |
+| [DTP (RWDTP / RCDTP)](dtp.md) | Continuous | Tree ensemble | N/A (offline) | High | Very Low |
 | [Diffusion Policy](diffusion.md) | Continuous | Diffusion | N/A (offline) | High | High |
 | [GRPO](grpo.md) | Token sequences | Stochastic (LLM) | N/A | Medium | Medium |
 | [DPO](dpo.md) | Token sequences | Stochastic (LLM) | N/A | High | Low |
@@ -135,6 +137,7 @@ graph TD
 - [BC -- Behavioral Cloning](bc.md)
 - [AWR -- Advantage Weighted Regression](awr.md)
 - [Decision Transformer -- RL via Sequence Modeling](dt.md)
+- [DTP -- Decision Tree Policy (RWDTP / RCDTP)](dtp.md)
 
 ### Policy as Diffusion
 

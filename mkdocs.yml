@@ -104,6 +104,7 @@ nav:
       - BC: algorithms/bc.md
       - AWR: algorithms/awr.md
       - Decision Transformer: algorithms/dt.md
+      - DTP (Tree Policy): algorithms/dtp.md
     - Policy as Diffusion:
       - Diffusion Policy: algorithms/diffusion.md
     - LLM Post-Training:

@@ -88,36 +88,41 @@ class RolloutCollector:
         self.gae_lambda = gae_lambda
         self.reward_fn = reward_fn
 
-        # Allow caller to provide a pre-built env (e.g. VecNormalize wrapper)
-        _is_native = False
+        # Allow caller to provide a pre-built env (e.g. VecNormalize wrapper).
+        # When a wrapped env is supplied we MUST detect discreteness from the
+        # wrapped env's action_space, not from env_id — wrappers like
+        # VecNormalize forward a gym.spaces.Box even when env_id refers to a
+        # natively-supported Rust env (e.g. Pendulum-v1).
+        _used_rust_native = False
         if env is not None:
             self.env = env
-            _is_native = env_id in _NATIVE_ENV_IDS
         elif env_id in _NATIVE_ENV_IDS:
             try:
                 self.env = rlox.VecEnv(n=n_envs, seed=seed, env_id=env_id)
-                _is_native = True
+                _used_rust_native = True
             except (ValueError, RuntimeError):
                 # Rust side doesn't support this env yet; fall back to Gymnasium
                 self.env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
         else:
             self.env = GymVecEnv(env_id, n_envs=n_envs, seed=seed)
 
-        if _is_native:
-            # Query the Rust VecEnv's action_space property
-            action_space_info = getattr(self.env, "action_space", None)
-            if isinstance(action_space_info, dict):
-                self._is_discrete = action_space_info.get("type") == "discrete"
-            else:
-                self._is_discrete = True  # fallback for older Rust builds
-        else:
+        # Detect discrete vs continuous from the actual env's action_space.
+        # Rust VecEnv exposes a dict {"type": "discrete"|"continuous", ...};
+        # gymnasium / GymVecEnv / VecNormalize exposes a gym.spaces.Space.
+        action_space_info = getattr(self.env, "action_space", None)
+        if isinstance(action_space_info, dict):
+            self._is_discrete = action_space_info.get("type") == "discrete"
+        elif action_space_info is not None:
             import gymnasium as gym
 
-            action_space = getattr(self.env, "action_space", None)
-            if action_space is not None:
-                self._is_discrete = isinstance(action_space, gym.spaces.Discrete)
-            else:
-                self._is_discrete = True
+            self._is_discrete = isinstance(action_space_info, gym.spaces.Discrete)
+        elif _used_rust_native:
+            # Older Rust builds expose no action_space property — fall back
+            # to env_id heuristic, which historically only matched discrete
+            # envs (CartPole).
+            self._is_discrete = True
+        else:
+            self._is_discrete = True
 
         self._obs: np.ndarray | None = None  # (n_envs, obs_dim)
 

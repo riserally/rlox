@@ -2,22 +2,23 @@ algorithm: DQN
 environment: MountainCar-v0
 action_space: discrete
 threshold: -110.0
-max_steps: 500_000
-eval_freq: 1_000
+max_steps: 120_000
+eval_freq: 5_000
 eval_episodes: 10
 
+# Hyperparameters from rl-baselines3-zoo (proven to reach -110 in ~120k steps).
+# Source: https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/hyperparams/dqn.yml
 hyperparameters:
-  buffer_size: 100_000
-  batch_size: 64
-  learning_rate: 1.0e-4
-  gamma: 0.99
+  buffer_size: 10_000
+  batch_size: 128
+  learning_rate: 4.0e-3
+  gamma: 0.98
   exploration_fraction: 0.2
-  exploration_final_eps: 0.05
-  target_update_interval: 10_000
-  train_freq: 4
-  gradient_steps: 1
+  exploration_final_eps: 0.07
+  target_update_freq: 600
   learning_starts: 1_000
+  hidden: 256
 
 policy:
   type: MlpPolicy
-  hidden_sizes: [64, 64]
+  hidden_sizes: [256, 256]

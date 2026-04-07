@@ -2,22 +2,25 @@ algorithm: DQN
 environment: CartPole-v1
 action_space: discrete
 threshold: 475.0
-max_steps: 100_000
+max_steps: 50_000
 eval_freq: 1_000
 eval_episodes: 10
 
+# Hyperparameters from rl-baselines3-zoo (verified locally to hit 500/500 at 50k steps).
+# Source: https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/hyperparams/dqn.yml
+# Previous defaults (lr=1e-4, target_update=10000) only reached ~200 — see
+# docs/plans/results-inspection-2026-04-06.md.
 hyperparameters:
   buffer_size: 100_000
   batch_size: 64
-  learning_rate: 1.0e-4
+  learning_rate: 2.3e-3
   gamma: 0.99
-  exploration_fraction: 0.1
-  exploration_final_eps: 0.05
-  target_update_interval: 10_000
-  train_freq: 4
-  gradient_steps: 1
+  exploration_fraction: 0.16
+  exploration_final_eps: 0.04
+  target_update_freq: 10
   learning_starts: 1_000
+  hidden: 256
 
 policy:
   type: MlpPolicy
-  hidden_sizes: [64, 64]
+  hidden_sizes: [256, 256]

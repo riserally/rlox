@@ -218,7 +218,7 @@ class PPOConfig(ConfigMixin):
     gamma: float = 0.99
     gae_lambda: float = 0.95
     normalize_advantages: bool = True
-    clip_vloss: bool = True
+    clip_vloss: bool = False  # matches SB3 default (clip_range_vf=None)
     anneal_lr: bool = True
     normalize_rewards: bool = False
     normalize_obs: bool = False

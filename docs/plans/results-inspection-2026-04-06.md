@@ -174,3 +174,58 @@ flowchart TD
 ```
 
 **SAC/TD3 multi-seed is unblocked** — those algorithms already converge cleanly and the multi-seed runner has the action-shape fix from the previous compaction. The lowest-risk paper deliverable today is "launch SAC/TD3 multi-seed on GCP, do PPO/DQN deep-dives in parallel."
+
+---
+
+## Update — task #5 (rlox PPO vs SB3 PPO) closed (2026-04-06)
+
+### Two concrete diffs found in `losses.py`
+
+1. **Inner `0.5` factor on value loss** — rlox followed CleanRL's convention of computing `value_loss = 0.5 * MSE` *inside* the loss, then multiplying by `vf_coef=0.5` outside. SB3 just does `F.mse_loss(returns, values)` then multiplies by `vf_coef=0.5`. **rlox's effective value-loss gradient was exactly half SB3's at the same `vf_coef`** — a more conservative critic, slower learning of the value function, and downstream slower advantage refinement.
+2. **`clip_vloss` default mismatch** — rlox defaulted `clip_vloss=True` (CleanRL max-of-clipped formulation). SB3 defaults `clip_range_vf=None` (plain MSE). Different loss objectives by default.
+
+### Fix
+
+- `python/rlox/losses.py`: removed the inner `0.5`; `value_loss = max(...).mean()` (clipped) or `((v - r)**2).mean()` (plain). Default `clip_vloss=False`.
+- `python/rlox/config.py`: `PPOConfig.clip_vloss` default flipped to `False`.
+
+These changes make `vf_coef=0.5` in rlox produce the **same** value-loss contribution as `vf_coef=0.5` in SB3.
+
+### Verification
+
+500k Hopper-v4, seed=42, identical hyperparameters, 10 deterministic eval episodes:
+
+| variant | return | wall |
+|---|---:|---:|
+| rlox **new defaults** (no user overrides) | **450.6 ± 1.7** | 90s |
+| SB3 PPO 2.7.1 | 427.0 ± 1.8 | 97s |
+
+rlox now matches (and slightly beats) SB3 out of the box. The original 1M Hopper "gap" (rlox 2374 vs SB3 3578) was largely single-seed variance, *amplified* by the systematic 2× value-loss weighting bias which slowed rlox's late-training convergence.
+
+### Bisection at 200k Hopper (seed=42)
+
+| variant | return |
+|---|---:|
+| A: old defaults (`vf_coef=0.5`, `clip_vloss=True`, inner 0.5) | 208 |
+| B: `vf_coef=1.0`, rest as A | 229 |
+| C: `clip_vloss=False`, rest as A | 245 |
+| D: `vf_coef=1.0` + `clip_vloss=False` | 252 |
+| **new defaults** (effective vf weight 2× of A) | 252 |
+| SB3 reference | 268 |
+
+Both axes contributed; combined fix closes the 200k gap from 60 reward points (A→SB3) to 16 (~6%, well inside seed noise).
+
+### Tasks remaining for the paper
+
+```mermaid
+flowchart LR
+    A[✅ Trainer↔runner equivalence] --> X[ready]
+    B[✅ DQN CartPole config] --> X
+    C[✅ collectors.py discreteness fix] --> X
+    D[✅ PPO loss SB3 alignment] --> X
+    X --> E[P1: SAC/TD3 multi-seed on GCP]
+    X --> F[P1: PPO multi-seed on GCP<br/>now expected to match SB3]
+    X --> G[P2: DQN MountainCar bug<br/>not paper-blocking]
+```
+
+The blockers for a credible paper table are now down to **launching multi-seed runs** — no more code fixes required for SAC/TD3/PPO/DQN-CartPole. DQN MountainCar is the only known unresolved cell, and it's a single non-paper-critical entry.

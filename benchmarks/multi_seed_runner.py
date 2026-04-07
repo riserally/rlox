@@ -17,6 +17,31 @@ from pathlib import Path
 
 import numpy as np
 
+# Per-(algo, env) hyperparameter presets live alongside the convergence
+# benchmark configs. We auto-resolve them so the launch scripts only need
+# to specify --algo/--env/--timesteps.
+_PRESET_DIR = Path(__file__).resolve().parent / "convergence" / "configs"
+
+
+def _resolve_preset(algo: str, env_id: str) -> dict | None:
+    """Look up a YAML preset for (algo, env) and return its hyperparameters.
+
+    Convention: ``benchmarks/convergence/configs/<algo>_<env_short>.yaml``
+    where ``env_short = env_id.split('-')[0].lower()``.
+
+    Returns None if no preset exists; the caller falls back to Trainer
+    defaults (which are CleanRL CartPole-tuned and unsuitable for MuJoCo).
+    """
+    env_short = env_id.split("-")[0].lower()
+    preset = _PRESET_DIR / f"{algo.lower()}_{env_short}.yaml"
+    if not preset.exists():
+        return None
+    import yaml
+
+    with preset.open() as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("hyperparameters", data)
+
 
 def run_single_seed(
     algo: str,
@@ -25,9 +50,16 @@ def run_single_seed(
     seed: int,
     config: dict | None = None,
 ) -> dict:
-    """Train one seed and return metrics + final eval reward."""
+    """Train one seed and return metrics + final eval reward.
+
+    If ``config`` is None, attempt to auto-resolve a preset YAML for the
+    (algo, env) pair from ``benchmarks/convergence/configs/``. This avoids
+    silently running CleanRL CartPole-tuned defaults on MuJoCo envs.
+    """
     from rlox import Trainer
 
+    if config is None:
+        config = _resolve_preset(algo, env_id)
     cfg = dict(config or {})
     trainer = Trainer(algo, env=env_id, seed=seed, config=cfg)
 

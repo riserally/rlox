@@ -448,12 +448,19 @@ class DQNConfig(ConfigMixin):
     alpha: float = 0.6
     beta_start: float = 0.4
     hidden: int = 256
+    # Update cadence — match SB3 semantics. Defaults preserve historic
+    # rlox behavior (1 grad step per env step). Set ``train_freq=16,
+    # gradient_steps=8`` to match SB3-zoo MountainCar / Atari recipes.
+    train_freq: int = 1
+    gradient_steps: int = 1
 
     def __post_init__(self):
         _validate_positive("learning_rate", self.learning_rate)
         _validate_min("buffer_size", self.buffer_size, 1)
         _validate_min("batch_size", self.batch_size, 1)
         _validate_min("n_step", self.n_step, 1)
+        _validate_min("train_freq", self.train_freq, 1)
+        _validate_min("gradient_steps", self.gradient_steps, 1)
 
 
 # ---------------------------------------------------------------------------

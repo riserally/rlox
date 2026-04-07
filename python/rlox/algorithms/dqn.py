@@ -44,6 +44,8 @@ class DQN:
         alpha: float = 0.6,
         beta_start: float = 0.4,
         hidden: int = 256,
+        train_freq: int = 1,
+        gradient_steps: int = 1,
         seed: int = 42,
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
@@ -74,6 +76,8 @@ class DQN:
         self.dueling = dueling
         self.n_step = n_step
         self.prioritized = prioritized
+        self.train_freq = train_freq
+        self.gradient_steps = gradient_steps
 
         self.config = DQNConfig(
             learning_rate=learning_rate,
@@ -92,6 +96,8 @@ class DQN:
             alpha=alpha,
             beta_start=beta_start,
             hidden=hidden,
+            train_freq=train_freq,
+            gradient_steps=gradient_steps,
         )
 
         obs_dim = int(np.prod(self.env.observation_space.shape))
@@ -265,10 +271,17 @@ class DQN:
             if not should_continue:
                 break
 
-            # Update
-            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
-                metrics = self._update(step, total_timesteps)
-                self.callbacks.on_train_batch(**metrics)
+            # Update — only every ``train_freq`` env steps, doing
+            # ``gradient_steps`` SGD steps per training round (matches SB3
+            # semantics).
+            if (
+                step >= self.learning_starts
+                and len(self.buffer) >= self.batch_size
+                and step % self.train_freq == 0
+            ):
+                for _ in range(self.gradient_steps):
+                    metrics = self._update(step, total_timesteps)
+                    self.callbacks.on_train_batch(**metrics)
 
                 # Logger
                 if self.logger is not None and self._global_step % 1000 == 0:
@@ -379,9 +392,14 @@ class DQN:
             if not should_continue:
                 break
 
-            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
-                metrics = self._update(step, total_timesteps)
-                self.callbacks.on_train_batch(**metrics)
+            if (
+                step >= self.learning_starts
+                and len(self.buffer) >= self.batch_size
+                and step % self.train_freq == 0
+            ):
+                for _ in range(self.gradient_steps):
+                    metrics = self._update(step, total_timesteps)
+                    self.callbacks.on_train_batch(**metrics)
 
                 if self.logger is not None and self._global_step % 1000 == 0:
                     self.logger.on_train_step(self._global_step, metrics)

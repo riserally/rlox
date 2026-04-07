@@ -18,6 +18,10 @@ hyperparameters:
   target_update_freq: 600
   learning_starts: 1_000
   hidden: 256
+  # Match SB3-zoo update cadence — without this rlox over-trains on early
+  # transitions and never explores far enough to reach the goal flag.
+  train_freq: 16
+  gradient_steps: 8
 
 policy:
   type: MlpPolicy

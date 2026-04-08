@@ -46,6 +46,7 @@ class DQN:
         hidden: int = 256,
         train_freq: int = 1,
         gradient_steps: int = 1,
+        max_grad_norm: float = 10.0,
         seed: int = 42,
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
@@ -78,6 +79,7 @@ class DQN:
         self.prioritized = prioritized
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
+        self.max_grad_norm = max_grad_norm
 
         self.config = DQNConfig(
             learning_rate=learning_rate,
@@ -98,6 +100,7 @@ class DQN:
             hidden=hidden,
             train_freq=train_freq,
             gradient_steps=gradient_steps,
+            max_grad_norm=max_grad_norm,
         )
 
         obs_dim = int(np.prod(self.env.observation_space.shape))
@@ -333,10 +336,23 @@ class DQN:
             target_q = rewards + self.gamma**self.n_step * (1.0 - terminated) * next_q
 
         td_error = q - target_q
+        # NOTE: rlox DQN uses MSE; SB3 DQN uses Huber (smooth_l1_loss). This
+        # is an intentional divergence — see
+        # docs/plans/benchmark-comparison-inconsistencies.md. Switching to
+        # Huber here without other adjustments was empirically destabilizing
+        # on CartPole with the SB3-zoo cadence. Tracked as a follow-up.
         loss = (weights * td_error.pow(2)).mean()
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        # Optional gradient clipping. ``max_grad_norm`` is exposed in
+        # DQNConfig for users who want to mirror SB3's clip-at-10; the
+        # default value is large enough that it is effectively a no-op,
+        # preserving historical rlox behavior.
+        if self.max_grad_norm < float("inf"):
+            torch.nn.utils.clip_grad_norm_(
+                self.q_network.parameters(), self.max_grad_norm
+            )
         self.optimizer.step()
 
         # Update priorities

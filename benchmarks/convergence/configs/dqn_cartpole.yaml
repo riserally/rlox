@@ -20,6 +20,13 @@ hyperparameters:
   target_update_freq: 10
   learning_starts: 1_000
   hidden: 256
+  # NOTE: rlox DQN uses MSE loss + train-every-step (train_freq=1) by
+  # default. SB3 DQN uses Huber + train_freq=256 + gradient_steps=128.
+  # The two paths converge to ~500/500 with their respective recipes;
+  # crossing them (e.g. setting train_freq=256 here) DOES NOT WORK with
+  # rlox's MSE because the per-step gradient is larger and the
+  # algorithm relies on more frequent target syncs to stay stable.
+  # See docs/plans/benchmark-comparison-inconsistencies.md.
 
 policy:
   type: MlpPolicy

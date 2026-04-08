@@ -453,6 +453,12 @@ class DQNConfig(ConfigMixin):
     # gradient_steps=8`` to match SB3-zoo MountainCar / Atari recipes.
     train_freq: int = 1
     gradient_steps: int = 1
+    # Gradient clipping — set to a finite value (e.g. 10.0, matching SB3)
+    # to mirror SB3's default. The historical rlox default is unbounded
+    # (no clipping); this is preserved by setting the default to inf so
+    # existing behavior is unchanged. Users who care about SB3-style
+    # algorithmic alignment should set this to 10.0 explicitly.
+    max_grad_norm: float = float("inf")
 
     def __post_init__(self):
         _validate_positive("learning_rate", self.learning_rate)
@@ -461,6 +467,7 @@ class DQNConfig(ConfigMixin):
         _validate_min("n_step", self.n_step, 1)
         _validate_min("train_freq", self.train_freq, 1)
         _validate_min("gradient_steps", self.gradient_steps, 1)
+        _validate_positive("max_grad_norm", self.max_grad_norm)
 
 
 # ---------------------------------------------------------------------------

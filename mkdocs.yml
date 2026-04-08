@@ -46,6 +46,39 @@ plugins:
             show_root_heading: true
             members_order: source
             show_signature_annotations: true
+  # Internationalization (i18n).
+  #
+  # File-naming convention: page translations use a `.<lang>.md` suffix
+  # next to the default English file, e.g.:
+  #   docs/index.md       <- default (English)
+  #   docs/index.pl.md    <- Polish
+  #   docs/index.de.md    <- German
+  #   docs/index.fr.md    <- French
+  #
+  # Pages without a translation fall through to the default (English).
+  # See docs/CONTRIBUTING-translations.md for the contributor workflow.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: pl
+          name: Polski
+          build: true
+          site_name: "rlox — Reinforcement Learning w Ruście"
+        - locale: de
+          name: Deutsch
+          build: true
+          site_name: "rlox — Rust-beschleunigtes Reinforcement Learning"
+        - locale: fr
+          name: Français
+          build: true
+          site_name: "rlox — Apprentissage par renforcement accéléré par Rust"
 
 markdown_extensions:
   - pymdownx.highlight:

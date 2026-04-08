@@ -75,8 +75,12 @@ def run_single_seed(
     is_discrete = hasattr(eval_env.action_space, "n")
     vn = getattr(trainer.algo, "vec_normalize", None)
     rewards = []
-    for _ in range(30):
-        obs, _ = eval_env.reset(seed=seed + 1000)
+    for ep in range(30):
+        # Unique reset seed per eval episode — otherwise 30 "independent"
+        # deterministic rollouts are really one playout replayed 30x
+        # (small MuJoCo noise notwithstanding). See
+        # docs/plans/multi-seed-pre-flight-review-2026-04-06.md.
+        obs, _ = eval_env.reset(seed=seed + 1000 + ep)
         ep_r = 0.0
         done = False
         while not done:

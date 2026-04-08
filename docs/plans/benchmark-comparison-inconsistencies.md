@@ -155,35 +155,48 @@ because YAML diff tools will not flag them.
   so we happen to match SB3 on MuJoCo. But anyone running PPO from a
   preset that omits `ent_coef` gets a mismatch.
 
-#### 2.4 PPO `clip_range_vf` / `clip_vloss`
+#### 2.4 PPO `clip_range_vf` / `clip_vloss` — **DIVERGENCE (by choice)**
 
 - **SB3 PPO default**: `clip_range_vf=None`
   (`stable_baselines3/ppo/ppo.py:91`) — NO value clipping.
-- **rlox PPOLoss default**: `clip_vloss=False`
-  (`python/rlox/losses.py:59`) — NO value clipping. **Match.**
-- Historical note: an earlier rlox release defaulted `clip_vloss=True`.
-  This was fixed in commit 9a7d628 to match SB3. Documented in the
-  `PPOLoss` docstring, lines 38-43.
-- The harness currently drops `clip_vloss` at translation time. If a
-  preset sets `clip_vloss=True`, rlox will clip and SB3 will not —
-  asymmetric comparison. **Fix: if preset has `clip_vloss=True`,
-  inject `clip_range_vf = preset["clip_range"]` into `sb3_kwargs`.**
+- **rlox PPOLoss default (current)**: `clip_vloss=True`
+  (`python/rlox/losses.py:59`) — max-of-clipped formulation, CleanRL style.
+- **Update (2026-04-08)**: commit `9a7d628` briefly defaulted `clip_vloss=False`
+  to match SB3, and was reverted after an A/B at Hopper-v4 1M seed=42
+  showed the SB3-aligned variant regressed from **1955 → 837** (−57%).
+  The 200k/500k bisection that motivated the original alignment was in
+  the wrong evaluation regime: plain MSE without clipping lets the value
+  function move too far per update once the policy starts generating
+  high-magnitude advantages in late training, and the policy can't track.
+  rlox PPO now keeps the CleanRL formulation as default.
+- **Paper implication**: rlox PPO and SB3 PPO use different value-loss
+  formulations by design. The comparison is "best rlox recipe vs best
+  SB3 recipe", not "same loss, different framework". Disclose
+  explicitly in the methods section. Cite the A/B results above.
+- The harness currently drops `clip_vloss` at translation time — which
+  now is INTENTIONAL: the rlox `clip_vloss=True` default should NOT be
+  mirrored into SB3, because SB3's `clip_range_vf=None` default IS its
+  best setting. Leave the asymmetry as-is.
 
-#### 2.5 PPO value loss inner `0.5` factor (HISTORICAL)
+#### 2.5 PPO value loss inner `0.5` factor — **DIVERGENCE (by choice)**
 
 - **SB3 PPO**: `value_loss = F.mse_loss(returns, values_pred)` then
   `loss = policy_loss + vf_coef * value_loss`
-  (`stable_baselines3/ppo/ppo.py:244,256`).
-- **rlox PPOLoss (current)**: `value_loss = ((new_values -
-  returns)**2).mean()` then `policy_loss + vf_coef * value_loss`
-  (`python/rlox/losses.py:124,128`). **Match.**
-- **rlox PPOLoss (historical)**: had an inner `0.5 *` factor,
-  inherited from CleanRL. At the same `vf_coef=0.5` that made rlox's
-  effective value gradient half of SB3's. Fixed in the same commit
-  9a7d628. The docstring at `losses.py:38-43` documents the change.
-- **Paper implication:** if any published rlox result predates that
-  commit, it is NOT directly comparable to SB3 at matched `vf_coef`.
-  Re-run or footnote with the 2× adjustment.
+  (`stable_baselines3/ppo/ppo.py:244,256`). Effective value weight at
+  `vf_coef=0.5` is `0.5 * MSE`.
+- **rlox PPOLoss (current, re-reverted)**: `value_loss = 0.5 * max(...).mean()`
+  then `policy_loss + vf_coef * value_loss`
+  (`python/rlox/losses.py:118,126`). Effective value weight at
+  `vf_coef=0.5` is `0.25 * MSE`. **Half of SB3.**
+- **History**: commit `9a7d628` removed the inner `0.5` factor to match
+  SB3 exactly, which was immediately reverted for the same Hopper
+  regression reason as 2.4. The CleanRL convention is preserved.
+- **Paper implication**: at the same `vf_coef`, rlox's value gradient
+  is half SB3's. Call this out in the methods section. When quoting
+  "same hyperparameters", make clear it's the rlox interpretation of
+  those hyperparameters. For an apples-to-apples under SB3 semantics,
+  multiply the rlox `vf_coef` by 2 (i.e. use `vf_coef=1.0` in rlox,
+  equivalent to `vf_coef=0.5` in SB3).
 
 #### 2.6 Optimizer `eps` for Adam
 

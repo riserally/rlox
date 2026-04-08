@@ -30,17 +30,19 @@ class PPOLoss:
     max_grad_norm : float
         Maximum gradient norm for clipping (stored but applied externally).
     clip_vloss : bool
-        Whether to clip the value loss (default ``False``, matches SB3).
-        Set to ``True`` for the CleanRL-style max-of-clipped formulation.
+        Whether to clip the value loss (default ``True``, CleanRL-style
+        max-of-clipped formulation). Set to ``False`` for plain MSE.
 
     Notes
     -----
-    The value loss is plain ``mean((returns - values)**2)`` (no leading 0.5),
-    matching SB3's ``F.mse_loss``. Earlier rlox releases inherited the
-    CleanRL convention of ``0.5 * MSE`` *inside* the loss, which made the
-    effective value gradient half of SB3's at the same ``vf_coef``. The
-    inner factor is now removed so ``vf_coef=0.5`` in rlox produces the
-    same value-loss contribution as ``vf_coef=0.5`` in SB3.
+    The value loss is ``0.5 * mean(...)`` with the inner ``0.5`` factor
+    preserved (CleanRL convention). An earlier attempt to align with SB3's
+    ``F.mse_loss`` (no inner ``0.5``) by removing this factor was a
+    dramatic regression at the 1M-step horizon on Hopper-v4 (2374 → 837
+    at seed=42, verified by A/B). The 200k/500k bisection that motivated
+    the removal was in the wrong evaluation regime. See
+    ``docs/plans/benchmark-comparison-inconsistencies.md`` and the
+    reversion commit in the git log.
 
     Example
     -------
@@ -56,7 +58,7 @@ class PPOLoss:
         vf_coef: float = 0.5,
         ent_coef: float = 0.01,
         max_grad_norm: float = 0.5,
-        clip_vloss: bool = False,
+        clip_vloss: bool = True,
     ):
         self.clip_eps = clip_eps
         self.vf_coef = vf_coef
@@ -110,8 +112,10 @@ class PPOLoss:
         )
         policy_loss = torch.max(pg_loss1, pg_loss2).mean()
 
-        # Value loss — matches SB3 PPO convention (no inner 0.5; vf_coef
-        # is the actual outer multiplier in `total_loss`).
+        # Value loss — CleanRL convention (0.5 * MSE inside the loss).
+        # An earlier attempt to align with SB3 (no inner 0.5) regressed
+        # Hopper-v4 by 57% at 1M steps. See benchmark-comparison-
+        # inconsistencies.md §2 for the divergence details.
         new_values = policy.get_value(obs)
         if self.clip_vloss:
             v_clipped = old_values + torch.clamp(
@@ -119,9 +123,9 @@ class PPOLoss:
             )
             vf_loss1 = (new_values - returns) ** 2
             vf_loss2 = (v_clipped - returns) ** 2
-            value_loss = torch.max(vf_loss1, vf_loss2).mean()
+            value_loss = 0.5 * torch.max(vf_loss1, vf_loss2).mean()
         else:
-            value_loss = ((new_values - returns) ** 2).mean()
+            value_loss = 0.5 * ((new_values - returns) ** 2).mean()
 
         entropy_loss = entropy.mean()
 

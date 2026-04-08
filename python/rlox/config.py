@@ -218,7 +218,12 @@ class PPOConfig(ConfigMixin):
     gamma: float = 0.99
     gae_lambda: float = 0.95
     normalize_advantages: bool = True
-    clip_vloss: bool = False  # matches SB3 default (clip_range_vf=None)
+    # CleanRL convention (max-of-clipped value loss, inner 0.5 factor in
+    # PPOLoss). An earlier attempt to default this to False to match SB3
+    # (clip_range_vf=None) regressed Hopper-v4 by 57% at 1M steps; the
+    # 200k bisection that motivated the change was in the wrong regime.
+    # See docs/plans/benchmark-comparison-inconsistencies.md.
+    clip_vloss: bool = True
     anneal_lr: bool = True
     normalize_rewards: bool = False
     normalize_obs: bool = False

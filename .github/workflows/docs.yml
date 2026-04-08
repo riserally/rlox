@@ -52,7 +52,9 @@ jobs:
           source .venv/bin/activate
           pip install maturin numpy
           maturin develop --release
-          pip install mkdocs-material "mkdocstrings[python]"
+          # mkdocs-static-i18n serves .pl.md / .de.md / .fr.md translations
+          # from the same tree. See docs/CONTRIBUTING-translations.md.
+          pip install mkdocs-material "mkdocstrings[python]" mkdocs-static-i18n
           mkdocs build -d site
 
       - name: Build Hugo blog

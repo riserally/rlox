@@ -35,6 +35,9 @@ class SAC:
         gamma: float = 0.99,
         learning_starts: int = 1000,
         hidden: int = 256,
+        train_freq: int = 1,
+        gradient_steps: int = 1,
+        ent_coef: str | float = "auto",
         seed: int = 42,
         auto_entropy: bool = True,
         target_entropy: float | None = None,
@@ -61,6 +64,21 @@ class SAC:
         self.tau = tau
         self.batch_size = batch_size
         self.learning_starts = learning_starts
+        # train_freq / gradient_steps mirror SB3 SAC semantics: do
+        # ``gradient_steps`` SGD updates every ``train_freq`` env steps.
+        # Default 1/1 preserves rlox's historical update-every-step
+        # behavior. Accepted (and silently honored) so the shared preset
+        # YAMLs that include these keys don't crash on rlox SAC.
+        self.train_freq = max(1, int(train_freq))
+        self.gradient_steps = max(1, int(gradient_steps))
+        # ent_coef accepted for SB3-preset compatibility. rlox SAC uses
+        # ``auto_entropy=True`` (learned alpha) by default; passing a
+        # numeric ent_coef pins alpha to that value (auto_entropy=False).
+        if isinstance(ent_coef, (int, float)):
+            auto_entropy = False
+            self._fixed_alpha = float(ent_coef)
+        else:
+            self._fixed_alpha = None  # "auto" or unrecognized -> learned
 
         self.config = SACConfig(
             learning_rate=learning_rate,
@@ -119,7 +137,8 @@ class SAC:
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=learning_rate)
             self.alpha = self.log_alpha.exp().item()
         else:
-            self.alpha = 0.2
+            # Pinned alpha — either from ent_coef kwarg or default 0.2.
+            self.alpha = self._fixed_alpha if self._fixed_alpha is not None else 0.2
 
         # Replay buffer — use custom if provided
         self.buffer = (
@@ -201,10 +220,16 @@ class SAC:
             if not should_continue:
                 break
 
-            # Update
-            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
-                metrics = self._update(step)
-                self.callbacks.on_train_batch(**metrics)
+            # Update — only every ``train_freq`` env steps, doing
+            # ``gradient_steps`` SGD steps per training round (mirrors SB3).
+            if (
+                step >= self.learning_starts
+                and len(self.buffer) >= self.batch_size
+                and step % self.train_freq == 0
+            ):
+                for _ in range(self.gradient_steps):
+                    metrics = self._update(step)
+                    self.callbacks.on_train_batch(**metrics)
 
                 # Logger
                 if self.logger is not None and self._global_step % 1000 == 0:

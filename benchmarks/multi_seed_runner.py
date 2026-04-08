@@ -96,13 +96,27 @@ def run_single_seed(
                     else:
                         action = logits.squeeze(0)
 
-            # Ensure action is correct shape for the environment
+            # Coerce action to the shape the env expects:
+            #   discrete    -> Python int scalar
+            #   continuous  -> 1-D np.ndarray of shape (act_dim,)
+            if hasattr(action, "detach"):
+                action = action.detach()
+            if hasattr(action, "cpu"):
+                action = action.cpu()
             if hasattr(action, "numpy"):
                 action = action.numpy()
-            if isinstance(action, np.ndarray):
-                action = action.flatten()
-            elif is_discrete and hasattr(action, "item"):
-                action = action.item()
+            if is_discrete:
+                if isinstance(action, np.ndarray):
+                    action = int(action.reshape(-1)[0])
+                elif hasattr(action, "item"):
+                    action = int(action.item())
+                else:
+                    action = int(action)
+            else:
+                if isinstance(action, np.ndarray):
+                    action = action.astype(np.float32).flatten()
+                else:
+                    action = np.asarray(action, dtype=np.float32).flatten()
 
             obs, r, term, trunc, _ = eval_env.step(action)
             ep_r += r

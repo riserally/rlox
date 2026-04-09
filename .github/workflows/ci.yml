@@ -91,7 +91,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -m pip install pytest pytest-timeout gymnasium torch numpy pyyaml "gymnasium[mujoco]"
-      - run: python -m pytest tests/ -q --tb=short -m "slow" --timeout=300
+      # Slow tests are CI smoke checks with reduced training budgets.
+      # Full convergence validation runs in the multi-seed GCP sweep.
+      # 600s timeout gives enough headroom for SAC on GitHub Actions
+      # runners (~2x slower than Apple M3 Pro on MuJoCo envs).
+      - run: python -m pytest tests/ -q --tb=short -m "slow" --timeout=600
 
   wheel-smoke:
     name: Wheel smoke test

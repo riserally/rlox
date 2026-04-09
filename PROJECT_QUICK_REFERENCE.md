@@ -96,12 +96,14 @@ Python interpreter: always invoke via `./.venv/bin/python`, never bare
 
 ## Non-obvious facts (common gotchas)
 
-- **`PPOLoss` has NO inner 0.5 factor** on the value loss. We follow SB3's
-  `F.mse_loss` convention, not CleanRL's `0.5 * MSE`. `vf_coef=0.5` here
-  matches `vf_coef=0.5` in SB3. See commit `9a7d628` and
-  `docs/plans/results-inspection-2026-04-06.md`.
-- **`PPOConfig.clip_vloss` default is `False`** (matches SB3 `clip_range_vf=None`).
-  Flip to `True` for the CleanRL max-of-clipped formulation.
+- **`PPOLoss` HAS an inner 0.5 factor** on the value loss. We follow CleanRL's
+  `0.5 * MSE` convention, not SB3's plain `F.mse_loss`. `vf_coef=0.5` here
+  produces an effective weight of `0.25 * MSE`. An earlier attempt to remove
+  this factor (aligning with SB3) regressed Hopper-v4 by 57% at 1M steps
+  and was reverted. See `docs/plans/benchmark-comparison-inconsistencies.md`.
+- **`PPOConfig.clip_vloss` default is `True`** (CleanRL max-of-clipped
+  formulation). Set to `False` for plain MSE (closer to SB3's
+  `clip_range_vf=None`).
 - **DQN defaults `train_freq=1, gradient_steps=1`** (1 grad step per env step).
   Set `train_freq=16, gradient_steps=8` for MountainCar or the agent over-trains
   on early transitions and never explores to the goal. See commit `17cdfeb`.

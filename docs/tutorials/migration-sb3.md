@@ -178,6 +178,19 @@ from rlox.runner import train_from_config
 metrics = train_from_config("experiment.yaml")
 ```
 
+## Known Algorithmic Asymmetries
+
+When migrating from SB3, be aware that rlox intentionally differs in a few implementation details. These differences have been validated via multi-seed convergence benchmarks and do not prevent parity, but they can cause confusion when comparing loss values or debugging.
+
+| Asymmetry | rlox | SB3 | Impact |
+|-----------|------|-----|--------|
+| **PPO value loss** | `0.5 * MSE` with `clip_vloss=True` (CleanRL convention) | `F.mse_loss` (no inner 0.5) with `clip_range_vf=None` | `vf_coef=0.5` in rlox produces an effective weight of 0.25, vs 0.5 in SB3. Convergence is equivalent in practice. |
+| **DQN loss function** | MSE loss `(Q - y)^2` | Huber loss `F.smooth_l1_loss` | MSE can produce larger gradients on outlier TD errors. Consider setting `max_grad_norm=10.0` for stability. |
+| **SAC critic loss factor** | No `0.5` factor on critic loss | `0.5 * F.mse_loss` on each critic | The effective critic learning rate differs by 2x. rlox's defaults are calibrated for this. |
+| **DQN/SAC train_freq** | `train_freq=1, gradient_steps=1` (default) | `train_freq=1, gradient_steps=1` (default) | Identical defaults. Override via config or kwargs. |
+
+See the [PPO algorithm page](../algorithms/ppo.md#value-loss-formulation) for the full rationale behind the value loss choice, including the Hopper-v4 A/B test that led to the current defaults.
+
 ## Advanced Algorithms (rlox only)
 
 rlox includes MAPPO (multi-agent), DreamerV3 (world-model-based), and IMPALA (distributed actor-learner). These have no SB3 equivalent.

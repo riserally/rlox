@@ -267,6 +267,9 @@ sac = SAC(
     tau=0.005,
     gamma=0.99,
     auto_entropy=True,
+    train_freq=1,        # gradient updates every N env steps
+    gradient_steps=1,    # SGD steps per update
+    ent_coef="auto",     # learned alpha; pass a float to pin it
 )
 metrics = sac.train(total_timesteps=20_000)
 ```
@@ -293,6 +296,9 @@ dqn = DQN(
     prioritized=True,
     alpha=0.6,
     beta_start=0.4,
+    train_freq=1,        # gradient updates every N env steps
+    gradient_steps=1,    # SGD steps per update
+    max_grad_norm=10.0,  # gradient clipping (default: inf = no clipping)
 )
 metrics = dqn.train(total_timesteps=50_000)
 ```

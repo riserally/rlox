@@ -40,7 +40,11 @@ algorithm PPO:
             for minibatch in shuffle(rollout, batch_size) do
                 r_t = pi_theta(a|s) / pi_old(a|s)
                 L_clip = min(r_t * A_t, clip(r_t, 1-eps, 1+eps) * A_t)
-                L_vf = (V_theta(s) - G_t)^2
+                if clip_vloss:
+                    v_clipped = old_V + clip(V_theta(s) - old_V, -eps, eps)
+                    L_vf = 0.5 * max((V_theta(s) - G_t)^2, (v_clipped - G_t)^2)
+                else:
+                    L_vf = 0.5 * (V_theta(s) - G_t)^2
                 L_ent = -H[pi_theta]
                 loss = -L_clip + vf_coef * L_vf + ent_coef * L_ent
                 update theta with Adam, clip gradients to max_grad_norm
@@ -90,10 +94,24 @@ All defaults from `PPOConfig`:
 | `gamma` | `0.99` | Discount factor |
 | `gae_lambda` | `0.95` | GAE lambda |
 | `normalize_advantages` | `True` | Normalize advantages per minibatch |
-| `clip_vloss` | `True` | Clip value function loss |
+| `clip_vloss` | `True` | Clip value function loss (CleanRL convention) |
 | `anneal_lr` | `True` | Linearly anneal learning rate |
 | `normalize_rewards` | `False` | Running reward normalization |
 | `normalize_obs` | `False` | Running observation normalization |
+
+## Value Loss Formulation
+
+rlox PPO follows the **CleanRL convention** for the value loss:
+
+- An inner `0.5` factor is applied: `L_vf = 0.5 * mean((V - G)^2)`
+- `clip_vloss=True` by default: uses the max-of-clipped formulation where the value prediction is clipped to within `clip_eps` of the old value estimate, and the loss is the maximum of the clipped and unclipped squared errors.
+
+This differs from Stable-Baselines3, which uses plain `F.mse_loss` (no inner 0.5) and defaults to `clip_range_vf=None` (no value clipping).
+
+An earlier attempt to align with the SB3 convention (removing the inner 0.5 and setting `clip_vloss=False`) was reverted after an A/B test showed a **57% regression on Hopper-v4** at 1M steps (2374 to 837 mean return). The 200k/500k bisection that originally motivated the change was evaluated too early in training. The current CleanRL defaults are validated across CartPole, Acrobot, Hopper-v4, and HalfCheetah-v4 with multi-seed convergence parity against SB3.
+
+!!! warning "SB3 migration note"
+    If you are porting hyperparameters from SB3, note that `vf_coef=0.5` in rlox produces a different effective value loss scale than `vf_coef=0.5` in SB3 due to the inner 0.5 factor. The net effect is `0.25 * MSE` in rlox vs `0.5 * MSE` in SB3. In practice, the CleanRL defaults converge well without adjustment.
 
 ## When to Use
 

@@ -194,12 +194,15 @@ For continuous control with SAC or TD3:
 ```python
 from rlox import Trainer
 
-trainer = Trainer("sac", 
+trainer = Trainer("sac",
     env="Pendulum-v1",
     config={
         "learning_rate": 3e-4,
         "buffer_size": 100_000,
         "learning_starts": 1000,
+        "train_freq": 1,        # env steps between gradient updates
+        "gradient_steps": 1,    # SGD steps per update
+        "ent_coef": "auto",     # learned entropy coefficient (or a float to pin it)
     },
     seed=42,
 )
@@ -212,17 +215,21 @@ For discrete control with DQN (with Rainbow extensions):
 ```python
 from rlox import Trainer
 
-trainer = Trainer("dqn", 
+trainer = Trainer("dqn",
     env="CartPole-v1",
     config={
         "double_dqn": True,
         "dueling": True,
         "learning_rate": 1e-4,
+        "train_freq": 1,        # env steps between gradient updates
+        "gradient_steps": 1,    # SGD steps per update
     },
     seed=42,
 )
 metrics = trainer.train(total_timesteps=50_000)
 ```
+
+> **Tip**: For sparse-reward environments like MountainCar, set `train_freq=16, gradient_steps=8` to avoid over-training on uninformative early transitions.
 
 ## Step 6: Custom Environments
 

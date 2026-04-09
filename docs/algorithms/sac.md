@@ -107,6 +107,12 @@ All defaults from `SACConfig`:
 | `auto_entropy` | `True` | Automatically tune entropy coefficient |
 | `learning_starts` | `1000` | Random exploration steps before training |
 | `hidden` | `256` | Hidden layer width |
+| `train_freq` | `1` | Environment steps between gradient updates |
+| `gradient_steps` | `1` | Number of gradient steps per update |
+| `ent_coef` | `"auto"` | Entropy coefficient: `"auto"` for learned alpha, or a float to pin it |
+
+!!! note "Entropy coefficient"
+    When `ent_coef="auto"` (default), SAC uses automatic entropy tuning -- it learns the entropy coefficient alpha via a separate optimizer to match `target_entropy = -dim(action_space)`. Passing a numeric value (e.g., `ent_coef=0.2`) pins alpha to that constant and disables automatic tuning. This parameter is accepted for compatibility with SB3/rl-zoo3 preset YAMLs.
 
 ## When to Use
 

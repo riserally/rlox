@@ -80,13 +80,16 @@ graph TD
 
 ## Benchmark Highlights
 
-| Component | vs SB3 | vs TorchRL |
-|-----------|--------|------------|
-| GAE (32K steps) | 147x vs NumPy | **1,700x** |
-| Buffer push (10K) | **9.7x** | **148x** |
-| E2E rollout (256x2048) | **3.9x** | **53x** |
-| GRPO advantages | **35x** vs NumPy | **34x** vs PyTorch |
-| KL divergence (f32) | **2-9x** vs TRL | — |
+> Last refreshed: 2026-04-08. Apple M4, macOS 26.2, Python 3.12.7, PyTorch 2.10.0.
+
+| Component | vs SB3 | vs TorchRL / NumPy |
+|-----------|--------|--------------------|
+| GAE (32K steps) | 135x vs NumPy | **1,588x** vs TorchRL |
+| Buffer sample (batch=1024) | **9.7x** | **6.5x** vs TorchRL |
+| Buffer push (10K, CartPole) | **4.6x** | **60.8x** vs TorchRL |
+| E2E rollout (256x2048) | **3.1x** | **40.4x** vs TorchRL |
+| GRPO advantages | **41x** vs NumPy | **35x** vs PyTorch |
+| KL divergence (f32) | **2-9x** vs TRL | -- |
 
 ## Algorithms
 

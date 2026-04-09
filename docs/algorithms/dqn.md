@@ -118,6 +118,15 @@ All defaults from `DQNConfig`:
 | `alpha` | `0.6` | PER priority exponent |
 | `beta_start` | `0.4` | PER initial importance-sampling exponent |
 | `hidden` | `256` | Hidden layer width |
+| `train_freq` | `1` | Environment steps between gradient updates |
+| `gradient_steps` | `1` | Number of gradient steps per update |
+| `max_grad_norm` | `inf` | Maximum gradient norm (no clipping by default) |
+
+!!! tip "Update cadence for sparse-reward environments"
+    For environments like MountainCar where early transitions are uninformative, set `train_freq=16, gradient_steps=8` to avoid over-training on early replay data. With the default `train_freq=1`, the agent performs a gradient step on every env step, which can cause premature convergence before sufficient exploration.
+
+!!! note "Loss function"
+    rlox DQN uses MSE loss (`(Q - y)^2`), not Huber loss. This differs from SB3's default, which uses `F.smooth_l1_loss` (Huber with delta=1). MSE loss can produce larger gradients for large TD errors, which may require setting `max_grad_norm` to a finite value (e.g., 10.0) for stability on some environments.
 
 ## When to Use
 

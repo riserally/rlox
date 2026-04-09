@@ -80,13 +80,14 @@ graph TD
 
 ## Benchmark-Highlights
 
-| Komponente | vs SB3 | vs TorchRL |
-|-----------|--------|------------|
-| GAE (32K Schritte) | 147× vs NumPy | **1.700×** |
-| Buffer-Push (10K) | **9,7×** | **148×** |
-| End-to-End-Rollout (256×2048) | **3,9×** | **53×** |
-| GRPO-Advantages | **35×** vs NumPy | **34×** vs PyTorch |
-| KL-Divergenz (f32) | **2–9×** vs TRL | — |
+| Komponente | vs SB3 | vs TorchRL / NumPy |
+|-----------|--------|--------------------|
+| GAE (32K Schritte) | 135× vs NumPy | **1.588×** vs TorchRL |
+| Buffer-Sample (batch=1024) | **9,7×** | **6,5×** vs TorchRL |
+| Buffer-Push (10K, CartPole) | **4,6×** | **60,8×** vs TorchRL |
+| End-to-End-Rollout (256×2048) | **3,1×** | **40,4×** vs TorchRL |
+| GRPO-Advantages | **41×** vs NumPy | **35×** vs PyTorch |
+| KL-Divergenz (f32) | **2--9×** vs TRL | -- |
 
 ## Algorithmen
 

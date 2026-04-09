@@ -4,7 +4,7 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 
 > Measured on Apple M4 (14 cores), macOS 26.2, Python 3.12.7, PyTorch 2.10.0.
 > All speedups reported with bootstrap 95% confidence intervals (10,000 resamples).
-> Last updated: 2026-03-29.
+> Last updated: 2026-04-08.
 
 ## Summary
 
@@ -12,13 +12,13 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 
 | Category | vs SB3 | vs TorchRL | vs NumPy |
 |----------|--------|------------|----------|
-| [GAE (2048 steps)](gae.md) | — | **1,635x** | **142x** |
-| [Buffer push (CartPole)](buffer-ops.md) | **4.0x** | **60.8x** | — |
-| [Buffer sample (batch=1024)](buffer-ops.md) | **6.1x** | **6.5x** | — |
-| [E2E rollout (256×2048)](e2e-rollout.md) | **3.0x** | **40.4x** | — |
-| [Env stepping (256 envs)](env-stepping.md) | — | **120x** | **6.7x** (Gym) |
-| [GRPO advantages (256×16)](llm-ops.md) | — | — | **34x** |
-| [Token KL (128 tokens)](llm-ops.md) | — | — | **4.7x** |
+| [GAE (2048 steps)](gae.md) | -- | **1,588x** | **135x** |
+| [Buffer push (CartPole)](buffer-ops.md) | **4.6x** | **60.8x** | -- |
+| [Buffer sample (batch=1024)](buffer-ops.md) | **9.7x** | **6.5x** | -- |
+| [E2E rollout (256x2048)](e2e-rollout.md) | **3.1x** | **40.4x** | -- |
+| [Env stepping (256 envs)](env-stepping.md) | -- | **120x** | **6.7x** (Gym) |
+| [GRPO advantages (256x16)](llm-ops.md) | -- | -- | **41x** |
+| [Token KL (128 tokens)](llm-ops.md) | -- | -- | **4.7x** |
 
 ### TRL Comparison (LLM Post-Training Primitives)
 
@@ -55,11 +55,11 @@ Three-framework performance comparison: **rlox** (Rust/PyO3) vs **TorchRL** (PyT
 
 ## Key Findings
 
-1. **GAE is the standout result**: 142x vs Python loops because the sequential backward scan eliminates per-iteration interpreter overhead. 1,635x vs TorchRL due to TensorDict metadata overhead per element.
+1. **GAE is the standout result**: 135x vs Python loops because the sequential backward scan eliminates per-iteration interpreter overhead. 1,588x vs TorchRL due to TensorDict metadata overhead per element.
 
 2. **Buffer operations scale inversely with observation size**: At CartPole (obs=4), rlox is 61x faster than TorchRL on push — per-call overhead dominates. At Atari-sized observations (obs=28,224), the gap narrows to 1.8x as memcpy dominates. SB3 edges ahead at Atari scale (0.8x) because pre-allocated NumPy arrays avoid reallocation.
 
-3. **End-to-end advantage compounds**: Individual speedups (env stepping: ~7x, buffer: ~4x, GAE: ~142x) compound to 3.0x vs SB3 at the largest configuration. The GAE advantage is diluted because env stepping dominates wall clock time.
+3. **End-to-end advantage compounds**: Individual speedups (env stepping: ~7x, buffer: ~4.6x, GAE: ~135x) compound to 3.1x vs SB3 at the largest configuration. The GAE advantage is diluted because env stepping dominates wall clock time.
 
 4. **Env stepping scales with parallelism**: rlox reaches **2.7M steps/s** at 512 envs (8.2x vs Gymnasium). At low env counts (4), Rayon thread pool overhead makes rlox slower than sequential Python. The crossover is at ~16 envs.
 

@@ -159,32 +159,34 @@ Multi-crate workspace ([crates.io](https://crates.io/crates/rlox-core)):
 
 ## Benchmark Highlights
 
-All benchmarks on Apple M4 with bootstrap 95% CI (10,000 resamples). All results statistically significant (CI lower bound > 1.0).
+Measured 2026-04-08 on Apple M3 Pro (ARM, 12-core), CPU only, against
+stable-baselines3 2.7.1 and torchrl 0.11.1. All results statistically
+significant (bootstrap 95% CI lower bound > 1.0).
 
-| Component | vs SB3 | vs TorchRL | Details |
+| Component | vs NumPy / SB3 | vs TorchRL | Details |
 |-----------|--------|------------|---------|
-| GAE (32K steps) | 147x vs NumPy | **1,700x** | [docs/benchmark/gae.md](docs/benchmark/gae.md) |
-| Buffer push (10K) | **9.7x** | **148x** | [docs/benchmark/buffer-ops.md](docs/benchmark/buffer-ops.md) |
-| Buffer sample (1024) | **8.1x** | **10x** | [docs/benchmark/buffer-ops.md](docs/benchmark/buffer-ops.md) |
-| E2E rollout (256x2048) | **3.9x** | **53x** | [docs/benchmark/e2e-rollout.md](docs/benchmark/e2e-rollout.md) |
-| GRPO advantages | 35x vs NumPy | 34x vs PyTorch | [docs/benchmark/llm-ops.md](docs/benchmark/llm-ops.md) |
-| Env stepping (512 envs) | -- | -- | [2.7M steps/s](docs/benchmark/env-stepping.md) |
+| GAE (32K steps) | **135x vs NumPy** | **1,588x** | [docs/benchmark/gae.md](docs/benchmark/gae.md) |
+| Replay buffer push (obs_dim=4, 10K) | **4.6x vs SB3** | **70x** | [docs/benchmark/buffer-ops.md](docs/benchmark/buffer-ops.md) |
+| Replay buffer sample (batch=32) | **9.7x vs SB3** | **9x** | [docs/benchmark/buffer-ops.md](docs/benchmark/buffer-ops.md) |
+| E2E rollout (256×2048) | **3.1x vs SB3** | **42x** | [docs/benchmark/e2e-rollout.md](docs/benchmark/e2e-rollout.md) |
+| GRPO advantages (64×8) | **41x vs NumPy** | **42x vs PyTorch** | [docs/benchmark/llm-ops.md](docs/benchmark/llm-ops.md) |
+| Tokenwise KL (seq=128) | **5x vs NumPy** | **9x vs PyTorch** | [docs/benchmark/llm-ops.md](docs/benchmark/llm-ops.md) |
 
 > **Full methodology, raw data, and reproducibility instructions**: [docs/benchmark/](docs/benchmark/)
 
 ### Performance
 
-Key numbers at a glance (Apple M4, single-threaded unless noted):
+Key numbers at a glance (Apple M3 Pro, CPU only, median of 100–200
+timed iterations):
 
-| Operation | rlox | SB3/NumPy | Speedup |
+| Operation | rlox | Baseline | Speedup |
 |-----------|------|-----------|---------|
-| GAE (32K steps) | ~0.02 ms | ~3 ms | **147x** |
-| Buffer push (10K) | ~0.1 ms | ~1 ms | **9.7x** |
-| Buffer sample (1024) | ~0.03 ms | ~0.25 ms | **8.1x** |
-| PPO SPS (8 envs, CartPole) | 9,121 | 4,026 | **2.3x** |
-| A2C SPS (8 envs, CartPole) | 10,445 | 4,206 | **2.5x** |
-| VecEnv throughput (512 envs) | 2.7M steps/s | -- | -- |
-| GRPO advantages (batch) | ~0.01 ms | ~0.35 ms | **35x** |
+| GAE (32K steps) | 69 µs | 9,376 µs (NumPy loop) | **135x** |
+| Replay buffer push (10K, obs_dim=4) | 3.2 ms | 14.7 ms (SB3) | **4.6x** |
+| Replay buffer sample (batch=32) | 2.0 µs | 19.3 µs (SB3) | **9.7x** |
+| E2E rollout (256×2048 trans) | 669 ms | 2,057 ms (SB3) | **3.1x** |
+| GRPO advantages (64×8 groups) | 7.8 µs | 318 µs (NumPy) | **41x** |
+| Tokenwise KL (seq=128) | 0.3 µs | 3.0 µs (PyTorch) | **9x** |
 
 ### Convergence (rlox vs SB3)
 

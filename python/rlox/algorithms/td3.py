@@ -39,6 +39,11 @@ class TD3:
         target_noise: float = 0.2,
         noise_clip: float = 0.5,
         exploration_noise: float = 0.1,
+        train_freq: int = 1,
+        gradient_steps: int = 1,
+        # SB3 name aliases — accepted so preset YAMLs don't crash.
+        target_policy_noise: float | None = None,
+        target_noise_clip: float | None = None,
         callbacks: list[Callback] | None = None,
         logger: LoggerCallback | None = None,
         compile: bool = False,
@@ -63,9 +68,12 @@ class TD3:
         self.batch_size = batch_size
         self.learning_starts = learning_starts
         self.policy_delay = policy_delay
-        self.target_noise = target_noise
-        self.noise_clip = noise_clip
+        # Accept SB3 name aliases from preset YAMLs.
+        self.target_noise = target_policy_noise if target_policy_noise is not None else target_noise
+        self.noise_clip = target_noise_clip if target_noise_clip is not None else noise_clip
         self.exploration_noise = exploration_noise
+        self.train_freq = max(1, int(train_freq))
+        self.gradient_steps = max(1, int(gradient_steps))
         self.learning_rate = learning_rate
         self.hidden = hidden
         self.buffer_size = buffer_size
@@ -201,11 +209,17 @@ class TD3:
             if not should_continue:
                 break
 
-            # Update
-            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
-                update_count += 1
-                metrics = self._update(step, update_count)
-                self.callbacks.on_train_batch(**metrics)
+            # Update — only every ``train_freq`` env steps, doing
+            # ``gradient_steps`` SGD steps per round (mirrors SB3).
+            if (
+                step >= self.learning_starts
+                and len(self.buffer) >= self.batch_size
+                and step % self.train_freq == 0
+            ):
+                for _ in range(self.gradient_steps):
+                    update_count += 1
+                    metrics = self._update(step, update_count)
+                    self.callbacks.on_train_batch(**metrics)
 
                 # Logger
                 if self.logger is not None and self._global_step % 1000 == 0:
@@ -312,10 +326,15 @@ class TD3:
             if not should_continue:
                 break
 
-            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
-                update_count += 1
-                metrics = self._update(step, update_count)
-                self.callbacks.on_train_batch(**metrics)
+            if (
+                step >= self.learning_starts
+                and len(self.buffer) >= self.batch_size
+                and step % self.train_freq == 0
+            ):
+                for _ in range(self.gradient_steps):
+                    update_count += 1
+                    metrics = self._update(step, update_count)
+                    self.callbacks.on_train_batch(**metrics)
 
                 if self.logger is not None and self._global_step % 1000 == 0:
                     self.logger.on_train_step(self._global_step, metrics)

@@ -273,13 +273,48 @@ __all__ = [
     "Trainer",                  # Single entry point for all algorithms
     "TrainingConfig",           # YAML/TOML config-driven training
     "train_from_config",        # Run from config file
+    "ALGORITHM_REGISTRY",       # Algorithm name → class map
 
     # ---- Rust primitives (data plane) ----
+    "CartPole",
     "VecEnv",                   # Parallel env stepping (Rust)
+    "GymEnv",
     "GymVecEnv",                # Gymnasium env wrapper
     "VecNormalize",             # Obs/reward normalization
+    "ExperienceTable",
     "ReplayBuffer",             # Off-policy storage
-    "compute_gae",              # Generalized Advantage Estimation (147x)
+    "PrioritizedReplayBuffer",
+    "MmapReplayBuffer",
+    "OfflineDatasetBuffer",
+    "VarLenStore",
+    "SequenceReplayBuffer",
+    "HERBuffer",
+    "compute_gae",              # Generalized Advantage Estimation (135x)
+    "compute_gae_batched",
+    "compute_gae_batched_f32",
+    "compute_vtrace",
+    "compute_group_advantages",
+    "compute_batch_group_advantages",
+    "compute_token_kl",
+    "compute_token_kl_schulman",
+    "compute_batch_token_kl",
+    "compute_batch_token_kl_schulman",
+    "compute_token_kl_f32",
+    "compute_token_kl_schulman_f32",
+    "compute_batch_token_kl_f32",
+    "compute_batch_token_kl_schulman_f32",
+    "DPOPair",
+    "RunningStats",
+    "RunningStatsVec",
+    "pack_sequences",
+    "ActorCritic",
+    "CandleCollector",
+    "random_shift_batch",
+    "shape_rewards_pbrs",
+    "compute_goal_distance_potentials",
+    "reptile_update",
+    "average_weight_vectors",
+    "py_sample_mixed",
 
     # ---- Configs (6 core algorithms) ----
     "PPOConfig",

@@ -190,17 +190,23 @@ timed iterations):
 
 ### Convergence (rlox vs SB3)
 
-Same hyperparameters (rl-zoo3 defaults), 5 seeds per experiment. On-policy algorithms (PPO, A2C) show **1.4-3.3x faster wall-clock** convergence with matching reward thresholds.
+Same hyperparameters (rl-zoo3 defaults), same evaluation harness, 5 seeds per cell, IQM + bootstrap 95% CI per Agarwal et al. 2021. CIs overlap on every completed cell -- convergence parity confirmed.
 
-| Algorithm | Environment | rlox Wall-clock | SB3 Wall-clock | rlox SPS | SB3 SPS |
-|-----------|-------------|-----------------|----------------|----------|---------|
-| PPO | CartPole-v1 | **1.6s** | 5.2s | **9,121** | 4,026 |
-| A2C | CartPole-v1 | **1.8s** | 2.1s | **10,445** | 4,206 |
-| PPO | Acrobot-v1 | **6.4s** | 9.1s | **12,030** | 7,727 |
+| Algo | Environment | rlox IQM | rlox CI | SB3 IQM | SB3 CI | Status |
+|---|---|---:|---|---:|---|---|
+| PPO | CartPole-v1 | 450.8 | [440.5, 454.2] | 438.2 | [389.7, 500.0] | both done |
+| PPO | Acrobot-v1 | -86.0 | [-89.7, -83.0] | -83.7 | [-97.0, -77.4] | both done |
+| PPO | Hopper-v4 | 932.8 | [706.0, 2190.4] | 1173.1 | [719.4, 1578.8] | CIs overlap |
+| PPO | HalfCheetah-v4 | 1854.6 | [1381.3, 2598.8] | 1568.7 | [1516.9, 3094.3] | CIs overlap |
+| SAC | Pendulum-v1 | -152.1 | [-173.9, -129.5] | — | — | rlox done |
+| SAC | HalfCheetah-v4 | 10871.9 | [10294.9, 11293.1] | — | — | beats zoo ref (9656) by 13% |
+| TD3 | Pendulum-v1 | -149.1 | [-171.7, -134.2] | — | — | matches zoo ref (-150) |
+
+The PPO MuJoCo "gap" vs zoo references is a protocol-and-version artifact (v4 vs v3, different eval protocol), not a framework deficit -- both rlox and SB3 show the same gap when measured in the same harness.
 
 ![SPS Comparison](docs/benchmark/convergence/sps_comparison.png)
 
-> Full convergence results, learning curves, and performance profiles: [benchmarks/convergence/](benchmarks/convergence/)
+> Full convergence results, learning curves, and performance profiles: [docs/benchmark/convergence-results.md](docs/benchmark/convergence-results.md)
 
 ## Features
 

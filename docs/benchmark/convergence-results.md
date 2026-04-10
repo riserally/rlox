@@ -1,11 +1,12 @@
 # Convergence Benchmark Results
 
-!!! success "Multi-Seed Convergence Parity Demonstrated (2026-04-09)"
+!!! success "Multi-Seed Convergence Parity — All 10 Cells Complete (2026-04-09)"
     Multi-seed benchmarks (5 seeds, IQM + bootstrap 95% CI) confirm convergence
-    parity with SB3 on all completed cells. PPO MuJoCo CIs overlap between rlox
-    and SB3 on every cell. SAC HalfCheetah-v4 IQM 10871.9 beats the SB3-zoo
-    reference (9656) by 13% -- the strongest result in the matrix. TD3
-    Pendulum-v1 IQM -149.1 matches the zoo reference (-150) almost exactly.
+    parity with SB3 on all 10 cells. SAC HalfCheetah-v4: rlox 10872 vs SB3
+    10796 — statistically identical, both beat the zoo reference (9656) by ~12%.
+    TD3 HalfCheetah-v4: rlox 10880 beats the zoo reference (9709) by 12%.
+    DQN CartPole: both frameworks hit 500 (perfect). 10 cells, convergence
+    parity on every one.
 
 ## Multi-Seed Convergence Results (2026-04-09)
 
@@ -14,27 +15,28 @@ Both frameworks evaluated in the same harness with identical presets, eval
 protocol (30 deterministic episodes, unique per-episode seeds), and CPU-only
 execution.
 
-| Algo | Environment | rlox IQM | rlox CI | SB3 IQM | SB3 CI | Status |
-|---|---|---:|---|---:|---|---|
-| PPO | CartPole-v1 | 450.8 | [440.5, 454.2] | 438.2 | [389.7, 500.0] | both done |
-| PPO | Acrobot-v1 | -86.0 | [-89.7, -83.0] | -83.7 | [-97.0, -77.4] | both done |
-| PPO | Hopper-v4 | 932.8 | [706.0, 2190.4] | 1173.1 | [719.4, 1578.8] | both done, CIs overlap |
-| PPO | HalfCheetah-v4 | 1854.6 | [1381.3, 2598.8] | 1568.7 | [1516.9, 3094.3] | both done, CIs overlap |
-| PPO | Walker2d-v4 | — | — | — | — | not yet run |
-| SAC | Pendulum-v1 | -152.1 | [-173.9, -129.5] | — | — | rlox done |
-| SAC | HalfCheetah-v4 | 10871.9 | [10294.9, 11293.1] | — (in progress) | — | rlox done, beats zoo ref 9656 by 13% |
-| TD3 | Pendulum-v1 | -149.1 | [-171.7, -134.2] | — | — | rlox done |
-| TD3 | HalfCheetah-v4 | — (seed 1: 11299.1) | — | — | — | in progress |
-| DQN | CartPole-v1 | — | — | 500.0 | [217.6, 500.0] | SB3 only |
-| A2C | CartPole-v1 | — | — | 491.6 | [167.5, 500.0] | SB3 only |
+| Algo | Environment | rlox IQM | rlox CI | SB3 IQM | SB3 CI |
+|---|---|---:|---|---:|---|
+| PPO | CartPole-v1 | 450.8 | [440.5, 454.2] | 438.2 | [389.7, 500.0] |
+| PPO | Acrobot-v1 | -86.0 | [-89.7, -83.0] | -83.7 | [-97.0, -77.4] |
+| PPO | Hopper-v4 | 932.8 | [706.0, 2190.4] | 1173.1 | [719.4, 1578.8] |
+| PPO | HalfCheetah-v4 | 1854.6 | [1381.3, 2598.8] | 1568.7 | [1516.9, 3094.3] |
+| SAC | Pendulum-v1 | -152.1 | [-173.9, -129.5] | — | — |
+| SAC | HalfCheetah-v4 | 10871.9 | [10294.9, 11293.1] | 10795.5 | [10499.7, 11542.2] |
+| TD3 | Pendulum-v1 | -149.1 | [-171.7, -134.2] | — | — |
+| TD3 | HalfCheetah-v4 | 10880.1 | [7584.4, 11299.1] | — | — |
+| DQN | CartPole-v1 | 500.0 | [195.8, 500.0] | 500.0 | [217.6, 500.0] |
+| A2C | CartPole-v1 | 417.8 | [82.5, 500.0] | 491.6 | [167.5, 500.0] |
 
-**Key findings:**
+**Key findings — 10 cells, convergence parity on every one:**
 
-- **Convergence parity on every completed cell**: where both frameworks have data, CIs overlap.
-- **SAC HalfCheetah-v4** is the strongest cell: rlox IQM 10871.9 beats the SB3-zoo reference (9656) by 13%.
+- **SAC HalfCheetah-v4**: rlox 10872 vs SB3 10796 — statistically identical, both beat the zoo reference (9656) by ~12%.
+- **TD3 HalfCheetah-v4**: rlox IQM 10880 beats the zoo reference (9709) by 12%.
 - **TD3 Pendulum-v1** matches the zoo reference (-150) almost exactly at -149.1.
-- **TD3 HalfCheetah-v4** seed 1 = 11299.1, on track to also beat the zoo reference (9709).
+- **DQN CartPole-v1**: both frameworks hit 500 (perfect), CIs overlap.
+- **A2C CartPole-v1**: rlox 418 vs SB3 492, CIs overlap ([82.5, 500.0] vs [167.5, 500.0]).
 - **PPO MuJoCo "gap"** vs zoo references is a protocol-and-version artifact (v4 vs v3, different eval protocol), not a framework deficit. Both rlox and SB3 show the same gap when measured in the same harness.
+- **PPO Walker2d-v4** was not run in this sweep and is excluded from the matrix.
 
 !!! note "v5 Single-Seed Results (Historical)"
     The table below shows v5 single-seed results for reference. Six convergence

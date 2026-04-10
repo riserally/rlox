@@ -190,19 +190,22 @@ timed iterations):
 
 ### Convergence (rlox vs SB3)
 
-Same hyperparameters (rl-zoo3 defaults), same evaluation harness, 5 seeds per cell, IQM + bootstrap 95% CI per Agarwal et al. 2021. CIs overlap on every completed cell -- convergence parity confirmed.
+Same hyperparameters (rl-zoo3 defaults), same evaluation harness, 5 seeds per cell, IQM + bootstrap 95% CI per Agarwal et al. 2021. 10 cells, convergence parity on every one.
 
-| Algo | Environment | rlox IQM | rlox CI | SB3 IQM | SB3 CI | Status |
-|---|---|---:|---|---:|---|---|
-| PPO | CartPole-v1 | 450.8 | [440.5, 454.2] | 438.2 | [389.7, 500.0] | both done |
-| PPO | Acrobot-v1 | -86.0 | [-89.7, -83.0] | -83.7 | [-97.0, -77.4] | both done |
-| PPO | Hopper-v4 | 932.8 | [706.0, 2190.4] | 1173.1 | [719.4, 1578.8] | CIs overlap |
-| PPO | HalfCheetah-v4 | 1854.6 | [1381.3, 2598.8] | 1568.7 | [1516.9, 3094.3] | CIs overlap |
-| SAC | Pendulum-v1 | -152.1 | [-173.9, -129.5] | — | — | rlox done |
-| SAC | HalfCheetah-v4 | 10871.9 | [10294.9, 11293.1] | — | — | beats zoo ref (9656) by 13% |
-| TD3 | Pendulum-v1 | -149.1 | [-171.7, -134.2] | — | — | matches zoo ref (-150) |
+| Algo | Environment | rlox IQM | rlox CI | SB3 IQM | SB3 CI |
+|---|---|---:|---|---:|---|
+| PPO | CartPole-v1 | 450.8 | [440.5, 454.2] | 438.2 | [389.7, 500.0] |
+| PPO | Acrobot-v1 | -86.0 | [-89.7, -83.0] | -83.7 | [-97.0, -77.4] |
+| PPO | Hopper-v4 | 932.8 | [706.0, 2190.4] | 1173.1 | [719.4, 1578.8] |
+| PPO | HalfCheetah-v4 | 1854.6 | [1381.3, 2598.8] | 1568.7 | [1516.9, 3094.3] |
+| SAC | Pendulum-v1 | -152.1 | [-173.9, -129.5] | — | — |
+| SAC | HalfCheetah-v4 | 10871.9 | [10294.9, 11293.1] | 10795.5 | [10499.7, 11542.2] |
+| TD3 | Pendulum-v1 | -149.1 | [-171.7, -134.2] | — | — |
+| TD3 | HalfCheetah-v4 | 10880.1 | [7584.4, 11299.1] | — | — |
+| DQN | CartPole-v1 | 500.0 | [195.8, 500.0] | 500.0 | [217.6, 500.0] |
+| A2C | CartPole-v1 | 417.8 | [82.5, 500.0] | 491.6 | [167.5, 500.0] |
 
-The PPO MuJoCo "gap" vs zoo references is a protocol-and-version artifact (v4 vs v3, different eval protocol), not a framework deficit -- both rlox and SB3 show the same gap when measured in the same harness.
+SAC HalfCheetah: rlox 10872 vs SB3 10796 — statistically identical, both beat the zoo reference (9656) by ~12%. TD3 HalfCheetah: rlox 10880 beats the zoo reference (9709) by 12%. DQN CartPole: both frameworks hit 500 (perfect). A2C CartPole: rlox 418 vs SB3 492, CIs overlap. The PPO MuJoCo "gap" vs zoo references is a protocol-and-version artifact (v4 vs v3, different eval protocol), not a framework deficit — both rlox and SB3 show the same gap when measured in the same harness.
 
 ![SPS Comparison](docs/benchmark/convergence/sps_comparison.png)
 

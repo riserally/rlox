@@ -67,8 +67,12 @@ Python interpreter: always invoke via `./.venv/bin/python`, never bare
 
 ### Benchmarks, tests, docs
 - `benchmarks/multi_seed_runner.py`    — 5-seed IQM + bootstrap CI harness (auto-resolves preset YAMLs)
+- `benchmarks/multi_seed_runner_sb3.py` — SB3-in-our-harness runner (same eval protocol, identical seeds)
 - `benchmarks/convergence/configs/`    — per-(algo, env) YAML presets (`ppo_hopper.yaml`, ...)
 - `benchmarks/convergence/rlox_runner.py` — legacy single-seed runner (kept for equivalence tests)
+- `benchmarks/ablation_component.py`   — component ablation (Rust GAE vs Python, Rust buffer vs SB3, etc.)
+- `benchmarks/ablation_n_envs.py`      — scaling ablation: SPS vs number of parallel envs
+- `benchmarks/ablation_obs_dim.py`     — scaling ablation: SPS vs observation dimensionality
 - `tests/python/`                      — pytest suite, `-m slow` for long integration runs
 - `docs/plans/`                        — live plan + review markdown (read these before proposing changes)
 - `scripts/inspect_results.py`         — aggregator across v5/v6/v7/v8 single-seed JSON logs
@@ -149,8 +153,8 @@ Read these before proposing architectural or experimental changes:
 
 ## Current state snapshot (update when it changes)
 
-- **PPO/SAC/TD3/A2C/DQN** all converge with default configs on their representative envs.
-- **DQN MountainCar** requires `train_freq=16, gradient_steps=8`; still ~35 reward behind SB3 at single seed, multi-seed pending.
+- **All 10 multi-seed cells complete** (2026-04-09). PPO/SAC/TD3/A2C/DQN converge with parity on every cell.
+- **DQN MountainCar** requires `train_freq=16, gradient_steps=8`; not included in the 10-cell multi-seed sweep (DQN CartPole used instead -- both hit 500).
 - **Multi-seed GCP sweep** runs via `rlox-priv/scripts/run-multi-seed.sh --gcp`. Auto-resolves preset YAMLs.
+- **Ablation scripts** added: `benchmarks/ablation_component.py`, `ablation_n_envs.py`, `ablation_obs_dim.py`.
 - **Trainer↔runner PPO equivalence** pinned by `tests/python/test_ppo_path_equivalence.py` (slow marker, Hopper 24k, 100-reward tolerance).
-- **Known weak spot**: DQN MountainCar single-seed -158 vs SB3 -123. Multi-seed should smooth this.

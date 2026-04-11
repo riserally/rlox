@@ -45,14 +45,15 @@ execution.
 
 ## Methodology
 
-- **Frameworks:** rlox v0.2.3 vs Stable-Baselines3 (v6 will use rlox v1.0.0)
+- **Frameworks:** rlox v1.0.0 vs Stable-Baselines3 2.7.1
 - **Hardware:** e2-standard-8 (8 vCPU, 32GB RAM), CPU-only
-- **Environments:** CartPole-v1, Pendulum-v1, HalfCheetah-v4, Hopper-v4, Walker2d-v4, Acrobot-v1, MountainCar-v0
+- **Environments:** CartPole-v1, Pendulum-v1, HalfCheetah-v4, Hopper-v4, Acrobot-v1
 - **Algorithms:** PPO, SAC, TD3, DQN, A2C
-- **Evaluation:** 30 episodes every 10K steps, deterministic policy
-- **Seeds:** Single seed (multi-seed planned for next run)
+- **Evaluation:** 30 deterministic episodes every 10K steps, unique per-episode seeds
+- **Seeds:** 5 seeds per cell, IQM + 95% stratified bootstrap CI (Agarwal et al. 2021)
+- **Harness:** Both frameworks evaluated in `benchmarks/multi_seed_runner.py` (rlox) and `benchmarks/multi_seed_runner_sb3.py` (SB3), with identical presets and eval protocol
 
-## Convergence Results
+## Single-Seed Results (v5, Historical)
 
 | Algorithm | Environment | Steps | rlox Return | SB3 Return | Winner |
 |-----------|-------------|-------|-------------|------------|--------|

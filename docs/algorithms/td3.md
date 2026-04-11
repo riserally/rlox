@@ -86,6 +86,8 @@ trainer = Trainer("td3", env="HalfCheetah-v4", seed=42, config={
     "target_noise": 0.2,
     "noise_clip": 0.5,
     "exploration_noise": 0.1,
+    "train_freq": 1,
+    "gradient_steps": 1,
 })
 metrics = trainer.train(total_timesteps=1_000_000)
 ```
@@ -108,6 +110,13 @@ All defaults from `TD3Config`:
 | `exploration_noise` | `0.1` | Std of Gaussian exploration noise |
 | `hidden` | `256` | Hidden layer width |
 | `n_envs` | `1` | Number of parallel environments |
+| `train_freq` | `1` | Environment steps between gradient updates |
+| `gradient_steps` | `1` | Number of gradient steps per update |
+| `target_policy_noise` | `None` | Alias for `target_noise` (SB3 preset compat) |
+| `target_noise_clip` | `None` | Alias for `noise_clip` (SB3 preset compat) |
+
+!!! note "SB3 preset compatibility"
+    `target_policy_noise` and `target_noise_clip` are accepted as aliases for `target_noise` and `noise_clip` respectively, so that SB3/rl-zoo3 YAML presets work without key renaming. When both are provided, the `target_policy_noise` / `target_noise_clip` values take precedence.
 
 ## When to Use
 

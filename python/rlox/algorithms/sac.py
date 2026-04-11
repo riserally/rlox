@@ -341,9 +341,14 @@ class SAC:
             if not should_continue:
                 break
 
-            if step >= self.learning_starts and len(self.buffer) >= self.batch_size:
-                metrics = self._update(step)
-                self.callbacks.on_train_batch(**metrics)
+            if (
+                step >= self.learning_starts
+                and len(self.buffer) >= self.batch_size
+                and step % self.train_freq == 0
+            ):
+                for _ in range(self.gradient_steps):
+                    metrics = self._update(step)
+                    self.callbacks.on_train_batch(**metrics)
 
                 if self.logger is not None and self._global_step % 1000 == 0:
                     self.logger.on_train_step(self._global_step, metrics)

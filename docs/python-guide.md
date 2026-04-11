@@ -87,24 +87,20 @@ trainer = Trainer("dqn",
 )
 ```
 
-**A2CTrainer** -- On-policy, single gradient step per rollout.
+**Trainer("a2c", ...)** -- On-policy, single gradient step per rollout.
 
 ```python
-from rlox import Trainer
-
-trainer = A2CTrainer(
+trainer = Trainer("a2c",
     env="CartPole-v1",
     config={"n_envs": 8, "learning_rate": 7e-4},
     seed=42,
 )
 ```
 
-**TD3Trainer** -- Off-policy, continuous actions with delayed policy updates.
+**Trainer("td3", ...)** -- Off-policy, continuous actions with delayed policy updates.
 
 ```python
-from rlox import Trainer
-
-trainer = TD3Trainer(
+trainer = Trainer("td3",
     env="Pendulum-v1",
     config={"policy_delay": 2, "target_noise": 0.2},
     seed=42,
@@ -282,6 +278,10 @@ td3 = TD3(
     target_noise=0.2,
     noise_clip=0.5,
     exploration_noise=0.1,
+    train_freq=1,              # gradient updates every N env steps
+    gradient_steps=1,          # SGD steps per update
+    target_policy_noise=None,  # alias for target_noise (SB3 compat)
+    target_noise_clip=None,    # alias for noise_clip (SB3 compat)
 )
 metrics = td3.train(total_timesteps=20_000)
 ```

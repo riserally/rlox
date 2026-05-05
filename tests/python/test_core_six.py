@@ -20,10 +20,10 @@ from rlox import Trainer
 
 
 class TestCoreAPI:
-    """The slim __all__ has exactly 20 exports."""
+    """All Rust primitives and core Python classes are in __all__."""
 
     def test_all_count(self):
-        assert len(rlox.__all__) == 20
+        assert len(rlox.__all__) == 55
 
     def test_trainer_in_all(self):
         assert "Trainer" in rlox.__all__

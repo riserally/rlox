@@ -43,7 +43,7 @@ pub fn pack_sequences(
     // Sort by length descending (first-fit-decreasing)
     let mut indexed: Vec<(usize, &[u32])> =
         sequences.iter().enumerate().map(|(i, s)| (i, *s)).collect();
-    indexed.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    indexed.sort_by_key(|x| std::cmp::Reverse(x.1.len()));
 
     // Bins: track remaining capacity and accumulated sequences
     struct Bin {

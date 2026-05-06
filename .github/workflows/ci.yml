@@ -9,6 +9,10 @@ on:
 env:
   PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
   CARGO_TERM_COLOR: always
+  # Override .cargo/config.toml's target-cpu=native which causes SIGILL
+  # in CI when Swatinem/rust-cache serves proc-macro dylibs compiled on
+  # a runner with different CPU features than the current one.
+  CARGO_BUILD_RUSTFLAGS: ""
 
 jobs:
   rust-tests:

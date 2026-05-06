@@ -322,6 +322,97 @@ class TimingCallback(Callback):
         return {k: v / total * 100 for k, v in self._phase_times.items()}
 
 
+class VideoRecordingCallback(Callback):
+    """Record evaluation episodes to video using gymnasium's RecordVideo.
+
+    Periodically runs evaluation episodes and saves them as mp4 videos
+    for visual debugging and presentations.
+
+    Parameters
+    ----------
+    video_folder : str
+        Directory to save video files (default "videos").
+    record_freq : int
+        Record a video every ``record_freq`` steps (default 50000).
+    n_episodes : int
+        Number of episodes to record each time (default 1).
+    verbose : bool
+        Print when recording (default True).
+    """
+
+    def __init__(
+        self,
+        video_folder: str = "videos",
+        record_freq: int = 50000,
+        n_episodes: int = 1,
+        verbose: bool = True,
+    ):
+        super().__init__()
+        self.video_folder = video_folder
+        self.record_freq = record_freq
+        self.n_episodes = n_episodes
+        self.verbose = verbose
+        self._step_count = 0
+
+    def on_step(self, **kwargs: Any) -> bool:
+        step = kwargs.get("step", None)
+        if step is not None:
+            self._step_count = step
+        else:
+            self._step_count += 1
+
+        if self._step_count % self.record_freq != 0:
+            return True
+
+        algo = kwargs.get("algo")
+        if algo is None or not hasattr(algo, "predict"):
+            return True
+
+        env_id = getattr(algo, "env_id", None)
+        if env_id is None:
+            return True
+
+        import os
+        import gymnasium as gym
+        import numpy as np
+
+        os.makedirs(self.video_folder, exist_ok=True)
+
+        env = gym.make(env_id, render_mode="rgb_array")
+        env = gym.wrappers.RecordVideo(
+            env,
+            video_folder=self.video_folder,
+            name_prefix=f"step_{self._step_count}",
+        )
+
+        vec_normalize = getattr(algo, "vec_normalize", None)
+        if vec_normalize is not None:
+            vec_normalize.training = False
+
+        for _ in range(self.n_episodes):
+            obs, _ = env.reset()
+            done = False
+            while not done:
+                if vec_normalize is not None and hasattr(vec_normalize, "normalize_obs"):
+                    obs_eval = vec_normalize.normalize_obs(
+                        np.asarray(obs, dtype=np.float32).reshape(1, -1)
+                    ).flatten()
+                else:
+                    obs_eval = obs
+                action = algo.predict(obs_eval, deterministic=True)
+                obs, _, term, trunc, _ = env.step(action)
+                done = term or trunc
+
+        if vec_normalize is not None:
+            vec_normalize.training = True
+        env.close()
+
+        if self.verbose:
+            print(f"  [video] Recorded at step {self._step_count} -> {self.video_folder}")
+
+        return True
+
+
 class CallbackList:
     """Run multiple callbacks in sequence."""
 

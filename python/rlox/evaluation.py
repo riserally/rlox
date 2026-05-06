@@ -124,6 +124,103 @@ def aggregate_metrics(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Score normalization baselines (random / expert)
+# ---------------------------------------------------------------------------
+
+# Baseline scores: (random_score, expert_score) for standard environments.
+# Random scores are the mean return of a uniform-random policy over 100 episodes.
+# Expert scores are from known well-tuned implementations (SB3 rl-zoo3 defaults).
+SCORE_BASELINES: dict[str, tuple[float, float]] = {
+    # Classic control
+    "CartPole-v1": (22.0, 500.0),
+    "Acrobot-v1": (-500.0, -72.0),
+    "MountainCar-v0": (-200.0, -104.0),
+    "Pendulum-v1": (-1600.0, -150.0),
+    "LunarLander-v3": (-200.0, 260.0),
+    # MuJoCo (from rliable / SB3 zoo defaults, 1M steps)
+    "HalfCheetah-v4": (-282.0, 5500.0),
+    "Walker2d-v4": (1.6, 4200.0),
+    "Hopper-v4": (18.0, 2500.0),
+    "Ant-v4": (-50.0, 4000.0),
+    "Humanoid-v4": (120.0, 5500.0),
+    "Swimmer-v4": (0.3, 360.0),
+    "Reacher-v4": (-44.0, -3.5),
+    "InvertedPendulum-v4": (0.0, 1000.0),
+    "InvertedDoublePendulum-v4": (70.0, 9300.0),
+}
+
+
+def normalize_score(
+    score: float,
+    env_id: str,
+    random_score: float | None = None,
+    expert_score: float | None = None,
+) -> float:
+    """Normalize a raw score to [0, 1] using random and expert baselines.
+
+    Uses the formula: ``(score - random) / (expert - random)``.
+    A normalized score of 0 means random-level performance, 1 means
+    expert-level. Values can exceed [0, 1].
+
+    Parameters
+    ----------
+    score : raw environment return
+    env_id : Gymnasium environment ID (used to look up baselines)
+    random_score : override random baseline (default: looked up from table)
+    expert_score : override expert baseline (default: looked up from table)
+
+    Returns
+    -------
+    Normalized score as a float.
+
+    Raises
+    ------
+    ValueError
+        If env_id not found in baselines and no overrides provided.
+    """
+    if random_score is None or expert_score is None:
+        if env_id not in SCORE_BASELINES:
+            raise ValueError(
+                f"No baseline scores for {env_id!r}. "
+                f"Provide random_score and expert_score, or add to SCORE_BASELINES. "
+                f"Known envs: {sorted(SCORE_BASELINES)}"
+            )
+        default_random, default_expert = SCORE_BASELINES[env_id]
+        random_score = random_score if random_score is not None else default_random
+        expert_score = expert_score if expert_score is not None else default_expert
+
+    denom = expert_score - random_score
+    if abs(denom) < 1e-10:
+        return 0.0
+    return (score - random_score) / denom
+
+
+def normalize_scores(
+    scores: list[float] | np.ndarray,
+    env_id: str,
+    random_score: float | None = None,
+    expert_score: float | None = None,
+) -> np.ndarray:
+    """Normalize an array of scores to [0, 1] using baselines.
+
+    Parameters
+    ----------
+    scores : list or array of raw scores
+    env_id : Gymnasium environment ID
+    random_score : override random baseline
+    expert_score : override expert baseline
+
+    Returns
+    -------
+    Normalized scores as a numpy array.
+    """
+    return np.array(
+        [normalize_score(s, env_id, random_score, expert_score) for s in scores],
+        dtype=np.float64,
+    )
+
+
 def probability_of_improvement(
     scores_a: list[float] | np.ndarray,
     scores_b: list[float] | np.ndarray,

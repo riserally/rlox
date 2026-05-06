@@ -155,6 +155,84 @@ class Trainer:
         """Get action from the trained policy."""
         return self.algo.predict(obs, deterministic=deterministic)
 
+    def evaluate(
+        self,
+        n_episodes: int = 10,
+        seed: int = 0,
+        render: bool = False,
+    ) -> dict[str, float]:
+        """Run deterministic evaluation and return episode statistics.
+
+        Parameters
+        ----------
+        n_episodes : int
+            Number of evaluation episodes (default 10).
+        seed : int
+            Base seed for environment resets (default 0).
+        render : bool
+            Whether to render the environment (default False).
+
+        Returns
+        -------
+        dict with keys: mean_reward, std_reward, min_reward, max_reward,
+        mean_length, n_episodes.
+        """
+        import gymnasium as gym
+        import numpy as np
+
+        render_mode = "human" if render else None
+        env = gym.make(self.env, render_mode=render_mode)
+
+        # Freeze VecNormalize stats during eval
+        vec_normalize = getattr(self.algo, "vec_normalize", None)
+        if vec_normalize is not None:
+            vec_normalize.training = False
+
+        rewards: list[float] = []
+        lengths: list[int] = []
+        for ep in range(n_episodes):
+            obs, _ = env.reset(seed=seed + ep)
+            ep_reward, ep_len, done = 0.0, 0, False
+            while not done:
+                if vec_normalize is not None and hasattr(vec_normalize, "normalize_obs"):
+                    obs_eval = vec_normalize.normalize_obs(
+                        np.asarray(obs, dtype=np.float32).reshape(1, -1)
+                    ).flatten()
+                else:
+                    obs_eval = obs
+                action = self.predict(obs_eval, deterministic=True)
+                obs, r, term, trunc, _ = env.step(action)
+                ep_reward += float(r)
+                ep_len += 1
+                done = term or trunc
+            rewards.append(ep_reward)
+            lengths.append(ep_len)
+
+        if vec_normalize is not None:
+            vec_normalize.training = True
+        env.close()
+
+        return {
+            "mean_reward": float(np.mean(rewards)),
+            "std_reward": float(np.std(rewards)),
+            "min_reward": float(np.min(rewards)),
+            "max_reward": float(np.max(rewards)),
+            "mean_length": float(np.mean(lengths)),
+            "n_episodes": n_episodes,
+        }
+
+    def enjoy(self, n_episodes: int = 1, seed: int = 0) -> None:
+        """Render the trained policy for visual inspection.
+
+        Parameters
+        ----------
+        n_episodes : int
+            Number of episodes to render (default 1).
+        seed : int
+            Base seed for environment resets (default 0).
+        """
+        self.evaluate(n_episodes=n_episodes, seed=seed, render=True)
+
     @classmethod
     def from_checkpoint(
         cls,

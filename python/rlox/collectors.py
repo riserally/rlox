@@ -126,6 +126,22 @@ class RolloutCollector:
 
         self._obs: np.ndarray | None = None  # (n_envs, obs_dim)
 
+        # Episode statistics tracking
+        self._ep_rewards = np.zeros(n_envs, dtype=np.float64)
+        self._ep_lengths = np.zeros(n_envs, dtype=np.int64)
+        self._completed_rewards: list[float] = []
+        self._completed_lengths: list[int] = []
+
+    @property
+    def episode_rewards(self) -> list[float]:
+        """Rewards of all completed episodes since collector creation."""
+        return self._completed_rewards
+
+    @property
+    def episode_lengths(self) -> list[int]:
+        """Lengths of all completed episodes since collector creation."""
+        return self._completed_lengths
+
     @torch.no_grad()
     def collect(self, policy: nn.Module, n_steps: int) -> RolloutBatch:
         """Run the policy for *n_steps* in each env and return a flat batch."""
@@ -170,6 +186,17 @@ class RolloutCollector:
 
             terminated = step_result["terminated"].astype(bool)
             truncated = step_result["truncated"].astype(bool)
+
+            # Track episode statistics
+            self._ep_rewards += raw_rewards
+            self._ep_lengths += 1
+            dones = terminated | truncated
+            for i in range(self.n_envs):
+                if dones[i]:
+                    self._completed_rewards.append(float(self._ep_rewards[i]))
+                    self._completed_lengths.append(int(self._ep_lengths[i]))
+                    self._ep_rewards[i] = 0.0
+                    self._ep_lengths[i] = 0
 
             # Truncation bootstrap: when truncated but not terminated,
             # add gamma * V(terminal_obs) to reward.

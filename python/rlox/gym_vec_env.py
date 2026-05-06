@@ -31,21 +31,42 @@ class GymVecEnv:
         Base seed; each sub-env gets ``seed + i``.
     """
 
-    def __init__(self, env_id: str, n_envs: int, seed: int = 0) -> None:
+    def __init__(
+        self,
+        env_id: str,
+        n_envs: int,
+        seed: int = 0,
+        record_episode_stats: bool = True,
+    ) -> None:
         self._env = gym.vector.SyncVectorEnv(
-            [self._make_env(env_id, seed + i) for i in range(n_envs)],
+            [self._make_env(env_id, seed + i, record_episode_stats) for i in range(n_envs)],
             autoreset_mode=AutoresetMode.SAME_STEP,
         )
         self._n_envs = n_envs
+        self._record_episode_stats = record_episode_stats
+        self._episode_rewards: list[float] = []
+        self._episode_lengths: list[int] = []
 
     @staticmethod
-    def _make_env(env_id: str, seed: int):  # noqa: ANN205
+    def _make_env(env_id: str, seed: int, record_stats: bool = True):  # noqa: ANN205
         def _thunk() -> gym.Env:
             env = gym.make(env_id)
+            if record_stats:
+                env = gym.wrappers.RecordEpisodeStatistics(env)
             env.reset(seed=seed)
             return env
 
         return _thunk
+
+    @property
+    def episode_rewards(self) -> list[float]:
+        """Rewards of all completed episodes."""
+        return self._episode_rewards
+
+    @property
+    def episode_lengths(self) -> list[int]:
+        """Lengths of all completed episodes."""
+        return self._episode_lengths
 
     def step_all(self, actions: np.ndarray | list[Any]) -> dict[str, Any]:
         """Step all sub-environments.
@@ -74,6 +95,15 @@ class GymVecEnv:
                     terminal_obs[i] = np.asarray(
                         infos["final_obs"][i], dtype=np.float32
                     )
+
+        # Extract episode statistics from RecordEpisodeStatistics wrapper
+        if self._record_episode_stats and "episode" in infos:
+            ep_info = infos["episode"]
+            mask = infos.get("_episode", np.zeros(self._n_envs, dtype=bool))
+            for i in range(self._n_envs):
+                if mask[i]:
+                    self._episode_rewards.append(float(ep_info["r"][i]))
+                    self._episode_lengths.append(int(ep_info["l"][i]))
 
         return {
             "obs": np.asarray(obs, dtype=np.float32),

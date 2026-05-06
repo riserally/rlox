@@ -100,11 +100,11 @@ from rlox._rlox_core import (
 # -- Core Python imports (eager — these are in __all__) -----------------------
 from rlox.gym_vec_env import GymVecEnv
 from rlox.vec_normalize import VecNormalize
-from rlox.policies import ContinuousPolicy, DiscretePolicy
+from rlox.policies import ContinuousPolicy, DiscretePolicy, AsymmetricPolicy
 from rlox.config import PPOConfig, SACConfig, DQNConfig, A2CConfig, TD3Config, TRPOConfig, TrainingConfig
 from rlox.trainer import Trainer, ALGORITHM_REGISTRY
 from rlox.runner import train_from_config
-from rlox.callbacks import Callback, EvalCallback
+from rlox.callbacks import Callback, EvalCallback, VideoRecordingCallback
 from rlox.logging import ConsoleLogger
 
 # ---------------------------------------------------------------------------
@@ -327,10 +327,12 @@ __all__ = [
     # ---- Policies ----
     "ContinuousPolicy",
     "DiscretePolicy",
+    "AsymmetricPolicy",
 
     # ---- Callbacks ----
     "Callback",
     "EvalCallback",
+    "VideoRecordingCallback",
 
     # ---- Logging ----
     "ConsoleLogger",

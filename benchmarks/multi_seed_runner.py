@@ -49,19 +49,36 @@ def run_single_seed(
     total_timesteps: int,
     seed: int,
     config: dict | None = None,
+    eval_freq: int = 0,
 ) -> dict:
     """Train one seed and return metrics + final eval reward.
 
     If ``config`` is None, attempt to auto-resolve a preset YAML for the
     (algo, env) pair from ``benchmarks/convergence/configs/``. This avoids
     silently running CleanRL CartPole-tuned defaults on MuJoCo envs.
+
+    Parameters
+    ----------
+    eval_freq : int
+        If > 0, evaluate every ``eval_freq`` steps during training and
+        record per-checkpoint learning curve data. Default 0 (off).
     """
     from rlox import Trainer
+    from rlox.callbacks import EvalCallback
 
     if config is None:
         config = _resolve_preset(algo, env_id)
     cfg = dict(config or {})
-    trainer = Trainer(algo, env=env_id, seed=seed, config=cfg)
+
+    callbacks = []
+    eval_cb = None
+    if eval_freq > 0:
+        eval_cb = EvalCallback(
+            eval_freq=eval_freq, n_eval_episodes=10, verbose=False
+        )
+        callbacks.append(eval_cb)
+
+    trainer = Trainer(algo, env=env_id, seed=seed, config=cfg, callbacks=callbacks)
 
     t0 = time.time()
     metrics = trainer.train(total_timesteps=total_timesteps)
@@ -128,7 +145,7 @@ def run_single_seed(
         rewards.append(ep_r)
     eval_env.close()
 
-    return {
+    result = {
         "algo": algo,
         "env": env_id,
         "seed": seed,
@@ -140,6 +157,65 @@ def run_single_seed(
         "metrics": {k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))},
     }
 
+    # Include learning curve if eval callback was used
+    if eval_cb is not None and eval_cb.eval_results:
+        result["learning_curve"] = [
+            {"step": step, "reward": reward}
+            for step, reward in eval_cb.eval_results
+        ]
+
+    return result
+
+
+def _compute_learning_curve_ci(
+    results: list[dict],
+    ci: float = 0.95,
+    n_bootstrap: int = 2000,
+) -> list[dict[str, float]]:
+    """Compute bootstrap CI bands on per-step learning curves across seeds.
+
+    Aligns learning curves by step, then bootstraps IQM at each checkpoint.
+
+    Returns
+    -------
+    List of dicts with keys: step, mean, ci_low, ci_high.
+    """
+    # Collect all learning curves
+    curves = [r["learning_curve"] for r in results if "learning_curve" in r]
+    if not curves:
+        return []
+
+    # Find common steps (intersection across seeds)
+    step_sets = [set(pt["step"] for pt in curve) for curve in curves]
+    common_steps = sorted(set.intersection(*step_sets)) if step_sets else []
+    if not common_steps:
+        return []
+
+    # Build matrix: (n_seeds, n_steps)
+    seed_by_step = {}
+    for curve in curves:
+        for pt in curve:
+            seed_by_step.setdefault(pt["step"], []).append(pt["reward"])
+
+    rng = np.random.default_rng(42)
+    alpha = (1.0 - ci) / 2.0
+    ci_curve = []
+    for step in common_steps:
+        rewards = np.array(seed_by_step[step])
+        n = len(rewards)
+        boot_means = np.array([
+            float(np.mean(rng.choice(rewards, size=n, replace=True)))
+            for _ in range(n_bootstrap)
+        ])
+        ci_curve.append({
+            "step": int(step),
+            "mean": float(np.mean(rewards)),
+            "ci_low": float(np.percentile(boot_means, 100 * alpha)),
+            "ci_high": float(np.percentile(boot_means, 100 * (1.0 - alpha))),
+        })
+
+    return ci_curve
+
 
 def run_multi_seed(
     algo: str,
@@ -148,15 +224,23 @@ def run_multi_seed(
     n_seeds: int = 5,
     config: dict | None = None,
     output_dir: str = "results/multi_seed",
+    eval_freq: int = 0,
 ) -> dict:
-    """Run multiple seeds and compute aggregate statistics."""
+    """Run multiple seeds and compute aggregate statistics.
+
+    Parameters
+    ----------
+    eval_freq : int
+        If > 0, evaluate every ``eval_freq`` steps during training.
+        Enables learning curve CI bands in the output.
+    """
     from rlox.evaluation import interquartile_mean, stratified_bootstrap_ci
 
     results = []
     for i in range(n_seeds):
         seed = i * 1000 + 42
         print(f"  Seed {i + 1}/{n_seeds} (seed={seed})...", end=" ", flush=True)
-        result = run_single_seed(algo, env_id, total_timesteps, seed, config)
+        result = run_single_seed(algo, env_id, total_timesteps, seed, config, eval_freq)
         results.append(result)
         print(f"reward={result['mean_reward']:.1f}, SPS={result['sps']:.0f}")
 
@@ -180,6 +264,11 @@ def run_multi_seed(
         "per_seed": results,
     }
 
+    # Compute learning curve CI bands if eval data is available
+    ci_curve = _compute_learning_curve_ci(results)
+    if ci_curve:
+        summary["learning_curve_ci"] = ci_curve
+
     # Save
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -199,6 +288,8 @@ def main():
     parser.add_argument("--seeds", type=int, default=5, help="Number of seeds")
     parser.add_argument("--output", default="results/multi_seed", help="Output directory")
     parser.add_argument("--config", help="YAML config file for hyperparameters")
+    parser.add_argument("--eval-freq", type=int, default=0,
+                        help="Eval frequency for learning curve CI bands (0=off)")
     args = parser.parse_args()
 
     config = None
@@ -210,7 +301,7 @@ def main():
         config = data.get("hyperparameters", data)
 
     print(f"Multi-seed benchmark: {args.algo} on {args.env} ({args.seeds} seeds, {args.timesteps} steps)")
-    run_multi_seed(args.algo, args.env, args.timesteps, args.seeds, config, args.output)
+    run_multi_seed(args.algo, args.env, args.timesteps, args.seeds, config, args.output, args.eval_freq)
 
 
 if __name__ == "__main__":

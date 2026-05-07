@@ -1,4 +1,5 @@
 pub mod augmentation;
+pub mod cpd;
 pub mod gae;
 pub mod kl;
 pub mod normalization;

@@ -6,7 +6,8 @@ use pyo3::types::PyDict;
 use rlox_core::pipeline::channel::{Pipeline, RolloutBatch};
 use rlox_core::training::augmentation;
 use rlox_core::training::gae;
-use rlox_core::training::normalization::{RunningStats, RunningStatsVec};
+use rlox_core::training::cpd;
+use rlox_core::training::normalization::{ExponentialRunningStats, RunningStats, RunningStatsVec};
 use rlox_core::training::packing;
 use rlox_core::training::reward_shaping;
 use rlox_core::training::vtrace;
@@ -776,4 +777,228 @@ pub fn average_weight_vectors<'py>(
     let result = weight_ops::average_weight_vectors(&slices)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
     Ok(PyArray1::from_vec(py, result))
+}
+
+// ---------------------------------------------------------------------------
+// EMA Running Statistics (non-stationary RL)
+// ---------------------------------------------------------------------------
+
+/// Exponential Moving Average running statistics for non-stationary signals.
+///
+/// Unlike standard RunningStats (Welford) which weights all observations equally,
+/// EMA gives exponentially more weight to recent observations, making it suitable
+/// for tracking non-stationary distributions.
+///
+/// Args:
+///     alpha: Smoothing factor in (0, 1). Higher = more responsive.
+///
+/// Alternative constructors:
+///     EmaRunningStats.from_window(N) — alpha = 2/(N+1)
+///     EmaRunningStats.from_halflife(h) — weight decays 50% every h steps
+#[pyclass(name = "EmaRunningStats")]
+pub struct PyEmaRunningStats {
+    inner: ExponentialRunningStats,
+}
+
+#[pymethods]
+impl PyEmaRunningStats {
+    #[new]
+    fn new(alpha: f64) -> PyResult<Self> {
+        if alpha <= 0.0 || alpha >= 1.0 {
+            return Err(PyValueError::new_err("alpha must be in (0, 1)"));
+        }
+        Ok(Self {
+            inner: ExponentialRunningStats::new(alpha),
+        })
+    }
+
+    /// Create from equivalent window size: alpha = 2/(N+1).
+    #[staticmethod]
+    fn from_window(window: usize) -> PyResult<Self> {
+        if window < 1 {
+            return Err(PyValueError::new_err("window must be >= 1"));
+        }
+        Ok(Self {
+            inner: ExponentialRunningStats::from_window(window),
+        })
+    }
+
+    /// Create from half-life (steps for weight to decay by 50%).
+    #[staticmethod]
+    fn from_halflife(halflife: f64) -> PyResult<Self> {
+        if halflife <= 0.0 {
+            return Err(PyValueError::new_err("halflife must be > 0"));
+        }
+        Ok(Self {
+            inner: ExponentialRunningStats::from_halflife(halflife),
+        })
+    }
+
+    /// Update with a single observation.
+    fn update(&mut self, value: f64) {
+        self.inner.update(value);
+    }
+
+    /// Update with a batch of observations.
+    fn batch_update(&mut self, values: PyReadonlyArray1<'_, f64>) -> PyResult<()> {
+        let slice = values.as_slice()?;
+        self.inner.batch_update(slice);
+        Ok(())
+    }
+
+    /// Current EMA mean.
+    #[getter]
+    fn mean(&self) -> f64 {
+        self.inner.mean()
+    }
+
+    /// Current EMA variance.
+    #[getter]
+    fn var(&self) -> f64 {
+        self.inner.var()
+    }
+
+    /// Current EMA standard deviation.
+    #[getter]
+    fn std(&self) -> f64 {
+        self.inner.std()
+    }
+
+    /// Normalize a value using current EMA mean and std.
+    fn normalize(&self, value: f64) -> f64 {
+        self.inner.normalize(value)
+    }
+
+    /// Number of observations seen.
+    #[getter]
+    fn count(&self) -> u64 {
+        self.inner.count()
+    }
+
+    /// Smoothing factor alpha.
+    #[getter]
+    fn alpha(&self) -> f64 {
+        self.inner.alpha()
+    }
+
+    /// Reset to initial state.
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CUSUM Change-Point Detector (non-stationary RL)
+// ---------------------------------------------------------------------------
+
+/// Two-sided CUSUM change-point detector.
+///
+/// Detects shifts in the mean of a streaming signal. Feed it reward or loss
+/// values; when it returns True, the underlying distribution has likely shifted.
+///
+/// Args:
+///     mu_0: Reference level (expected mean under no-change hypothesis)
+///     delta: Allowance parameter (minimum shift to detect). Typical: 0.5 * expected_shift
+///     h: Detection threshold. Higher = fewer false alarms, slower detection. Typical: 4-8
+///
+/// Alternative constructor:
+///     CusumDetector.with_burnin(burnin, delta, h) — estimates mu_0 from first N samples
+#[pyclass(name = "CusumDetector")]
+pub struct PyCusumDetector {
+    inner: cpd::CusumDetector,
+}
+
+#[pymethods]
+impl PyCusumDetector {
+    #[new]
+    fn new(mu_0: f64, delta: f64, h: f64) -> PyResult<Self> {
+        if delta < 0.0 {
+            return Err(PyValueError::new_err("delta must be non-negative"));
+        }
+        if h <= 0.0 {
+            return Err(PyValueError::new_err("h must be positive"));
+        }
+        Ok(Self {
+            inner: cpd::CusumDetector::new(mu_0, delta, h),
+        })
+    }
+
+    /// Create a detector that estimates mu_0 from the first `burnin` samples.
+    #[staticmethod]
+    fn with_burnin(burnin: u64, delta: f64, h: f64) -> PyResult<Self> {
+        if burnin == 0 {
+            return Err(PyValueError::new_err("burnin must be > 0"));
+        }
+        if delta < 0.0 {
+            return Err(PyValueError::new_err("delta must be non-negative"));
+        }
+        if h <= 0.0 {
+            return Err(PyValueError::new_err("h must be positive"));
+        }
+        Ok(Self {
+            inner: cpd::CusumDetector::with_burnin(burnin, delta, h),
+        })
+    }
+
+    /// Feed one observation. Returns True if a change-point alarm fires.
+    fn update(&mut self, value: f64) -> bool {
+        self.inner.update(value)
+    }
+
+    /// Feed a batch. Returns the index of the first alarm, or None.
+    fn batch_update(&mut self, values: PyReadonlyArray1<'_, f64>) -> PyResult<Option<usize>> {
+        let slice = values.as_slice()?;
+        Ok(self.inner.batch_update(slice))
+    }
+
+    /// Reset CUSUM statistics (call after handling an alarm).
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+
+    /// Reset and re-estimate mu_0 from next burnin samples.
+    fn reset_with_burnin(&mut self) {
+        self.inner.reset_with_burnin();
+    }
+
+    /// Set a new reference level manually.
+    fn set_mu(&mut self, mu_0: f64) {
+        self.inner.set_mu(mu_0);
+    }
+
+    /// Current upward CUSUM statistic.
+    #[getter]
+    fn s_pos(&self) -> f64 {
+        self.inner.s_pos()
+    }
+
+    /// Current downward CUSUM statistic.
+    #[getter]
+    fn s_neg(&self) -> f64 {
+        self.inner.s_neg()
+    }
+
+    /// Reference level.
+    #[getter]
+    fn mu_0(&self) -> f64 {
+        self.inner.mu_0()
+    }
+
+    /// Total observations processed.
+    #[getter]
+    fn count(&self) -> u64 {
+        self.inner.count()
+    }
+
+    /// Total alarms fired.
+    #[getter]
+    fn alarm_count(&self) -> u64 {
+        self.inner.alarm_count()
+    }
+
+    /// Whether burn-in is complete and detection is active.
+    #[getter]
+    fn is_ready(&self) -> bool {
+        self.inner.is_ready()
+    }
 }

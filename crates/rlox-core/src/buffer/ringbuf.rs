@@ -399,6 +399,83 @@ impl ReplayBuffer {
         Ok(())
     }
 
+    /// Sample uniformly from only the most recent `window_size` transitions.
+    ///
+    /// This implements a sliding window replay strategy for non-stationary RL:
+    /// only recent experience is used for training, discarding stale transitions
+    /// from previous MDP regimes.
+    ///
+    /// # Parameters
+    /// - `batch_size`: number of transitions to sample
+    /// - `window_size`: only consider the most recent `window_size` transitions
+    /// - `seed`: RNG seed for reproducibility
+    ///
+    /// # Errors
+    /// Returns an error if `batch_size > min(window_size, self.count)`.
+    pub fn sample_recent(
+        &self,
+        batch_size: usize,
+        window_size: usize,
+        seed: u64,
+    ) -> Result<SampledBatch, RloxError> {
+        let effective_window = window_size.min(self.count);
+        if batch_size > effective_window {
+            return Err(RloxError::BufferError(format!(
+                "batch_size {} > effective window {} (window_size={}, count={})",
+                batch_size, effective_window, window_size, self.count
+            )));
+        }
+
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let mut batch = SampledBatch::with_capacity(batch_size, self.obs_dim, self.act_dim);
+
+        let has_extra = self.extra.num_columns() > 0;
+        let mut indices = if has_extra {
+            Vec::with_capacity(batch_size)
+        } else {
+            Vec::new()
+        };
+
+        for _ in 0..batch_size {
+            // Map random offset within window to actual ring buffer index.
+            // The most recent transition is at (write_pos - 1) mod capacity,
+            // the second most recent at (write_pos - 2) mod capacity, etc.
+            let offset = rng.random_range(0..effective_window);
+            let idx = if self.write_pos > offset {
+                self.write_pos - 1 - offset
+            } else {
+                // Wrap around the ring
+                self.capacity - 1 - (offset - self.write_pos)
+            };
+
+            let obs_start = idx * self.obs_dim;
+            batch
+                .observations
+                .extend_from_slice(&self.observations[obs_start..obs_start + self.obs_dim]);
+            batch
+                .next_observations
+                .extend_from_slice(&self.next_observations[obs_start..obs_start + self.obs_dim]);
+            let act_start = idx * self.act_dim;
+            batch
+                .actions
+                .extend_from_slice(&self.actions[act_start..act_start + self.act_dim]);
+            batch.rewards.push(self.rewards[idx]);
+            batch.terminated.push(self.terminated[idx]);
+            batch.truncated.push(self.truncated[idx]);
+
+            if has_extra {
+                indices.push(idx);
+            }
+        }
+        batch.batch_size = batch_size;
+
+        if has_extra {
+            batch.extra = self.extra.sample_all(&indices);
+        }
+
+        Ok(batch)
+    }
+
     /// Access the extra columns storage (for advanced use / testing).
     pub fn extra_columns(&self) -> &ExtraColumns {
         &self.extra

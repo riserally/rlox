@@ -137,10 +137,12 @@ result = env.step_all(actions)
 │  vLLM/TGI/SGLang backends, multi-GPU (DDP)       │
 ├────────────── PyO3 boundary ─────────────────────┤
 │  Rust (data plane)                               │
-│  rlox-core:   envs (CartPole, Pendulum),         │
+│  rlox-core:   envs (CartPole, Pendulum,           │
+│               NonStationaryCartPole),            │
 │               Rayon parallel stepping,           │
 │               buffers (ring, mmap, priority),    │
-│               GAE, V-trace, GRPO, pipeline       │
+│               GAE, V-trace, GRPO, pipeline,      │
+│               EMA stats, CUSUM change detection  │
 │  rlox-nn:     RL algorithm traits                │
 │  rlox-burn:   Burn backend (NdArray)             │
 │  rlox-candle: Candle backend (CPU)               │
@@ -227,6 +229,9 @@ SAC HalfCheetah: rlox 10872 vs SB3 10796 — statistically identical, both beat 
 - **LLM post-training**: GRPO, DPO, token KL, sequence packing, vLLM/TGI/SGLang backends
 - **Cloud deploy**: Dockerfile generator, Kubernetes manifest generator, SageMaker integration
 - **Distributed**: pipeline parallelism (crossbeam), gRPC workers, multi-GPU (DDP)
+- **Evaluation**: `Trainer.evaluate()`, `Trainer.enjoy()`, `VideoRecordingCallback`, score normalization
+- **Non-stationary RL**: EMA running stats, CUSUM change-point detection, sliding window replay, dynamic regret metrics
+- **Asymmetric actor-critic**: `AsymmetricPolicy` for privileged critic observations (sim-to-real)
 - **Production**: callbacks, checkpointing, eval toolkit (IQM, bootstrap CI, performance profiles)
 - **NN backends**: Burn (NdArray) and Candle (CPU) for pure-Rust inference, PyTorch for training
 - **444 Rust tests, ~1094 Python tests** — comprehensive coverage

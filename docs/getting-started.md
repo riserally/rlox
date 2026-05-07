@@ -51,6 +51,42 @@ That's it — 3 lines to a trained agent. Under the hood, rlox uses:
 - Rust `compute_gae` for advantage estimation (140x faster than Python)
 - PyTorch for policy network and SGD updates
 
+## Step 1b: Evaluating and Watching Your Agent
+
+After training, use `evaluate()` to get episode statistics and `enjoy()` to watch the trained policy:
+
+```python
+# Evaluate over 10 episodes (deterministic policy)
+results = trainer.evaluate(n_episodes=10, seed=0)
+print(f"Mean reward: {results['mean_reward']:.1f} +/- {results['std_reward']:.1f}")
+print(f"Min: {results['min_reward']:.1f}, Max: {results['max_reward']:.1f}")
+print(f"Mean length: {results['mean_length']:.1f}")
+
+# Watch the agent play (opens a render window)
+trainer.enjoy(n_episodes=1, seed=0)
+```
+
+### Recording Videos
+
+Use `VideoRecordingCallback` to save mp4 recordings during training:
+
+```python
+from rlox import Trainer
+from rlox.callbacks import VideoRecordingCallback
+
+trainer = Trainer("ppo",
+    env="CartPole-v1",
+    callbacks=[VideoRecordingCallback(
+        video_folder="videos",
+        record_freq=50_000,  # record every 50K steps
+        n_episodes=1,
+    )],
+    seed=42,
+)
+metrics = trainer.train(total_timesteps=200_000)
+# Videos saved to videos/ directory
+```
+
 ## Step 2: Understanding the Architecture
 
 rlox follows the **Polars pattern** — a Rust data plane for heavy computation, with Python in control:
@@ -343,6 +379,8 @@ cargo test --package rlox-core
 | `DPOPair` | DPO preference pair container |
 | `RunningStats` | Online mean/variance (Welford) |
 | `RunningStatsVec` | Per-dimension online mean/variance (for observation normalisation) |
+| `EmaRunningStats` | Exponential moving average stats (non-stationary signals) |
+| `CusumDetector` | Two-sided CUSUM change-point detection |
 | `pack_sequences` | LLM sequence packing |
 | `Pendulum` | Native Pendulum-v1 environment |
 | `FrameStack` | Stack consecutive observation frames (visual RL) |
@@ -368,6 +406,7 @@ cargo test --package rlox-core
 | `IMPALA`, `MAPPO`, `DreamerV3` | `rlox.algorithms` | Advanced algorithms |
 | `BestOfN` | `rlox.algorithms` | Inference-time rejection sampling |
 | `DiscretePolicy` | `rlox.policies` | Actor-critic for discrete actions |
+| `AsymmetricPolicy` | `rlox.policies` | Asymmetric actor-critic (privileged critic) |
 | `RolloutBatch` | `rlox.batch` | Flat tensor container |
 | `RolloutCollector` | `rlox.collectors` | VecEnv + batched GAE collection |
 | `PPOLoss` | `rlox.losses` | Clipped surrogate objective |
@@ -381,6 +420,7 @@ cargo test --package rlox-core
 | `MetricsCollector` | `rlox.dashboard` | In-memory metrics aggregation for dashboards |
 | `ProgressBarCallback`, `TimingCallback` | `rlox.callbacks` | Progress & profiling |
 | `Callback`, `EvalCallback` | `rlox.callbacks` | Training hooks |
+| `VideoRecordingCallback` | `rlox.callbacks` | Record eval episodes to mp4 |
 | `compile_policy` | `rlox.compile` | torch.compile integration |
 | `MmapReplayBuffer` | `rlox` | Disk-spilling replay for large obs |
 | `ENV_REGISTRY` | `rlox.plugins` | Plugin registry for custom environments |

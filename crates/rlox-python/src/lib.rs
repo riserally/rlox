@@ -47,6 +47,8 @@ fn _rlox_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDPOPair>()?;
     m.add_class::<PyRunningStats>()?;
     m.add_class::<PyRunningStatsVec>()?;
+    m.add_class::<training::PyEmaRunningStats>()?;
+    m.add_class::<training::PyCusumDetector>()?;
     m.add_class::<PyActorCritic>()?;
     m.add_class::<PyCandleCollector>()?;
     m.add_class::<PyRolloutBatch>()?;

@@ -2,6 +2,27 @@
 
 All notable changes to rlox are documented here.
 
+## [1.2.0] - 2026-05-05
+
+### Added
+- **`Trainer.evaluate(n_episodes, seed, render)`** -- deterministic evaluation returning mean/std/min/max reward and episode lengths
+- **`Trainer.enjoy(n_episodes, seed)`** -- render the trained policy for visual inspection
+- **`VideoRecordingCallback`** -- records evaluation episodes to mp4 at configurable intervals during training
+- **`AsymmetricPolicy`** -- actor-critic with separate observation spaces (actor sees deployment obs, critic sees privileged state). Supports both discrete and continuous actions
+- **Episode statistics tracking** -- `RolloutCollector` and `GymVecEnv` now expose `episode_rewards` and `episode_lengths` properties for completed episodes
+- **`RecordEpisodeStatistics`** auto-wrapping in `GymVecEnv`
+- **Score normalization** -- `normalize_score()`, `normalize_scores()`, and `SCORE_BASELINES` dict for mapping raw returns to [0, 1] using random/expert baselines (14 environments)
+- **Bootstrap CI bands** on learning curves in `multi_seed_runner.py` via `--eval-freq` flag
+- **`EmaRunningStats`** (Rust + PyO3) -- exponential moving average mean/variance for non-stationary signals. Constructors: `EmaRunningStats(alpha)`, `.from_window(N)`, `.from_halflife(h)`
+- **`CusumDetector`** (Rust + PyO3) -- two-sided CUSUM change-point detection with optional burn-in period for automatic reference level estimation
+- **`PageHinkleyDetector`** (Rust only) -- Page-Hinkley change-point detection
+- **`NonStationaryCartPole`** (Rust only) -- CartPole with configurable parameter drift (gravity, pole length, cart mass, force magnitude) via `DriftMode` (None, Linear, Sinusoidal, Step)
+- **`ReplayBuffer.sample_recent(batch_size, window_size, seed)`** -- sliding window replay for non-stationary RL, sampling only from recent transitions
+- **Dynamic regret metrics** in `evaluation.py`: `dynamic_regret()`, `adaptation_latency()`, `forgetting_ratio()` for non-stationary RL evaluation
+
+### Fixed
+- CI: override `target-cpu=native` to prevent SIGILL from stale cache on different hardware
+
 ## [1.1.0] - 2026-03-29
 
 ### Added

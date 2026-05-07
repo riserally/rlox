@@ -177,6 +177,7 @@ print(timing.summary())
 | `TimingCallback` | Wall-clock profiling of each training phase |
 | `EvalCallback` | Periodic evaluation on a separate environment |
 | `CheckpointCallback` | Save model weights at regular intervals |
+| `VideoRecordingCallback` | Record evaluation episodes to mp4 videos |
 | `Callback` | Base class for custom callbacks |
 
 ### Logging
@@ -915,6 +916,243 @@ profiles = performance_profiles(
     thresholds=[100, 200, 300, 400, 500],
 )
 ```
+
+---
+
+## Evaluation & Rendering
+
+After training, use `trainer.evaluate()` for deterministic evaluation and `trainer.enjoy()` for visual inspection:
+
+```python
+from rlox import Trainer
+
+trainer = Trainer("ppo", env="CartPole-v1", seed=42)
+trainer.train(total_timesteps=50_000)
+
+# Deterministic evaluation over 10 episodes
+results = trainer.evaluate(n_episodes=10, seed=0)
+# Returns: {mean_reward, std_reward, min_reward, max_reward, mean_length, n_episodes}
+print(f"Mean: {results['mean_reward']:.1f} +/- {results['std_reward']:.1f}")
+
+# Watch the policy play (opens render window)
+trainer.enjoy(n_episodes=1, seed=0)
+```
+
+### Video Recording
+
+`VideoRecordingCallback` records evaluation episodes to mp4 at regular intervals during training:
+
+```python
+from rlox import Trainer
+from rlox.callbacks import VideoRecordingCallback
+
+trainer = Trainer("ppo",
+    env="CartPole-v1",
+    callbacks=[VideoRecordingCallback(
+        video_folder="videos",    # output directory
+        record_freq=50_000,       # record every 50K steps
+        n_episodes=1,             # episodes per recording
+    )],
+    seed=42,
+)
+trainer.train(total_timesteps=200_000)
+```
+
+### Episode Statistics
+
+`RolloutCollector` and `GymVecEnv` track completed episode statistics automatically:
+
+```python
+from rlox.collectors import RolloutCollector
+from rlox.policies import DiscretePolicy
+
+collector = RolloutCollector(env_id="CartPole-v1", n_envs=8, seed=0)
+policy = DiscretePolicy(obs_dim=4, n_actions=2)
+batch = collector.collect(policy, n_steps=128)
+
+# Access completed episode stats
+print(collector.episode_rewards)   # list[float]
+print(collector.episode_lengths)   # list[int]
+```
+
+---
+
+## Score Normalization
+
+Normalize raw environment returns to [0, 1] using random and expert baselines (for cross-environment comparison following rliable conventions):
+
+```python
+from rlox.evaluation import normalize_score, normalize_scores, SCORE_BASELINES
+
+# Single score
+normalized = normalize_score(450.0, env_id="CartPole-v1")
+# (450 - 22) / (500 - 22) = 0.895
+
+# Batch of scores
+import numpy as np
+scores = [450, 480, 500, 200, 490]
+normalized_arr = normalize_scores(scores, env_id="CartPole-v1")
+
+# Custom baselines (for envs not in SCORE_BASELINES)
+normalized = normalize_score(1500.0, env_id="MyCustomEnv-v0",
+                             random_score=0.0, expert_score=2000.0)
+
+# See all built-in baselines
+print(sorted(SCORE_BASELINES.keys()))
+# CartPole-v1, Acrobot-v1, Pendulum-v1, HalfCheetah-v4, Hopper-v4, ...
+```
+
+---
+
+## AsymmetricPolicy
+
+`AsymmetricPolicy` implements the asymmetric actor-critic pattern where the critic sees privileged state during training (e.g. ground-truth positions, velocities) while the actor only sees deployment-time observations (e.g. sensor readings). Common in sim-to-real transfer and Isaac Gym workflows.
+
+```python
+from rlox.policies import AsymmetricPolicy
+
+# Discrete actions: actor sees 10-dim obs, critic sees 20-dim privileged state
+policy = AsymmetricPolicy(
+    obs_dim=10,
+    critic_obs_dim=20,
+    n_actions=4,
+    hidden=64,
+)
+
+# Continuous actions: actor sees 10-dim obs, critic sees 30-dim privileged state
+policy = AsymmetricPolicy(
+    obs_dim=10,
+    critic_obs_dim=30,
+    act_dim=3,
+    hidden=128,
+)
+
+# Interface (same as DiscretePolicy / ContinuousPolicy):
+# actions, log_probs = policy.get_action_and_logprob(actor_obs)
+# values = policy.get_value(critic_obs)  # uses privileged observations
+# log_probs, entropy = policy.get_logprob_and_entropy(actor_obs, actions)
+```
+
+Exactly one of `n_actions` (discrete) or `act_dim` (continuous) must be provided.
+
+---
+
+## Non-Stationary RL Tools
+
+rlox includes Rust-accelerated primitives for non-stationary RL settings where the environment dynamics change over time.
+
+### EMA Running Stats
+
+`EmaRunningStats` tracks exponential moving average statistics, giving more weight to recent observations. Use it instead of `RunningStats` when the underlying distribution drifts.
+
+```python
+from rlox._rlox_core import EmaRunningStats
+import numpy as np
+
+# Create with explicit smoothing factor (higher = more responsive)
+ema = EmaRunningStats(alpha=0.1)
+
+# Or from equivalent window size / half-life
+ema = EmaRunningStats.from_window(20)       # alpha = 2/(20+1) ~ 0.095
+ema = EmaRunningStats.from_halflife(10.0)   # weight decays 50% every 10 steps
+
+# Update with observations
+ema.update(1.0)
+ema.update(2.0)
+ema.batch_update(np.array([3.0, 4.0, 5.0]))
+
+# Read current statistics
+print(ema.mean)    # EMA mean
+print(ema.std)     # EMA standard deviation
+print(ema.var)     # EMA variance
+print(ema.count)   # total observations seen
+
+# Normalize a value using current EMA stats
+normalized = ema.normalize(5.0)  # (5.0 - mean) / std
+```
+
+### CUSUM Change-Point Detection
+
+`CusumDetector` implements two-sided CUSUM (cumulative sum) for detecting distributional shifts in a streaming signal. Feed it reward or loss values; it fires an alarm when the mean has shifted.
+
+```python
+from rlox._rlox_core import CusumDetector
+import numpy as np
+
+# Known reference level
+detector = CusumDetector(mu_0=1.0, delta=0.5, h=5.0)
+# mu_0: expected mean under no-change hypothesis
+# delta: allowance (minimum shift to detect). Typical: 0.5 * expected_shift
+# h: threshold (higher = fewer false alarms). Typical: 4-8
+
+# Auto-estimate reference level from first N samples
+detector = CusumDetector.with_burnin(burnin=100, delta=0.5, h=5.0)
+
+# Feed observations one at a time
+alarm = detector.update(1.2)   # returns True if change detected
+
+# Or feed a batch (returns index of first alarm, or None)
+values = np.array([1.0, 1.1, 0.9, 5.0, 5.2, 5.1])
+alarm_idx = detector.batch_update(values)
+if alarm_idx is not None:
+    print(f"Change detected at index {alarm_idx}")
+
+# Reset after handling an alarm
+detector.reset()
+detector.reset_with_burnin()   # re-estimate mu_0
+detector.set_mu(2.0)           # set new reference manually
+```
+
+### Sliding Window Replay
+
+`ReplayBuffer.sample_recent()` samples uniformly from only the most recent transitions, discarding stale experience from previous regimes:
+
+```python
+import numpy as np
+import rlox
+
+buffer = rlox.ReplayBuffer(capacity=100_000, obs_dim=4, act_dim=1)
+# ... push transitions ...
+
+# Sample from only the last 1000 transitions
+batch = buffer.sample_recent(batch_size=32, window_size=1000, seed=0)
+# Same keys as buffer.sample(): obs, next_obs, actions, rewards, terminated, truncated
+```
+
+### Dynamic Regret Metrics
+
+Evaluation metrics for non-stationary settings (in `rlox.evaluation`):
+
+```python
+from rlox.evaluation import dynamic_regret, adaptation_latency, forgetting_ratio
+
+# Dynamic regret: cumulative gap between agent and time-varying optimal
+dr = dynamic_regret(
+    agent_rewards=[1.0, 0.8, 0.5, 0.9, 1.0],
+    optimal_rewards=[1.0, 1.0, 1.0, 1.0, 1.0],
+)
+# dr = 0.0 + 0.2 + 0.5 + 0.1 + 0.0 = 0.8
+
+# Adaptation latency: steps to recover after a change-point
+latency = adaptation_latency(
+    rewards=[1.0]*50 + [0.2, 0.3, 0.5, 0.7, 0.85, 0.9, 0.95],
+    change_point=50,
+    pre_change_mean=1.0,
+    recovery_fraction=0.9,  # recover to 90% of pre-change performance
+)
+# returns number of steps after change_point, or None if never recovered
+
+# Forgetting ratio: performance retained on old task after training on new one
+fr = forgetting_ratio(
+    reward_on_task_before=100.0,
+    reward_on_task_after=85.0,
+)
+# fr = 0.85 (retained 85% performance). 1.0 = no forgetting
+```
+
+### NonStationaryCartPole (Rust only)
+
+A CartPole variant with configurable parameter drift, available in the Rust crate `rlox-core`. Physical parameters (gravity, pole length, cart mass, force magnitude) can drift independently via `DriftMode::None`, `DriftMode::Linear`, `DriftMode::Sinusoidal`, or `DriftMode::Step`. Not yet exposed to Python via PyO3.
 
 ---
 

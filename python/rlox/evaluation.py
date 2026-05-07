@@ -254,3 +254,99 @@ def probability_of_improvement(
             a_wins += 1
 
     return a_wins / n_bootstrap
+
+
+# ---------------------------------------------------------------------------
+# Non-stationary RL evaluation metrics
+# ---------------------------------------------------------------------------
+
+
+def dynamic_regret(
+    agent_rewards: list[float] | np.ndarray,
+    optimal_rewards: list[float] | np.ndarray,
+) -> float:
+    """Compute dynamic regret: sum of per-step optimality gaps.
+
+    Dynamic regret measures how much worse the agent performs compared to
+    the optimal policy *at each time step* (which may change in non-stationary
+    settings). Lower is better; 0 means the agent perfectly tracks the optimum.
+
+    DR = sum_{t=1}^T [V*(s_t; M_t) - V^pi(s_t; M_t)]
+
+    Parameters
+    ----------
+    agent_rewards : per-step rewards achieved by the agent
+    optimal_rewards : per-step rewards of the (time-varying) optimal policy
+
+    Returns
+    -------
+    Total dynamic regret (non-negative float).
+    """
+    agent = np.asarray(agent_rewards, dtype=np.float64)
+    optimal = np.asarray(optimal_rewards, dtype=np.float64)
+    assert len(agent) == len(optimal), (
+        f"Length mismatch: agent={len(agent)}, optimal={len(optimal)}"
+    )
+    return float(np.sum(np.maximum(optimal - agent, 0.0)))
+
+
+def adaptation_latency(
+    rewards: list[float] | np.ndarray,
+    change_point: int,
+    pre_change_mean: float,
+    recovery_fraction: float = 0.9,
+) -> int | None:
+    """Measure steps to recover after a change-point.
+
+    Counts how many steps after the change-point until the agent's
+    rolling mean reward reaches `recovery_fraction` of its pre-change
+    performance level.
+
+    Parameters
+    ----------
+    rewards : per-step rewards (full trajectory including before/after change)
+    change_point : index at which the environment changed
+    pre_change_mean : mean reward before the change (target to recover to)
+    recovery_fraction : fraction of pre-change performance to reach (default 0.9)
+
+    Returns
+    -------
+    Number of steps after change_point to reach recovery, or None if never recovered.
+    """
+    arr = np.asarray(rewards, dtype=np.float64)
+    target = pre_change_mean * recovery_fraction
+    post_change = arr[change_point:]
+    if len(post_change) == 0:
+        return None
+
+    # Use a rolling window of 10 steps for smoothing
+    window = min(10, len(post_change))
+    for i in range(window - 1, len(post_change)):
+        rolling_mean = float(np.mean(post_change[max(0, i - window + 1):i + 1]))
+        if rolling_mean >= target:
+            return i + 1
+    return None
+
+
+def forgetting_ratio(
+    reward_on_task_before: float,
+    reward_on_task_after: float,
+) -> float:
+    """Measure catastrophic forgetting after training on a new task.
+
+    Computes the ratio of performance retained on an old task after
+    the agent has been trained on a new task/regime.
+
+    Parameters
+    ----------
+    reward_on_task_before : performance on task A before training on task B
+    reward_on_task_after : performance on task A after training on task B
+
+    Returns
+    -------
+    Forgetting ratio in [0, 1]. 1.0 = no forgetting, 0.0 = total forgetting.
+    Values > 1 indicate positive transfer (improved on task A).
+    """
+    if abs(reward_on_task_before) < 1e-10:
+        return 1.0 if abs(reward_on_task_after) < 1e-10 else 0.0
+    return reward_on_task_after / reward_on_task_before

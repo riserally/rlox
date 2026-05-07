@@ -251,6 +251,130 @@ impl RunningStatsVec {
     }
 }
 
+/// Exponential Moving Average (EMA) running statistics for non-stationary signals.
+///
+/// Unlike Welford's algorithm which weights all observations equally,
+/// EMA statistics give exponentially more weight to recent observations.
+/// This makes them suitable for tracking non-stationary distributions
+/// where the underlying mean/variance drift over time.
+///
+/// Update rules:
+///   mean_t = (1 - alpha) * mean_{t-1} + alpha * x_t
+///   var_t  = (1 - alpha) * var_{t-1} + alpha * (x_t - mean_t)^2
+///
+/// The smoothing factor `alpha` controls the effective window:
+///   - alpha = 2/(N+1) gives an N-step equivalent window
+///   - Higher alpha = more responsive to change, noisier estimates
+///   - Lower alpha = smoother estimates, slower to adapt
+#[derive(Debug, Clone)]
+pub struct ExponentialRunningStats {
+    alpha: f64,
+    mean: f64,
+    var: f64,
+    count: u64,
+    initialized: bool,
+}
+
+impl ExponentialRunningStats {
+    /// Create a new EMA statistics tracker.
+    ///
+    /// # Parameters
+    /// - `alpha`: Smoothing factor in (0, 1). Use `from_halflife` or
+    ///   `from_window` for more intuitive parameterization.
+    ///
+    /// # Panics
+    /// Panics if alpha is not in (0, 1).
+    pub fn new(alpha: f64) -> Self {
+        assert!(
+            alpha > 0.0 && alpha < 1.0,
+            "alpha must be in (0, 1), got {alpha}"
+        );
+        Self {
+            alpha,
+            mean: 0.0,
+            var: 0.0,
+            count: 0,
+            initialized: false,
+        }
+    }
+
+    /// Create from an equivalent window size N: alpha = 2 / (N + 1).
+    pub fn from_window(window: usize) -> Self {
+        assert!(window >= 1, "window must be >= 1, got {window}");
+        Self::new(2.0 / (window as f64 + 1.0))
+    }
+
+    /// Create from a half-life (number of steps for weight to decay by 50%).
+    pub fn from_halflife(halflife: f64) -> Self {
+        assert!(halflife > 0.0, "halflife must be > 0, got {halflife}");
+        Self::new(1.0 - (0.5_f64).powf(1.0 / halflife))
+    }
+
+    /// Update with a single observation.
+    pub fn update(&mut self, value: f64) {
+        self.count += 1;
+        if !self.initialized {
+            self.mean = value;
+            self.var = 0.0;
+            self.initialized = true;
+            return;
+        }
+        let delta = value - self.mean;
+        self.mean += self.alpha * delta;
+        // Biased EMA variance estimate
+        self.var = (1.0 - self.alpha) * (self.var + self.alpha * delta * delta);
+    }
+
+    /// Update with a batch of observations (applied sequentially).
+    pub fn batch_update(&mut self, values: &[f64]) {
+        for &v in values {
+            self.update(v);
+        }
+    }
+
+    /// Current EMA mean.
+    pub fn mean(&self) -> f64 {
+        self.mean
+    }
+
+    /// Current EMA variance.
+    pub fn var(&self) -> f64 {
+        self.var
+    }
+
+    /// Current EMA standard deviation.
+    pub fn std(&self) -> f64 {
+        self.var.sqrt()
+    }
+
+    /// Normalize a value using current EMA mean and std.
+    pub fn normalize(&self, value: f64) -> f64 {
+        let s = self.std();
+        if s < 1e-8 {
+            return 0.0;
+        }
+        (value - self.mean) / s
+    }
+
+    /// Number of observations seen.
+    pub fn count(&self) -> u64 {
+        self.count
+    }
+
+    /// The smoothing factor.
+    pub fn alpha(&self) -> f64 {
+        self.alpha
+    }
+
+    /// Reset to initial state.
+    pub fn reset(&mut self) {
+        self.mean = 0.0;
+        self.var = 0.0;
+        self.count = 0;
+        self.initialized = false;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -584,6 +708,119 @@ mod tests {
             "normalized values should be moderate z-scores, got {:?}",
             z
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // ExponentialRunningStats tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ema_new_basic() {
+        let ema = ExponentialRunningStats::new(0.1);
+        assert_eq!(ema.count(), 0);
+        assert!((ema.alpha() - 0.1).abs() < 1e-10);
+    }
+
+    #[test]
+    fn ema_from_window() {
+        let ema = ExponentialRunningStats::from_window(19);
+        // alpha = 2/(19+1) = 0.1
+        assert!((ema.alpha() - 0.1).abs() < 1e-10);
+    }
+
+    #[test]
+    fn ema_from_halflife() {
+        let ema = ExponentialRunningStats::from_halflife(10.0);
+        // After 10 steps, weight should be ~0.5
+        assert!(ema.alpha() > 0.0 && ema.alpha() < 1.0);
+    }
+
+    #[test]
+    fn ema_first_update_sets_mean() {
+        let mut ema = ExponentialRunningStats::new(0.1);
+        ema.update(5.0);
+        assert!((ema.mean() - 5.0).abs() < 1e-10);
+        assert_eq!(ema.count(), 1);
+    }
+
+    #[test]
+    fn ema_tracks_constant_signal() {
+        let mut ema = ExponentialRunningStats::new(0.1);
+        for _ in 0..100 {
+            ema.update(3.0);
+        }
+        assert!((ema.mean() - 3.0).abs() < 1e-8);
+        assert!(ema.var() < 1e-8);
+    }
+
+    #[test]
+    fn ema_adapts_to_level_shift() {
+        let mut ema = ExponentialRunningStats::new(0.1);
+        // Burn in at level 0
+        for _ in 0..50 {
+            ema.update(0.0);
+        }
+        assert!(ema.mean().abs() < 0.01);
+        // Shift to level 10
+        for _ in 0..100 {
+            ema.update(10.0);
+        }
+        // Should have adapted close to 10
+        assert!((ema.mean() - 10.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn ema_higher_alpha_adapts_faster() {
+        let mut fast = ExponentialRunningStats::new(0.5);
+        let mut slow = ExponentialRunningStats::new(0.01);
+        for _ in 0..20 {
+            fast.update(0.0);
+            slow.update(0.0);
+        }
+        for _ in 0..10 {
+            fast.update(10.0);
+            slow.update(10.0);
+        }
+        // Fast should be closer to 10 than slow
+        assert!(
+            (fast.mean() - 10.0).abs() < (slow.mean() - 10.0).abs(),
+            "fast={}, slow={}",
+            fast.mean(),
+            slow.mean()
+        );
+    }
+
+    #[test]
+    fn ema_normalize_zero_for_mean() {
+        let mut ema = ExponentialRunningStats::new(0.1);
+        for x in 0..100 {
+            ema.update(x as f64);
+        }
+        // Normalize the current mean should be ~0
+        let z = ema.normalize(ema.mean());
+        assert!(z.abs() < 1e-8);
+    }
+
+    #[test]
+    fn ema_reset_clears_state() {
+        let mut ema = ExponentialRunningStats::new(0.1);
+        ema.update(5.0);
+        ema.update(10.0);
+        ema.reset();
+        assert_eq!(ema.count(), 0);
+        assert!((ema.mean()).abs() < 1e-10);
+    }
+
+    #[test]
+    #[should_panic(expected = "alpha must be in (0, 1)")]
+    fn ema_invalid_alpha_panics() {
+        ExponentialRunningStats::new(0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "alpha must be in (0, 1)")]
+    fn ema_alpha_one_panics() {
+        ExponentialRunningStats::new(1.0);
     }
 
     mod proptests {

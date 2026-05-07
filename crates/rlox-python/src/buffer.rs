@@ -315,6 +315,40 @@ impl PyReplayBuffer {
         Ok(builder.build())
     }
 
+    /// Sample uniformly from only the most recent `window_size` transitions.
+    ///
+    /// Implements sliding window replay for non-stationary RL: only recent
+    /// experience is used, discarding stale transitions from previous regimes.
+    #[pyo3(signature = (batch_size, window_size, seed))]
+    fn sample_recent<'py>(
+        &self,
+        py: Python<'py>,
+        batch_size: usize,
+        window_size: usize,
+        seed: u64,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = py
+            .allow_threads(|| self.inner.sample_recent(batch_size, window_size, seed))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let builder = BatchDictBuilder::new(py);
+        builder.add_2d("obs", batch.observations, batch.batch_size, batch.obs_dim)?;
+        builder.add_2d(
+            "next_obs",
+            batch.next_observations,
+            batch.batch_size,
+            batch.obs_dim,
+        )?;
+        builder.add_actions(batch.actions, batch.batch_size, batch.act_dim)?;
+        builder.add_1d_f32("rewards", batch.rewards)?;
+        builder.add_bool("terminated", &batch.terminated)?;
+        builder.add_bool("truncated", &batch.truncated)?;
+        if !batch.extra.is_empty() {
+            builder.add_extra_columns(&batch.extra, batch.batch_size)?;
+        }
+        Ok(builder.build())
+    }
+
     /// Sample a batch as flat contiguous f32 arrays optimized for GPU transfer.
     ///
     /// Returns a dict where all values (including terminated/truncated) are

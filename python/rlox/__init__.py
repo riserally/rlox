@@ -15,6 +15,8 @@ Rust primitives (via PyO3)
 - :func:`compute_group_advantages`, :func:`compute_token_kl` -- LLM post-training
 - :class:`DPOPair`, :class:`VarLenStore`, :func:`pack_sequences` -- sequence handling
 - :class:`RunningStats`, :class:`RunningStatsVec` -- online mean/variance
+- :class:`EmaRunningStats` -- exponential moving average stats (non-stationary signals)
+- :class:`CusumDetector` -- two-sided CUSUM change-point detection
 - :class:`ActorCritic`, :class:`CandleCollector` -- NN backend
 
 Python layer
@@ -23,7 +25,7 @@ Python layer
 - :class:`RolloutBatch` -- flat-tensor container for on-policy data
 - :class:`RolloutCollector`, :class:`OffPolicyCollector` -- data collection
 - :class:`GymVecEnv` -- gymnasium wrapper with VecEnv interface
-- :class:`ContinuousPolicy`, :class:`DiscretePolicy` -- default policy networks
+- :class:`ContinuousPolicy`, :class:`DiscretePolicy`, :class:`AsymmetricPolicy` -- policy networks
 - :class:`TrainingConfig` -- YAML/TOML config-driven training
 - :class:`TerminalDashboard`, :class:`HTMLReport` -- diagnostics dashboard
 
@@ -33,8 +35,9 @@ Unified Trainer
 - Algorithms: ``ppo``, ``sac``, ``dqn``, ``td3``, ``a2c``, ``mappo``, ``dreamer``, ``impala``
 - :data:`ALGORITHM_REGISTRY` -- algorithm name -> class mapping
 
-All algorithms expose ``train(total_timesteps)``, ``save(path)``, and
-``from_checkpoint(path)`` via the unified :class:`Trainer`.
+All algorithms expose ``train(total_timesteps)``, ``save(path)``,
+``from_checkpoint(path)``, ``evaluate(n_episodes)``, and ``enjoy()``
+via the unified :class:`Trainer`.
 
 For algorithm implementations, see :mod:`rlox.algorithms`.
 For config-driven training, see :func:`train_from_config`.

@@ -45,19 +45,20 @@ Python interpreter: always invoke via `./.venv/bin/python`, never bare
 ## Directory map (1-line each — keep stable)
 
 ### Python control plane (`python/rlox/`)
-- `trainer.py`                  — unified `Trainer('ppo'|'sac'|...)` entrypoint + `ALGORITHM_REGISTRY`
+- `trainer.py`                  — unified `Trainer('ppo'|'sac'|...)` entrypoint + `ALGORITHM_REGISTRY` + `evaluate()` + `enjoy()`
 - `config.py`                   — `PPOConfig` / `SACConfig` / ... dataclasses with YAML alias support
 - `losses.py`                   — `PPOLoss` (SB3-aligned, see "Non-obvious facts")
-- `collectors.py`               — `RolloutCollector` (on-policy rollouts, GAE via Rust)
+- `collectors.py`               — `RolloutCollector` (on-policy rollouts, GAE via Rust, episode stats tracking)
 - `vec_normalize.py`            — SB3-compatible running obs/reward normalization
-- `gym_vec_env.py`              — Gymnasium `SyncVectorEnv` wrapper matching `rlox.VecEnv` interface
-- `policies.py`                 — `DiscretePolicy`, `ContinuousPolicy` (orthogonal init, Tanh)
+- `gym_vec_env.py`              — Gymnasium `SyncVectorEnv` wrapper matching `rlox.VecEnv` interface + RecordEpisodeStatistics
+- `policies.py`                 — `DiscretePolicy`, `ContinuousPolicy`, `AsymmetricPolicy` (orthogonal init, Tanh)
 - `checkpoint.py`               — `safe_torch_load` with `allow_unsafe` opt-in
 - `algorithms/`                 — 22 self-contained algo files (`ppo.py`, `sac.py`, `dqn.py`, ...)
-- `callbacks.py`, `logging.py`  — callback protocol + console/TB/MLflow loggers
+- `evaluation.py`               — IQM, CI, score normalization, dynamic regret, adaptation latency, forgetting ratio
+- `callbacks.py`, `logging.py`  — callback protocol + console/TB/MLflow loggers + `VideoRecordingCallback`
 
 ### Rust data plane (`crates/`)
-- `rlox-core/`      — GAE, replay buffer, running stats, env physics; pure Rust, no PyO3
+- `rlox-core/`      — GAE, replay buffer, running stats (Welford + EMA), CUSUM/PageHinkley CPD, env physics (incl. NonStationaryCartPole); pure Rust, no PyO3
 - `rlox-python/`    — PyO3 bindings (`rlox._rlox_core`)
 - `rlox-candle/`    — Candle NN backend (experimental)
 - `rlox-burn/`      — Burn NN backend (experimental)
@@ -125,6 +126,17 @@ Python interpreter: always invoke via `./.venv/bin/python`, never bare
   `done`) to GAE. This matters a lot for HalfCheetah (always truncates at 1000).
 - **Checkpoints are secure by default**: `safe_torch_load(path)` uses
   `weights_only=True`. Pass `allow_unsafe=True` explicitly for legacy checkpoints.
+- **`EmaRunningStats` and `CusumDetector`** are exposed via `rlox._rlox_core`
+  (PyO3 bindings), not re-exported in `rlox.__init__`. Import as
+  `from rlox._rlox_core import EmaRunningStats, CusumDetector`.
+- **`ReplayBuffer.sample_recent(batch_size, window_size, seed)`** samples
+  uniformly from only the most recent `window_size` transitions. Use for
+  non-stationary RL where stale experience hurts.
+- **`NonStationaryCartPole`** is Rust-only (no PyO3 binding yet). Use it from
+  `rlox-core` Rust tests or extend `rlox-python/src/env.rs` to expose it.
+- **`Trainer.evaluate()` freezes VecNormalize** stats automatically and
+  restores them after evaluation. Seeds episodes as `seed + ep` to avoid
+  inflated pseudo-precision.
 
 ---
 

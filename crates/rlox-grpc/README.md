@@ -42,7 +42,7 @@ use rlox_grpc::RemoteEnvClient;
 
 ## Part of rlox
 
-This crate enables distributed training for [rlox](https://github.com/riserally/rlox). See the main project for algorithms, Python bindings, and documentation.
+This crate enables distributed training for [rlox](https://github.com/wojciechkpl/rlox). See the main project for algorithms, Python bindings, and documentation.
 
 ## License
 

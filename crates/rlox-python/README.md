@@ -40,7 +40,7 @@ maturin develop --release
 
 ## Part of rlox
 
-This crate provides the Python bridge for [rlox](https://github.com/riserally/rlox). It is not intended to be used as a standalone Rust library.
+This crate provides the Python bridge for [rlox](https://github.com/wojciechkpl/rlox). It is not intended to be used as a standalone Rust library.
 
 ## License
 

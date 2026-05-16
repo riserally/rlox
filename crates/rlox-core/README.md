@@ -1,6 +1,6 @@
 # rlox-core
 
-Pure-Rust reinforcement learning primitives -- the data plane of [rlox](https://github.com/riserally/rlox).
+Pure-Rust reinforcement learning primitives -- the data plane of [rlox](https://github.com/wojciechkpl/rlox).
 
 ## Key Types
 
@@ -72,7 +72,7 @@ let vec_env = VecEnv::new(envs);
 
 ## Part of rlox
 
-This crate is the Rust data plane of the [rlox](https://github.com/riserally/rlox) reinforcement learning framework. See the main project for Python bindings, algorithms, and full documentation.
+This crate is the Rust data plane of the [rlox](https://github.com/wojciechkpl/rlox) reinforcement learning framework. See the main project for Python bindings, algorithms, and full documentation.
 
 ## License
 

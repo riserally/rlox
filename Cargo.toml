@@ -18,6 +18,6 @@ opt-level = 3
 
 [workspace.package]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/riserally/rlox"
+repository = "https://github.com/wojciechkpl/rlox"
 keywords = ["rl", "pyo3", "machine-learning", "ppo", "gymnasium"]
 categories = ["science", "algorithms"]

@@ -12,7 +12,7 @@ This tutorial walks you through installing rlox, training your first agent, and 
 
 ```bash
 # Clone the repository
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox
 
 # Create a Python virtual environment

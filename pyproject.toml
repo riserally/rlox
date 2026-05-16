@@ -38,11 +38,11 @@ dev = ["pytest", "pyyaml"]
 rlox = "rlox.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/riserally/rlox"
-Repository = "https://github.com/riserally/rlox"
-Documentation = "https://github.com/riserally/rlox/tree/main/docs"
-Changelog = "https://github.com/riserally/rlox/blob/main/CHANGELOG.md"
-Issues = "https://github.com/riserally/rlox/issues"
+Homepage = "https://github.com/wojciechkpl/rlox"
+Repository = "https://github.com/wojciechkpl/rlox"
+Documentation = "https://github.com/wojciechkpl/rlox/tree/main/docs"
+Changelog = "https://github.com/wojciechkpl/rlox/blob/main/CHANGELOG.md"
+Issues = "https://github.com/wojciechkpl/rlox/issues"
 
 [tool.maturin]
 manifest-path = "crates/rlox-python/Cargo.toml"

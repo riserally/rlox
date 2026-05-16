@@ -35,7 +35,7 @@ use rlox_nn::{ActorCritic, TensorData};
 
 ## Part of rlox
 
-This crate is the Candle NN backend for [rlox](https://github.com/riserally/rlox). See the main project for Python bindings, algorithms, and full documentation.
+This crate is the Candle NN backend for [rlox](https://github.com/wojciechkpl/rlox). See the main project for Python bindings, algorithms, and full documentation.
 
 ## License
 

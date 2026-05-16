@@ -19,7 +19,7 @@ Translating a page is a pure markdown edit — no tooling changes needed.
    ./.venv/bin/python -m mkdocs build
    ./.venv/bin/python -m mkdocs serve  # live preview at http://127.0.0.1:8000
    ```
-5. Open a PR. Tag `@riserally` and include a one-line summary of the page
+5. Open a PR. Tag `@wojciechkpl` and include a one-line summary of the page
    and target language.
 
 That's it. No build-system changes, no CI edits, no YAML reconfiguration —
@@ -140,5 +140,5 @@ translate a blog post, open an issue first so we can discuss scope.
 
 ## Questions
 
-Open a discussion at https://github.com/riserally/rlox/discussions with
-the `translations` label, or ping `@riserally` on the PR directly.
+Open a discussion at https://github.com/wojciechkpl/rlox/discussions with
+the `translations` label, or ping `@wojciechkpl` on the PR directly.

@@ -136,7 +136,7 @@ python -m rlox train --algo ppo --env CartPole-v1 --timesteps 100000</code></pre
 pip install rlox
 
 # From source (requires Rust toolchain)
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox && pip install -e ".[dev]"</code></pre>
 </section>
 
@@ -337,7 +337,7 @@ graph TD
     <a href="/rlox/python/examples/">Examples</a>
     <a href="/rlox/rust/rlox_core/">Rust API</a>
     <a href="/rlox/blog/">Blog</a>
-    <a href="https://github.com/riserally/rlox" class="nav-github">GitHub</a>
+    <a href="https://github.com/wojciechkpl/rlox" class="nav-github">GitHub</a>
   </div>
 </nav>
 ```
@@ -354,7 +354,7 @@ graph TD
   <a href="/rlox/python/">Python</a> |
   <a href="/rlox/rust/rlox_core/">Rust API</a> |
   <a href="/rlox/blog/">Blog</a> |
-  <a href="https://github.com/riserally/rlox">GitHub</a>
+  <a href="https://github.com/wojciechkpl/rlox">GitHub</a>
 </nav>
 {% endblock %}
 ```
@@ -482,7 +482,7 @@ Will be populated when GCP benchmark v5 completes (currently 26/32).
 ## Development Setup
 
 ​```bash
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox
 python -m venv .venv && source .venv/bin/activate
 pip install maturin numpy gymnasium torch pytest

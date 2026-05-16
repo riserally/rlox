@@ -1,8 +1,8 @@
 site_name: "rlox — Rust-Accelerated Reinforcement Learning"
-site_url: https://riserally.github.io/rlox/
+site_url: https://wojciechkpl.github.io/rlox/
 site_description: "Rust data plane + Python control plane for RL. 3-50x faster than SB3/TorchRL."
-repo_url: https://github.com/riserally/rlox
-repo_name: riserally/rlox
+repo_url: https://github.com/wojciechkpl/rlox
+repo_name: wojciechkpl/rlox
 docs_dir: docs
 
 theme:

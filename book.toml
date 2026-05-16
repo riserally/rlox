@@ -7,5 +7,5 @@ src = "book/src"
 build-dir = "book/build"
 
 [output.html]
-git-repository-url = "https://github.com/riserally/rlox"
+git-repository-url = "https://github.com/wojciechkpl/rlox"
 mathjax-support = true

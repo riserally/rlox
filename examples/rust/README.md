@@ -30,7 +30,7 @@ cargo run --bin reward_shaping  # PBRS + goal-distance potentials
 ```toml
 # Cargo.toml
 [dependencies]
-rlox-core = { git = "https://github.com/riserally/rlox", package = "rlox-core" }
+rlox-core = { git = "https://github.com/wojciechkpl/rlox", package = "rlox-core" }
 ```
 
 Or with a local checkout:

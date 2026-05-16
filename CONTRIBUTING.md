@@ -6,7 +6,7 @@ Thank you for your interest in contributing to rlox!
 
 ```bash
 # Clone the repository
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox
 
 # Create Python virtual environment

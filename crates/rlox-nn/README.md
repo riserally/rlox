@@ -41,7 +41,7 @@ let obs = TensorData::new(vec![0.1, 0.2, 0.3, 0.4], vec![1, 4]);
 
 ## Part of rlox
 
-This crate defines the NN interface for [rlox](https://github.com/riserally/rlox). Concrete implementations live in `rlox-candle` (Candle backend) and `rlox-burn` (Burn backend).
+This crate defines the NN interface for [rlox](https://github.com/wojciechkpl/rlox). Concrete implementations live in `rlox-candle` (Candle backend) and `rlox-burn` (Burn backend).
 
 ## License
 

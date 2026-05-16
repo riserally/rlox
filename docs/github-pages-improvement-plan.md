@@ -2,7 +2,7 @@
 
 ## Current State
 
-The rlox documentation site (https://riserally.github.io/rlox/) has four components:
+The rlox documentation site (https://wojciechkpl.github.io/rlox/) has four components:
 
 | Component | URL | Technology | Status |
 |-----------|-----|-----------|--------|
@@ -159,7 +159,7 @@ pip install rlox
 pip install rlox[mujoco]
 
 # Development
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox && pip install -e ".[dev]"
 ```
 ```
@@ -191,7 +191,7 @@ Add a shared header across all 4 components:
   <a href="/rust/rlox_core/">Rust</a>
   <a href="/book/">Guide</a>
   <a href="/blog/">Blog</a>
-  <a href="https://github.com/riserally/rlox">GitHub</a>
+  <a href="https://github.com/wojciechkpl/rlox">GitHub</a>
 </nav>
 ```
 

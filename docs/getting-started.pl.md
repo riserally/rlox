@@ -17,7 +17,7 @@ Ten samouczek prowadzi przez instalację rlox i wytrenowanie pierwszego agenta.
 
 ```bash
 # Sklonuj repozytorium
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox
 
 # Utwórz wirtualne środowisko Pythona

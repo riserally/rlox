@@ -275,10 +275,10 @@ result = env.step_all(actions)
 
 ## Links
 
-- **GitHub**: [github.com/riserally/rlox](https://github.com/riserally/rlox)
+- **GitHub**: [github.com/wojciechkpl/rlox](https://github.com/wojciechkpl/rlox)
 - **PyPI**: [pypi.org/project/rlox](https://pypi.org/project/rlox/)
 - **crates.io**: [crates.io/crates/rlox-core](https://crates.io/crates/rlox-core)
-- **Docs**: [riserally.github.io/rlox](https://riserally.github.io/rlox/)
+- **Docs**: [wojciechkpl.github.io/rlox](https://wojciechkpl.github.io/rlox/)
 - **License**: MIT or Apache 2.0
 
 We'd love to hear from you — open an issue, start a discussion, or try `pip install rlox` and let us know what you think.
@@ -292,7 +292,7 @@ If you use rlox in your research, please cite:
   author       = {Kowalinski, Wojciech},
   title        = {rlox: Rust-Accelerated Reinforcement Learning},
   year         = {2026},
-  url          = {https://github.com/riserally/rlox},
+  url          = {https://github.com/wojciechkpl/rlox},
   version      = {1.0.0},
   license      = {MIT OR Apache-2.0}
 }

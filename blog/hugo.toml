@@ -1,12 +1,12 @@
-baseURL = "https://riserally.github.io/rlox/blog/"
+baseURL = "https://wojciechkpl.github.io/rlox/blog/"
 languageCode = "en-us"
-title = "riserally blog"
+title = "wojciechkpl blog"
 theme = "PaperMod"
-copyright = "riserally"
+copyright = "wojciechkpl"
 
 [params]
   env = "production"
-  description = "Engineering blog by riserally — Rust-accelerated reinforcement learning, benchmarks, and technical deep-dives"
+  description = "Engineering blog by wojciechkpl — Rust-accelerated reinforcement learning, benchmarks, and technical deep-dives"
   author = "Wojciech Kowalinski"
   ShowReadingTime = true
   ShowShareButtons = false
@@ -18,16 +18,16 @@ copyright = "riserally"
   defaultTheme = "dark"
 
   [params.homeInfoParams]
-    Title = "riserally blog"
-    Content = "Engineering blog by riserally — updates, benchmarks, and technical deep-dives on Rust-accelerated reinforcement learning."
+    Title = "wojciechkpl blog"
+    Content = "Engineering blog by wojciechkpl — updates, benchmarks, and technical deep-dives on Rust-accelerated reinforcement learning."
 
   [[params.socialIcons]]
     name = "github"
-    url = "https://github.com/riserally"
+    url = "https://github.com/wojciechkpl"
 
   [[params.socialIcons]]
     name = "github"
-    url = "https://github.com/riserally/rlox"
+    url = "https://github.com/wojciechkpl/rlox"
 
 [menu]
   [[menu.main]]
@@ -48,7 +48,7 @@ copyright = "riserally"
   [[menu.main]]
     identifier = "docs"
     name = "Docs"
-    url = "https://riserally.github.io/rlox/"
+    url = "https://wojciechkpl.github.io/rlox/"
     weight = 40
 
 [markup]

@@ -18,7 +18,7 @@ Dieses Tutorial führt Sie durch die Installation von rlox und das Training Ihre
 
 ```bash
 # Repository klonen
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox
 
 # Virtuelle Python-Umgebung erstellen

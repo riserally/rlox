@@ -18,7 +18,7 @@ Ce tutoriel vous guide à travers l'installation de rlox et l'entraînement de v
 
 ```bash
 # Cloner le dépôt
-git clone https://github.com/riserally/rlox.git
+git clone https://github.com/wojciechkpl/rlox.git
 cd rlox
 
 # Créer un environnement virtuel Python

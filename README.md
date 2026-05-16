@@ -7,24 +7,24 @@
 <p align="center">Rust-accelerated reinforcement learning — the Polars architecture pattern applied to RL.</p>
 
 <p align="center">
-  <a href="https://riserally.github.io/rlox/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-7c4dff.svg" alt="Documentation"></a>
+  <a href="https://wojciechkpl.github.io/rlox/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-7c4dff.svg" alt="Documentation"></a>
   <a href="https://crates.io/crates/rlox-core"><img src="https://img.shields.io/crates/v/rlox-core.svg" alt="crates.io"></a>
   <a href="https://pypi.org/project/rlox/"><img src="https://img.shields.io/pypi/v/rlox.svg" alt="PyPI"></a>
-  <a href="https://github.com/riserally/rlox/actions/workflows/ci.yml"><img src="https://github.com/riserally/rlox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://deepwiki.com/riserally/rlox"><img src="https://img.shields.io/badge/DeepWiki-rlox-blue.svg" alt="DeepWiki"></a>
+  <a href="https://github.com/wojciechkpl/rlox/actions/workflows/ci.yml"><img src="https://github.com/wojciechkpl/rlox/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://deepwiki.com/wojciechkpl/rlox"><img src="https://img.shields.io/badge/DeepWiki-rlox-blue.svg" alt="DeepWiki"></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License"></a>
   <a href="https://pepy.tech/project/rlox"><img src="https://static.pepy.tech/badge/rlox" alt="Downloads"></a>
 </p>
 
 <p align="center">
-  <a href="https://riserally.github.io/rlox/"><b>Documentation</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/python/learning-path/"><b>Learning Path</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/python/rl-introduction/"><b>RL Introduction</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/python/algorithms/"><b>22 Algorithms</b></a> &nbsp;|&nbsp;
-  <a href="https://riserally.github.io/rlox/python/examples/"><b>Examples</b></a>
+  <a href="https://wojciechkpl.github.io/rlox/"><b>Documentation</b></a> &nbsp;|&nbsp;
+  <a href="https://wojciechkpl.github.io/rlox/python/learning-path/"><b>Learning Path</b></a> &nbsp;|&nbsp;
+  <a href="https://wojciechkpl.github.io/rlox/python/rl-introduction/"><b>RL Introduction</b></a> &nbsp;|&nbsp;
+  <a href="https://wojciechkpl.github.io/rlox/python/algorithms/"><b>22 Algorithms</b></a> &nbsp;|&nbsp;
+  <a href="https://wojciechkpl.github.io/rlox/python/examples/"><b>Examples</b></a>
 </p>
 
-> **New to Reinforcement Learning?** Start with our [RL Introduction](https://riserally.github.io/rlox/python/rl-introduction/) to learn the fundamentals, then follow the [Learning Path](https://riserally.github.io/rlox/python/learning-path/) from beginner to production.
+> **New to Reinforcement Learning?** Start with our [RL Introduction](https://wojciechkpl.github.io/rlox/python/rl-introduction/) to learn the fundamentals, then follow the [Learning Path](https://wojciechkpl.github.io/rlox/python/learning-path/) from beginner to production.
 
 ## Why rlox?
 
@@ -116,13 +116,13 @@ result = env.step_all(actions)
 
 | Resource | Link |
 |----------|------|
-| **Full Documentation** | [riserally.github.io/rlox](https://riserally.github.io/rlox/) |
-| Getting Started | [Tutorial](https://riserally.github.io/rlox/python/getting-started/) |
-| Python API Guide | [User Guide](https://riserally.github.io/rlox/python/) |
-| Examples | [Code Examples](https://riserally.github.io/rlox/python/examples/) |
-| Rust API | [cargo doc](https://riserally.github.io/rlox/rust/rlox_core/) |
-| Migrating from SB3 | [Migration Guide](https://riserally.github.io/rlox/python/tutorials/migration-sb3/) |
-| API Reference | [Autodoc](https://riserally.github.io/rlox/python/api/) |
+| **Full Documentation** | [wojciechkpl.github.io/rlox](https://wojciechkpl.github.io/rlox/) |
+| Getting Started | [Tutorial](https://wojciechkpl.github.io/rlox/python/getting-started/) |
+| Python API Guide | [User Guide](https://wojciechkpl.github.io/rlox/python/) |
+| Examples | [Code Examples](https://wojciechkpl.github.io/rlox/python/examples/) |
+| Rust API | [cargo doc](https://wojciechkpl.github.io/rlox/rust/rlox_core/) |
+| Migrating from SB3 | [Migration Guide](https://wojciechkpl.github.io/rlox/python/tutorials/migration-sb3/) |
+| API Reference | [Autodoc](https://wojciechkpl.github.io/rlox/python/api/) |
 
 ## Architecture
 
@@ -157,7 +157,7 @@ Multi-crate workspace ([crates.io](https://crates.io/crates/rlox-core)):
 - **rlox-candle** — Candle CPU implementations
 - **rlox-python** — PyO3 bindings exposing `rlox-core` to Python
 
-> For a deep-dive into the architecture, module relationships, and API reference, see the [DeepWiki](https://deepwiki.com/riserally/rlox).
+> For a deep-dive into the architecture, module relationships, and API reference, see the [DeepWiki](https://deepwiki.com/wojciechkpl/rlox).
 
 ## Benchmark Highlights
 
@@ -246,7 +246,7 @@ SAC HalfCheetah: rlox 10872 vs SB3 10796 — statistically identical, both beat 
 | [Rust Guide](docs/rust-guide.md) | Rust crate architecture and extending in Rust |
 | [Math Reference](docs/math-reference.md) | GAE, V-trace, GRPO, DPO derivations |
 | [Benchmark Details](docs/benchmark/) | Full methodology, per-benchmark analysis, reproducibility |
-| [DeepWiki](https://deepwiki.com/riserally/rlox) | Auto-generated architecture docs and API reference |
+| [DeepWiki](https://deepwiki.com/wojciechkpl/rlox) | Auto-generated architecture docs and API reference |
 
 ## Running Tests
 
@@ -302,7 +302,7 @@ If you use rlox in your research, please cite:
   author       = {Kowalinski, Wojciech},
   title        = {rlox: Rust-Accelerated Reinforcement Learning},
   year         = {2026},
-  url          = {https://github.com/riserally/rlox},
+  url          = {https://github.com/wojciechkpl/rlox},
   version      = {1.0.0},
   license      = {MIT OR Apache-2.0}
 }
